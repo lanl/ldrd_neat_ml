@@ -1,3 +1,6 @@
+import numpy as np
+
+
 # these features were considered potentially interesting
 # for machine learning-based prediction of polymer
 # properties by Mihee, Cesar, and Tyler during a discussion
@@ -24,3 +27,13 @@ features_of_interest = ["volume_fraction",
                         # if it would matter for polymer phase separatation/
                         # microparticle formation:
                         "viscosity"]
+
+def preprocess_data(df):
+    # Accepts an input DataFrame and produces the typical
+    # training (X) and prediction (y) values needed for ML
+    X = df[["Dextran (wt%)",  "PEO (wt%)"]].to_numpy()
+    y = df["Phase Separated"].to_numpy()
+    y[y == "Yes"] = 1
+    y[y == "No"] = 0
+    y = y.astype(np.int32)
+    return X, y
