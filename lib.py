@@ -37,3 +37,17 @@ def preprocess_data(df):
     y[y == "No"] = 0
     y = y.astype(np.int32)
     return X, y
+
+
+hyper_param_dict = {"rfc": {"max_depth": [1, 10, 100, None],
+                            "min_samples_split": [2, 4, 10],
+                            },
+                    "xgb_class": {"n_estimators": [20, 100, 2_000],
+                                  "subsample": [1, 0.9, 0.8],
+                                  "colsample_bytree": [1, 0.9, 0.7]},
+                    "xgb_dart": {"n_estimators": [20, 100, 300],
+                                  "subsample": [1, 0.8],
+                                  "colsample_bytree": [1, 0.9, 0.7]},
+                    "svm": {"C": [1, 10],
+                            "kernel": ["linear", "rbf"]},
+                    }
