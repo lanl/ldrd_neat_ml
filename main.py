@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import (train_test_split, cross_val_score,
-                                     StratifiedKFold, GridSearchCV)
+                                     StratifiedKFold, GridSearchCV,
+                                     cross_val_predict)
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
@@ -40,7 +41,7 @@ def main():
                       "xgb_dart": {"classifier": xgb.XGBClassifier(booster="dart",
                                                                    one_drop=1)},
                       # sklearn SVM:
-                      "svm": {"classifier": SVC(gamma='auto')},
+                      "svm": {"classifier": SVC(gamma='auto', probability=True)},
                       }
 
     for estimator_name in estimator_data.keys():
@@ -100,6 +101,35 @@ def main():
               estimator_data[estimator_name]["hyperparam_average_auc"]
               )
     print("-" * 70)
+
+    # Step 5: Assess estimator orthogonality so we get a sense for which
+    # estimators may be suitably combined via various forms of ensembling
+    # (i.e., soft voting, stacking, etc.) to improve our final classifier
+    # performance on test
+    print("-" * 70)
+    print("Assessment of estimator orthogonality based on "
+          "Pearson correlation coefficient\nof CV-predictions "
+          "on training data.\nPurpose is to assess suitability "
+          "for eventual ensembling on test.")
+    ortho_data = {}
+    for estimator_name in estimator_data.keys():
+        estimator = estimator_data[estimator_name]["classifier"]
+
+        # generate cross validated estimates for each training data point
+        pred_proba = cross_val_predict(estimator=estimator,
+                                       X=X_train,
+                                       y=y_train,
+                                       cv=StratifiedKFold(5),
+                                       method="predict_proba")
+        # the second column of the pred_proba array should
+        # be the probabilities for phase separation ("1" value)
+        pred_proba = pred_proba[..., 1]
+        ortho_data[estimator_name] = pred_proba
+    df_ortho = pd.DataFrame.from_dict(ortho_data).corr(method="pearson")
+    print(df_ortho)
+    df_ortho.style.pipe(lib.color_df).to_html("estimator_orthogonality_training.html")
+    print("-" * 70)
+
 
 
 if __name__ == "__main__":

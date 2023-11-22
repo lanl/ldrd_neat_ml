@@ -51,3 +51,11 @@ hyper_param_dict = {"rfc": {"max_depth": [1, 10, 100, None],
                     "svm": {"C": [1, 10],
                             "kernel": ["linear", "rbf"]},
                     }
+
+def color_df(styler):
+    # TODO: set vmin/vmax based on actual
+    # range of values in DataFrame
+    vmin = 0.8
+    vmax = 1.0
+    styler.background_gradient(axis=None, vmin=vmin, vmax=vmax, cmap="viridis")
+    return styler
