@@ -16,6 +16,7 @@ def main():
     # Step 1: Read in the experimental data/format it appropriately
     df = pd.read_excel("data/mihee_peo_dextran_phase_map_experimental.xlsx")
     X, y = lib.preprocess_data(df=df)
+    lib.plot_input_data(X, y)
 
     # we only have two features at the moment (% Dextran, % PEO)
     # so no need for feature selection just yet; can jump right into
