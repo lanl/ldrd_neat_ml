@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn import metrics
 import xgboost as xgb
 
 import lib
@@ -130,6 +131,23 @@ def main():
     print(df_ortho)
     df_ortho.style.pipe(lib.color_df).to_html("estimator_orthogonality_training.html")
     print("-" * 70)
+
+    # Step 6: train each estimator on the full training data, then
+    # produce ROC curves for each on test
+    for estimator_name in estimator_data.keys():
+        estimator = estimator_data[estimator_name]["classifier"]
+        estimator.fit(X_train, y_train)
+        pred_proba = estimator.predict_proba(X_test)
+        fpr, tpr, thresholds = metrics.roc_curve(y_test, pred_proba[..., 1])
+        roc_auc = metrics.auc(fpr, tpr)
+        roc_plot = metrics.RocCurveDisplay(fpr=fpr,
+                                           tpr=tpr,
+                                           roc_auc=roc_auc,
+                                           estimator_name=f"{estimator_name}")
+        roc_plot.plot()
+        fig = roc_plot.figure_
+        fig.savefig(f"roc_{estimator_name}.png", dpi=300)
+
 
 
 
