@@ -116,6 +116,9 @@ def main():
     ortho_data = {}
     for estimator_name in estimator_data.keys():
         estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
 
         # generate cross validated estimates for each training data point
         pred_proba = cross_val_predict(estimator=estimator,
@@ -136,6 +139,9 @@ def main():
     # produce ROC curves for each on test
     for estimator_name in estimator_data.keys():
         estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
         estimator.fit(X_train, y_train)
         pred_proba = estimator.predict_proba(X_test)
         fpr, tpr, thresholds = metrics.roc_curve(y_test, pred_proba[..., 1])
