@@ -3,12 +3,17 @@ import pandas as pd
 from sklearn.model_selection import (train_test_split, cross_val_score,
                                      StratifiedKFold, GridSearchCV,
                                      cross_val_predict)
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
 import xgboost as xgb
+import matplotlib
+matplotlib.use("agg")
+import matplotlib.pyplot as plt
+
 
 import lib
 
@@ -153,6 +158,62 @@ def main():
         roc_plot.plot()
         fig = roc_plot.figure_
         fig.savefig(f"roc_{estimator_name}.png", dpi=300)
+
+    # Step 7: Ensembling to improve predictions
+    # From the orthogonality check above, at the time of writing,
+    # if we assume that the xgb classifier is our "base classifier,"
+    # then RFC and SVM look like suitable ensembling partners based
+    # on the Pearson correlation coefficient.
+
+    # 7a: Stacking models via logistic regression as the ensembling
+    # final combiner (I think this was recommended in Corey Wade's book)
+    stacking_clf = StackingClassifier(
+                     estimators=[("rfc", estimator_data["rfc"]["classifier"]),
+                                 ("svm", make_pipeline(StandardScaler(), estimator_data["svm"]["classifier"])),
+                                 ("xgb_class", estimator_data["xgb_class"]["classifier"]),
+                                 ],
+                     final_estimator=LogisticRegression(),
+                     # NOTE: this cv strategy should re-fit (overwrite)
+                     # the previous fits I think; I did this because of the
+                     # warnings related to `prefit` option in sklearn docs...
+                     cv=StratifiedKFold(5),
+                     stack_method="predict_proba",
+                     )
+    stacking_clf.fit(X_train, y_train)
+    msg = "There should be three stacked estimators: XGB, RFC, SVM"
+    assert len(stacking_clf.estimators_) == 3, msg
+    estimator_data["stacking"] = {"classifier": stacking_clf}
+    # now, ROC comparison vs. individual estimators
+    fig, ax = plt.subplots()
+    for estimator_name in estimator_data.keys():
+        if estimator_name == "xgb_dart":
+            continue
+        estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
+            estimator.fit(X_train, y_train)
+        if estimator_name == "stacking":
+            color = "red"
+        else:
+            color = "grey"
+        pred_proba = estimator.predict_proba(X_test)
+        fpr, tpr, thresholds = metrics.roc_curve(y_test, pred_proba[..., 1])
+        roc_auc = metrics.auc(fpr, tpr)
+        ax.plot(fpr,
+                tpr,
+                label=f"{estimator_name} (AUC = {roc_auc:.2f})",
+                marker=".",
+                alpha=0.6,
+                color=color,
+                lw=5)
+    ax.legend()
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("Stacking Classification on Test")
+    ax.set_aspect("equal")
+    fig.set_size_inches(8, 8)
+    fig.savefig(f"stacking_roc.png", dpi=300)
 
 
 
