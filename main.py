@@ -1,9 +1,12 @@
 import numpy as np
+from numpy.testing import assert_allclose
+from scipy.optimize import minimize
 import pandas as pd
 from sklearn.model_selection import (train_test_split, cross_val_score,
                                      StratifiedKFold, GridSearchCV,
                                      cross_val_predict)
-from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import (RandomForestClassifier, StackingClassifier,
+                              VotingClassifier)
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -214,6 +217,118 @@ def main():
     ax.set_aspect("equal")
     fig.set_size_inches(8, 8)
     fig.savefig(f"stacking_roc.png", dpi=300)
+
+    # 7b: Ensembling via weighted soft voting
+    # Let's use xgb_class, RFC, and SVM together again
+
+    # Chollet recommended using a simple Nelder-Mead optimization
+    # to determine weights in his ML book
+    # approach also inspired by:
+    # https://guillaume-martin.github.io/average-ensemble-optimization.html
+
+    # first get the cross-validated estimates for
+    # each input record for each model we want to include
+    for estimator_name in estimator_data.keys():
+        if estimator_name in ["xgb_dart", "stacking"]:
+            continue
+        estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
+
+        # generate cross validated estimates for each training data point
+        pred_proba = cross_val_predict(estimator=estimator,
+                                       X=X_train,
+                                       y=y_train,
+                                       cv=StratifiedKFold(5),
+                                       method="predict_proba")
+        # the second column of the pred_proba array should
+        # be the probabilities for phase separation ("1" value)
+        estimator_data[estimator_name]["train_predictions"] = pred_proba[..., 1]
+
+    train_predictions = np.concatenate([estimator_data["rfc"]["train_predictions"][:, None],
+                                        estimator_data["svm"]["train_predictions"][:, None],
+                                        estimator_data["xgb_class"]["train_predictions"][:, None]],
+                                       axis=1)
+
+    # next, let's try minimizing the MSE of the CV predictions
+    # to obtain the weights for soft voting
+    def objective(weights):
+        y_ens = np.average(train_predictions, axis=1, weights=weights)
+        return metrics.mean_squared_error(y_train, y_ens)
+    results_list = []
+    weights_list = []
+    for k in range(100):
+        rng = np.random.default_rng(k)
+        w0 = rng.uniform(size=train_predictions.shape[1])
+        bounds = [(0,1)] * train_predictions.shape[1]
+        cons = [{'type': 'eq',
+                 'fun': lambda w: w.sum() - 1}]
+        res = minimize(objective,
+               w0,
+               method='SLSQP', # Chollet recommended Nelder-Mead, but doesn't support constraints
+               bounds=bounds,
+               options={'disp': False, 'maxiter': 10000},
+               constraints=cons)
+        results_list.append(res.fun)
+        weights_list.append(res.x)
+    best_score = np.min(results_list)
+    best_weights = weights_list[results_list.index(best_score)]
+    assert_allclose(sum(best_weights), 1.0)
+    print("model order: rfc, svm, xgb_class")
+    print("best_weights:", best_weights)
+    fig_soft_vote_weights, ax = plt.subplots()
+    ax.bar(["RFC", "SVM", "XGB Class"],
+           height=best_weights)
+    ax.set_xlabel("Estimator")
+    ax.set_ylabel("Weight")
+    ax.set_title("SLSQP weights on training")
+    fig_soft_vote_weights.savefig("soft_vote_weights.png", dpi=300)
+
+
+    soft_voting_clf = VotingClassifier(estimators=[("rfc", estimator_data["rfc"]["classifier"]),
+                                                   ("svm", make_pipeline(StandardScaler(), estimator_data["svm"]["classifier"])),
+                                                   ("xgb_class", estimator_data["xgb_class"]["classifier"]),
+                                                   ],
+                                       voting="soft",
+                                       weights=best_weights,
+                                       n_jobs=-1)
+    soft_voting_clf.fit(X_train, y_train)
+    msg = "There should be three stacked estimators: RFC, SVM, XGB Class"
+    assert len(soft_voting_clf.estimators_) == 3, msg
+    estimator_data["soft_voting"] = {"classifier": soft_voting_clf}
+
+    # now, ROC comparison vs. individual estimators
+    fig, ax = plt.subplots()
+    for estimator_name in estimator_data.keys():
+        if estimator_name in ["xgb_dart", "stacking"]:
+            continue
+        estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
+            estimator.fit(X_train, y_train)
+        if estimator_name == "soft_voting":
+            color = "red"
+        else:
+            color = "grey"
+        pred_proba = estimator.predict_proba(X_test)
+        fpr, tpr, thresholds = metrics.roc_curve(y_test, pred_proba[..., 1])
+        roc_auc = metrics.auc(fpr, tpr)
+        ax.plot(fpr,
+                tpr,
+                label=f"{estimator_name} (AUC = {roc_auc:.2f})",
+                marker=".",
+                alpha=0.6,
+                color=color,
+                lw=5)
+    ax.legend()
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("Soft Voting Classification on Test")
+    ax.set_aspect("equal")
+    fig.set_size_inches(6, 6)
+    fig.savefig(f"soft_voting_roc.png", dpi=300)
 
 
 
