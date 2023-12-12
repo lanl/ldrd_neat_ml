@@ -58,7 +58,7 @@ def main():
     test_percent_phase_sep = (test_phase_sep_count / y_test.size) * 100.
     print(f"% phase separated training: {training_percent_phase_sep:.2f}")
     print(f"% phase separated test: {test_percent_phase_sep:.2f}")
-    ax.set_title(f"Binary Phase Sepration Class Imbalance (Train: {training_percent_phase_sep:.2f} %; Test: {test_percent_phase_sep:.2f} %)")
+    ax.set_title(f"Binary Phase Separation Class Imbalance (Train: {training_percent_phase_sep:.2f} %; Test: {test_percent_phase_sep:.2f} %)")
     fig_class_imb.savefig("class_imbalance.png", dpi=300)
 
     # Step 3: Establish baseline cross-validation scores on training
