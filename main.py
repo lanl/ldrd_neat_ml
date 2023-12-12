@@ -37,6 +37,30 @@ def main():
     # of useful ML...
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
 
+    # 2b: plot/output the class imbalance between training/test sets
+    training_no_phase_sep_count = (y_train == 0).sum()
+    training_phase_sep_count = (y_train == 1).sum()
+    test_no_phase_sep_count = (y_test == 0).sum()
+    test_phase_sep_count = (y_test == 1).sum()
+    fig_class_imb, ax = plt.subplots()
+    ax.bar(["training NO",
+            "training YES",
+            "test NO",
+            "test YES"],
+           height=[training_no_phase_sep_count,
+                   training_phase_sep_count,
+                   test_no_phase_sep_count,
+                   test_phase_sep_count],
+           color=["blue", "blue", "red", "red"])
+    ax.set_xlabel("Phase Separation?")
+    ax.set_ylabel("Record Count")
+    training_percent_phase_sep = (training_phase_sep_count / y_train.size) * 100.
+    test_percent_phase_sep = (test_phase_sep_count / y_test.size) * 100.
+    print(f"% phase separated training: {training_percent_phase_sep:.2f}")
+    print(f"% phase separated test: {test_percent_phase_sep:.2f}")
+    ax.set_title(f"Binary Phase Sepration Class Imbalance (Train: {training_percent_phase_sep:.2f} %; Test: {test_percent_phase_sep:.2f} %)")
+    fig_class_imb.savefig("class_imbalance.png", dpi=300)
+
     # Step 3: Establish baseline cross-validation scores on training
     # let's establish baseline cross-validation roc_auc scores
     # prior to any hyperparameter optimization, using only
