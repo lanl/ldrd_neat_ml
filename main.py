@@ -240,7 +240,7 @@ def main():
     ax.set_title("Stacking Classification on Test")
     ax.set_aspect("equal")
     fig.set_size_inches(8, 8)
-    fig.savefig(f"stacking_roc.png", dpi=300)
+    fig.savefig("stacking_roc.png", dpi=300)
 
     # 7b: Ensembling via weighted soft voting
     # Let's use xgb_class, RFC, and SVM together again
@@ -352,7 +352,7 @@ def main():
     ax.set_title("Soft Voting Classification on Test")
     ax.set_aspect("equal")
     fig.set_size_inches(6, 6)
-    fig.savefig(f"soft_voting_roc.png", dpi=300)
+    fig.savefig("soft_voting_roc.png", dpi=300)
 
 
 
