@@ -4,10 +4,11 @@ before_script:
   - python --version
   - python -m venv venv
   - source venv/bin/activate
-  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost
+  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost pandas scikit-learn openpyxl jinja2
 
 stages:
   - lint
+  - test
 
 lint:
   stage: lint
@@ -18,3 +19,15 @@ lint:
   script:
     - mypy .
     - ruff check .
+
+# a crude end-to-end test of the entire workflow
+# TODO: add proper regression tests for individual
+# parts of the code base
+functional_test:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == 'merge_request_event'
+      when: always
+  allow_failure: false
+  script:
+    - python main.py
