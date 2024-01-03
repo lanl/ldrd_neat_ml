@@ -120,3 +120,12 @@ def color_df(styler):
     vmax = 1.0
     styler.background_gradient(axis=None, vmin=vmin, vmax=vmax, cmap="viridis")
     return styler
+
+
+def entropy(y):
+    # see section 3.2.3 of Kunapuli's "Ensemble Methods for Machine
+    # Learning" (2023)
+    counts = np.unique(y, return_counts=True)[1]
+    p = np.array(counts.astype(np.float64)) / len(y)
+    ent = -p.T @ np.log2(p)
+    return ent

@@ -373,6 +373,66 @@ def main():
         fig.set_size_inches(6, 6)
         fig.savefig(f"{voting_type}_voting_roc.png", dpi=300)
 
+    # 7c: Ensembling via entropy weighting; see section 3.2.3
+    # of Kunapuli's "Ensemble Methods for Marchine Learning" (2023);
+    # Let's use xgb_class, RFC, and SVM together again
+    print("-" * 70)
+    print("Step 7c: Start of entropy weighting ensembling")
+    ent_weights = []
+    ent_ensemble_members = []
+    for estimator_name in estimator_data.keys():
+        if estimator_name in ["xgb_dart", "stacking", "soft_voting", "hard_voting"]:
+            continue
+        print(f"hard prediction for {estimator_name}:", estimator_data[estimator_name]["train_predictions_hard"])
+        validation_hard_preds = estimator_data[estimator_name]["train_predictions_hard"]
+        ent_weights.append(1 / lib.entropy(validation_hard_preds))
+        ent_ensemble_members.append(estimator_name)
+    ent_weights = np.asarray(ent_weights)
+    ent_weights /= np.sum(ent_weights)
+    print("ent_weights:", ent_weights)
+    entropy_clf = VotingClassifier(estimators=[("rfc", estimator_data["rfc"]["classifier"]),
+                                              ("xgb_class", estimator_data["xgb_class"]["classifier"]),
+                                              ("svm", make_pipeline(StandardScaler(), estimator_data["svm"]["classifier"])),
+                                             ],
+                                       voting="soft",
+                                       weights=ent_weights,
+                                       n_jobs=-1)
+
+    entropy_clf.fit(X_train, y_train)
+    err_msg = f"The entropy weights follow this estimator order: {ent_ensemble_members}, but the entropy VotingClassifier uses this estimator order: {entropy_clf.named_estimators.keys()}"
+    assert ent_ensemble_members == list(entropy_clf.named_estimators_.keys()), err_msg
+    estimator_data["entropy_weighting"] = {"classifier": entropy_clf}
+
+    # now, ROC comparison vs. individual estimators
+    fig, ax = plt.subplots()
+    for estimator_name in ["rfc", "xgb_class", "svm", "entropy_weighting"]:
+        estimator = estimator_data[estimator_name]["classifier"]
+        if estimator_name == "svm":
+            # need the scaler for SVM
+            estimator = make_pipeline(StandardScaler(), estimator)
+            estimator.fit(X_train, y_train)
+        if "weighting" in estimator_name:
+            color = "red"
+        else:
+            color = "grey"
+        pred = estimator.predict_proba(X_test)[..., 1]
+        fpr, tpr, thresholds = metrics.roc_curve(y_test, pred)
+        roc_auc = metrics.auc(fpr, tpr)
+        ax.plot(fpr,
+                tpr,
+                label=f"{estimator_name} (AUC = {roc_auc:.2f})",
+                marker=".",
+                alpha=0.6,
+                color=color,
+                lw=5)
+    ax.legend()
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("Entropy weighted voting classification on test")
+    ax.set_aspect("equal")
+    fig.set_size_inches(6, 6)
+    fig.savefig("entopy_weighted_voting_roc.png", dpi=300)
+    print("-" * 70)
 
 
 
