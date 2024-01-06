@@ -434,6 +434,50 @@ def main():
     fig.savefig("entopy_weighted_voting_roc.png", dpi=300)
     print("-" * 70)
 
+    # 7d: Ensembling via Dempster-Shafer combination; see section 3.2.4
+    # of Kunapuli's "Ensemble Methods for Marchine Learning" (2023);
+    # Let's use xgb_class, RFC, and SVM together again
+    print("-" * 70)
+    print("Step 7d: Start of Dempster-Shafer ensembling")
+    # ROC comparison vs. individual estimators
+    fig, ax = plt.subplots()
+    for estimator_name in ["rfc", "xgb_class", "svm", "DST"]:
+        color = "grey"
+        if estimator_name != "DST":
+            estimator = estimator_data[estimator_name]["classifier"]
+            if estimator_name == "svm":
+                # need the scaler for SVM
+                estimator = make_pipeline(StandardScaler(), estimator)
+                estimator.fit(X_train, y_train)
+            pred = estimator.predict_proba(X_test)[..., 1]
+        else:
+            color = "red"
+            # TODO: we're using the normalized DST beliefs here...
+            # is that allowed for ROC AUC?
+            pred = lib.dempster_shafer_pred([estimator_data["rfc"]["classifier"],
+                                             estimator_data["svm"]["classifier"],
+                                             estimator_data["xgb_class"]["classifier"]],
+                                            X_train,
+                                            y_train,
+                                            X_test)[1]
+        fpr, tpr, thresholds = metrics.roc_curve(y_test, pred)
+        roc_auc = metrics.auc(fpr, tpr)
+        ax.plot(fpr,
+                tpr,
+                label=f"{estimator_name} (AUC = {roc_auc:.2f})",
+                marker=".",
+                alpha=0.6,
+                color=color,
+                lw=5)
+    ax.legend()
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("DST combination classification on test\n(TODO: DST normalized belief allowed?)")
+    ax.set_aspect("equal")
+    fig.set_size_inches(6, 6)
+    fig.savefig("DST_combination_roc.png", dpi=300)
+    print("-" * 70)
+
 
 
 if __name__ == "__main__":
