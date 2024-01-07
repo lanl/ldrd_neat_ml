@@ -3,6 +3,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 # these features were considered potentially interesting
@@ -129,3 +131,38 @@ def entropy(y):
     p = np.array(counts.astype(np.float64)) / len(y)
     ent = -p.T @ np.log2(p)
     return ent
+
+
+def dempster_shafer_pred(estimators,
+                         X_train,
+                         y_train,
+                         X_test):
+    # train a list of estimators, and then use
+    # Dempster-Shafer theory to combine their
+    # predictions on test data
+    # see section 3.2.4 of Kunapuli's
+    # "Ensemble Methods for Marchine Learning" (2023)
+    trained_estimators = []
+    for estimator in estimators:
+        # probably safe to scale the data for each estimator?
+        estimator = make_pipeline(StandardScaler(), estimator)
+        trained_estimators.append(estimator.fit(X_train, y_train))
+    test_preds = np.empty(shape=(len(estimators), X_test.shape[0]))
+    for index, estimator in enumerate(trained_estimators):
+        test_preds[index, ...] = estimator.predict_proba(X_test)[..., 1]
+    # column 0 is NOT phase sep
+    bpa_0 = 1 - np.prod(test_preds, axis=0)
+    # column 1 IS phase sep
+    bpa_1 = 1 - np.prod(1 - test_preds, axis=0)
+    belief_0 = bpa_0 / (1 - bpa_0)
+    belief_1 = bpa_1 / (1 - bpa_1)
+    belief = np.vstack([belief_0, belief_1]).T
+    # y_pred_ds now contains the hard 0/1 class predictions
+    # based on the highest "belief" score
+    y_pred_ds = np.argmax(belief, axis=1)
+    # for ROC curve we don't want hard decision though, let's
+    # try using normalized beliefs?
+    # TODO: check literature to see if this is acceptable?
+    Z = belief_0 + belief_1 + 1
+    y_normalized_beliefs = belief_1 / Z
+    return y_pred_ds, y_normalized_beliefs
