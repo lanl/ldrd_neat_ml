@@ -27,6 +27,12 @@ def main():
     X, y = lib.preprocess_data(df=df)
     lib.plot_input_data(X, y)
 
+    # Step 1b: also plot triangle phase diagram
+    # TODO: use actual 3-species/polymer data--for now we just
+    # use synthetic data for block copolymer to check that
+    # we produce something reasonable
+    lib.plot_tri_phase_diagram(X, y)
+
     # we only have two features at the moment (% Dextran, % PEO)
     # so no need for feature selection just yet; can jump right into
     # hyperparameter optimization

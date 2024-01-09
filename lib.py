@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import rankdata
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+import ternary
 
 
 # these features were considered potentially interesting
@@ -166,3 +167,26 @@ def dempster_shafer_pred(estimators,
     Z = belief_0 + belief_1 + 1
     y_normalized_beliefs = belief_1 / Z
     return y_pred_ds, y_normalized_beliefs
+
+
+def plot_tri_phase_diagram(X, y):
+    figure, tax = ternary.figure(scale=30)
+    tax.clear_matplotlib_ticks()
+    tax.boundary(linewidth=2.0)
+    tax.gridlines(color="blue", multiple=5)
+    # TODO: use real 3-species data, not synthetic data for
+    # one column...
+    X = np.column_stack((X[..., 0], X[..., 1], np.arange((34)) / 10))
+    tax.scatter(X, c=y)
+    offset = 0.15
+    tax.right_axis_label("PEO (wt %)", offset=offset)
+    tax.bottom_axis_label("Dextran (wt %)", offset=offset)
+    tax.left_axis_label("Block Copolymer (wt %)", offset=offset)
+    tax.set_title("Ternary Phase Diagram (synthetic copolymer data for now)\n", fontsize=10)
+    tax.get_axes().axis('off')
+    tax.ticks(axis='lbr', multiple=3, linewidth=1, offset=0.025)
+    # this is apparently needed on some platforms for
+    # axis labels to show up; see:
+    # https://github.com/marcharper/python-ternary/blob/master/README.md?plain=1#L472
+    tax._redraw_labels()
+    figure.savefig("ternary.png", dpi=300)
