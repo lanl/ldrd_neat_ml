@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from numpy.testing import assert_allclose
 from scipy.optimize import minimize
@@ -18,12 +19,12 @@ matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
 
-import lib
+from neat_ml import lib
 
 
 def main():
     # Step 1: Read in the experimental data/format it appropriately
-    df = pd.read_excel("data/mihee_peo_dextran_phase_map_experimental.xlsx")
+    df = pd.read_excel("neat_ml/data/mihee_peo_dextran_phase_map_experimental.xlsx")
     X, y = lib.preprocess_data(df=df)
     lib.plot_input_data(X, y)
 
@@ -31,7 +32,8 @@ def main():
     # TODO: use actual 3-species/polymer data--for now we just
     # use synthetic data for block copolymer to check that
     # we produce something reasonable
-    lib.plot_tri_phase_diagram(X, y)
+    X_tmp = np.column_stack((X[..., 0], X[..., 1], np.arange((34)) / 10))
+    lib.plot_tri_phase_diagram(X_tmp, y, plot_path=os.getcwd())
 
     # we only have two features at the moment (% Dextran, % PEO)
     # so no need for feature selection just yet; can jump right into

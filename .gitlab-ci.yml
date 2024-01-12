@@ -31,3 +31,13 @@ functional_test:
   allow_failure: false
   script:
     - python main.py
+
+unit_tests:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == 'merge_request_event'
+      when: always
+  allow_failure: false
+  script:
+    - python -m pip install -v .
+    - pytest
