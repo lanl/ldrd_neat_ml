@@ -20,9 +20,9 @@ def test_ternary_phase_diagram(tmp_path):
     lib.plot_tri_phase_diagram(X,
                                y,
                                plot_path=tmp_path,
-                               bottom_label="Sand Separate (%)",
-                               right_label="Silt Separate (%)",
-                               left_label="Clay Separate (%)",
+                               bottom_label_z="Sand Separate (%)",
+                               right_label_y="Silt Separate (%)",
+                               left_label_x="Clay Separate (%)",
                                clockwise=True)
 
     # first check that plot was produced

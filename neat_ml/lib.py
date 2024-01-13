@@ -173,19 +173,24 @@ def dempster_shafer_pred(estimators,
 def plot_tri_phase_diagram(X,
                            y,
                            plot_path,
-                           bottom_label="",
-                           right_label="",
-                           left_label="",
+                           bottom_label_z="",
+                           right_label_y="",
+                           left_label_x="",
                            clockwise=True):
     figure, tax = ternary.figure(scale=100)
     tax.clear_matplotlib_ticks()
     tax.boundary(linewidth=2.0)
     tax.gridlines(color="blue", multiple=5)
-    tax.scatter(X, c=y)
+    # need to swap columns to match convention
+    # of:
+    # https://en.wikipedia.org/wiki/Ternary_plot#Example
+    X_loc = X.copy()
+    X_loc[..., [0, 1]] = X_loc[..., [1, 0]]
+    tax.scatter(X_loc, c=y)
     offset = 0.15
-    tax.right_axis_label(f"{right_label}", offset=offset)
-    tax.bottom_axis_label(f"{bottom_label}", offset=offset)
-    tax.left_axis_label(f"{left_label}", offset=offset)
+    tax.right_axis_label(f"{right_label_y}", offset=offset)
+    tax.bottom_axis_label(f"{bottom_label_z}", offset=offset)
+    tax.left_axis_label(f"{left_label_x}", offset=offset)
     tax.set_title("Ternary Phase Diagram (synthetic copolymer data for now)\n", fontsize=10)
     tax.get_axes().axis('off')
     tax.ticks(axis='lbr',
