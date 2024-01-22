@@ -177,6 +177,10 @@ def plot_tri_phase_diagram(X,
                            right_label_y="",
                            left_label_x="",
                            clockwise=True):
+    if X.shape[1] != 3:
+        raise ValueError("Ternary plot requires input with three variables.")
+    if np.unique(np.sum(X, axis=1)).size != 1:
+        raise ValueError("The ternary phase diagram inputs do not sum to a constant value.")
     figure, tax = ternary.figure(scale=100)
     tax.clear_matplotlib_ticks()
     tax.boundary(linewidth=2.0)

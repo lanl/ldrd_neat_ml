@@ -1,5 +1,6 @@
 from neat_ml import lib
 
+import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
@@ -37,3 +38,27 @@ def test_ternary_phase_diagram(tmp_path):
     # this check appears to be sensitivie to the operations
     # inside `plot_tri_phase_diagram()`
     assert_allclose(actual_offsets, expected_offsets)
+
+
+@pytest.mark.parametrize("X, y, match", [
+    # case that doesn't sum to constant value
+    (np.array([[50, 20, 30],
+               [10, 60, 30],
+               [10, 30, 59]]),
+     np.zeros(3),
+     "do not sum"),
+    # case with incorrect shape that sums to
+    # a constant value
+    (np.array([[50, 20, 30, 2],
+               [10, 60, 30, 2],
+               [10, 30, 60, 2]]),
+     np.zeros(3),
+     "three variables"),
+    ])
+def test_ternary_phase_diagram_bad_inputs(tmp_path, X, y, match):
+    # according to: https://en.wikipedia.org/wiki/Ternary_plot
+    # a ternary plot is a barycentric plot on three variables
+    # which sum to a constant, so we should error out when
+    # input data is non-conforming
+    with pytest.raises(ValueError, match=match):
+        lib.plot_tri_phase_diagram(X, y, plot_path=tmp_path)
