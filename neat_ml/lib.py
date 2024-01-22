@@ -204,3 +204,4 @@ def plot_tri_phase_diagram(X,
     tax._redraw_labels()
     figure.savefig("ternary.png", dpi=300)
     figure.savefig(os.path.join(plot_path, "ternary.png"), dpi=300)
+    return figure

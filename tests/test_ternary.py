@@ -1,6 +1,7 @@
 from neat_ml import lib
 
 import numpy as np
+from numpy.testing import assert_allclose
 
 
 def test_ternary_phase_diagram(tmp_path):
@@ -17,13 +18,22 @@ def test_ternary_phase_diagram(tmp_path):
     y = np.array([0, 0, 1])
 
     expected_plot_file = tmp_path / "ternary.png"
-    lib.plot_tri_phase_diagram(X,
-                               y,
-                               plot_path=tmp_path,
-                               bottom_label_z="Sand Separate (%)",
-                               right_label_y="Silt Separate (%)",
-                               left_label_x="Clay Separate (%)",
-                               clockwise=True)
+    actual_fig = lib.plot_tri_phase_diagram(X,
+                                            y,
+                                            plot_path=tmp_path,
+                                            bottom_label_z="Sand Separate (%)",
+                                            right_label_y="Silt Separate (%)",
+                                            left_label_x="Clay Separate (%)",
+                                            clockwise=True)
 
     # first check that plot was produced
     assert expected_plot_file.is_file()
+    axis = actual_fig.get_axes()[0]
+    cs = axis.collections[0]
+    actual_offsets = cs.get_offsets()
+    expected_offsets = [[45.0, 43.30127018922193],
+                        [65.0, 8.660254037844386],
+                        [35.0, 8.660254037844386]]
+    # this check appears to be sensitivie to the operations
+    # inside `plot_tri_phase_diagram()`
+    assert_allclose(actual_offsets, expected_offsets)
