@@ -32,7 +32,8 @@ def main():
     # TODO: use actual 3-species/polymer data--for now we just
     # use synthetic data for block copolymer to check that
     # we produce something reasonable
-    X_tmp = np.column_stack((X[..., 0], X[..., 1], np.arange((34)) / 10))
+    y_tmp = 50 - X.sum(axis=1)
+    X_tmp = np.column_stack((X[..., 0], X[..., 1], y_tmp))
     lib.plot_tri_phase_diagram(X_tmp, y, plot_path=os.getcwd())
 
     # we only have two features at the moment (% Dextran, % PEO)

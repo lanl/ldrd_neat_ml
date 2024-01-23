@@ -173,6 +173,7 @@ def dempster_shafer_pred(estimators,
 def plot_tri_phase_diagram(X,
                            y,
                            plot_path,
+                           plot_name="ternary.png",
                            bottom_label_z="",
                            right_label_y="",
                            left_label_x="",
@@ -189,13 +190,22 @@ def plot_tri_phase_diagram(X,
     # of:
     # https://en.wikipedia.org/wiki/Ternary_plot#Example
     X_loc = X.copy()
-    X_loc[..., [0, 1]] = X_loc[..., [1, 0]]
-    tax.scatter(X_loc, c=y)
+    # TODO: clockwise vs. counterclockwise conventions handled
+    # more gracefully? this is pretty confusing manipulation!
     offset = 0.15
-    tax.right_axis_label(f"{right_label_y}", offset=offset)
-    tax.bottom_axis_label(f"{bottom_label_z}", offset=offset)
-    tax.left_axis_label(f"{left_label_x}", offset=offset)
-    tax.set_title("Ternary Phase Diagram (synthetic copolymer data for now)\n", fontsize=10)
+    if clockwise:
+        X_loc[..., [0, 1]] = X_loc[..., [1, 0]]
+        tax.right_axis_label(f"{right_label_y}", offset=offset)
+        tax.bottom_axis_label(f"{bottom_label_z}", offset=offset)
+        tax.left_axis_label(f"{left_label_x}", offset=offset)
+    else:
+        X_loc[..., [0, 2]] = X_loc[..., [2, 0]]
+        X_loc[..., [0, 1]] = X_loc[..., [1, 0]]
+        tax.right_axis_label(f"{left_label_x}", offset=offset)
+        tax.bottom_axis_label(f"{right_label_y}", offset=offset)
+        tax.left_axis_label(f"{bottom_label_z}", offset=offset)
+    tax.scatter(X_loc, c=y / y.max())
+    tax.set_title("Ternary Phase Diagram (synthetic data for now)\n", fontsize=10)
     tax.get_axes().axis('off')
     tax.ticks(axis='lbr',
               multiple=10,
@@ -206,6 +216,5 @@ def plot_tri_phase_diagram(X,
     # axis labels to show up; see:
     # https://github.com/marcharper/python-ternary/blob/master/README.md?plain=1#L472
     tax._redraw_labels()
-    figure.savefig("ternary.png", dpi=300)
-    figure.savefig(os.path.join(plot_path, "ternary.png"), dpi=300)
+    figure.savefig(os.path.join(plot_path, f"{plot_name}"), dpi=300)
     return figure
