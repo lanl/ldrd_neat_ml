@@ -26,7 +26,7 @@ from numpy.testing import assert_allclose
     # Mihee synthetic data with 80 % water
     (pd.read_excel("neat_ml/data/Hypothetical_ternary_phase_map.xlsx",
                    sheet_name=[0],
-                   header=1)[0].iloc[..., 4:-1].to_numpy(),
+                   header=1)[0].iloc[..., 4:-1].to_numpy(), # type: ignore
      np.ones(29),
      False,
     [[50.0,69.28203230275508],
@@ -62,7 +62,7 @@ from numpy.testing import assert_allclose
     # Mihee synthetic data with 20 % water
     (pd.read_excel("neat_ml/data/Hypothetical_ternary_phase_map.xlsx",
                    sheet_name=[1],
-                   header=1)[1].iloc[..., 4:-1].to_numpy(),
+                   header=1)[1].iloc[..., 4:-1].to_numpy(), # type: ignore
      np.ones(43),
      False,
     [[50.0,69.28203230275508],
