@@ -4,7 +4,7 @@ before_script:
   - python --version
   - python -m venv venv
   - source venv/bin/activate
-  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary
+  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest
 
 stages:
   - lint
@@ -31,3 +31,13 @@ functional_test:
   allow_failure: false
   script:
     - python main.py
+
+unit_tests:
+  stage: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == 'merge_request_event'
+      when: always
+  allow_failure: false
+  script:
+    - python -m pip install -v .
+    - pytest
