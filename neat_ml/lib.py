@@ -218,3 +218,26 @@ def plot_tri_phase_diagram(X,
     tax._redraw_labels()
     figure.savefig(os.path.join(plot_path, f"{plot_name}"), dpi=300)
     return figure
+
+
+def plot_ma_shap_vals_per_model(shap_values,
+                                feature_names,
+                                fig_title: str,
+                                fig_name: str):
+    # plot the mean absolute SHAP values for
+    # any models
+    # NOTE: shap_values should be for the "positive" class,
+    # though for now it probably doesn't matter since we have
+    # a binary classification with symmetric feature importances
+    fig, ax = plt.subplots(1, 1)
+    abs_shap_values = np.absolute(shap_values)
+    mean_abs_shap_values = np.mean(abs_shap_values, axis=0)
+    y_pos = np.arange(len(feature_names))
+    ax.barh(y_pos, mean_abs_shap_values)
+    ax.set_title(fig_title, fontsize=6)
+    ax.set_xlabel("mean(|SHAP value|)")
+    ax.set_yticks(y_pos, labels=feature_names)
+    fig.set_size_inches(3, 3)
+    fig.tight_layout()
+    fig.savefig(f"{fig_name}", dpi=300)
+    return fig
