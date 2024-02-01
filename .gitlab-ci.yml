@@ -4,7 +4,7 @@ before_script:
   - python --version
   - python -m venv venv
   - source venv/bin/activate
-  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest
+  - python -m pip install -U mypy ruff pandas-stubs matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest shap
 
 stages:
   - lint
