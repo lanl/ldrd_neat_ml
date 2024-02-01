@@ -17,6 +17,7 @@ import xgboost as xgb
 import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
+import shap
 
 
 from neat_ml import lib
@@ -485,6 +486,38 @@ def main():
     ax.set_aspect("equal")
     fig.set_size_inches(6, 6)
     fig.savefig("DST_combination_roc.png", dpi=300)
+    print("-" * 70)
+
+    # Step 8: Feature Importance Analysis
+    print("-" * 70)
+    print("Step 8: Feature Importance Analysis")
+    for key, subdict in estimator_data.items():
+        if key == "hard_voting":
+            # can't calculate SHAP without probabilities
+            continue
+        classifier = subdict["classifier"]
+        try:
+            explainer = shap.Explainer(classifier)
+        except TypeError:
+            # handle the non-tree/general cases
+            explainer = shap.KernelExplainer(classifier.predict_proba,
+                                             X_train)
+        shap_values = explainer.shap_values(X_train)
+        if isinstance(shap_values, list):
+            positive_class_shap_values = shap_values[1]
+        else:
+            # XGBoost seems to have some idiosyncracies with SHAP values
+            # https://github.com/shap/shap/issues/352#issuecomment-455795382
+            # NOTE: I'm not actually sure that these correspond to "positive
+            # "class", but it shouldn't matter since we'll take abs value
+            positive_class_shap_values = shap_values
+        assert positive_class_shap_values.shape == X_train.shape
+        print("Successfully calculated SHAP values for "
+              f"(classifier: {key}) on training data")
+        lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
+                                        feature_names=df.columns[1:-1],
+                                        fig_title=f"{key} model",
+                                        fig_name=f"{key}_SHAP_mean_absolute.png")
     print("-" * 70)
 
 
