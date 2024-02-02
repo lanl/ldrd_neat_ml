@@ -506,6 +506,15 @@ def main():
             # can't calculate SHAP without probabilities
             continue
         classifier = subdict["classifier"]
+        # some of the classifiers stored in the dict may not
+        # be fit...
+        classifier.fit(X_train, y_train)
+        # check that the classifier was fit reasonably
+        # above (the workflow is getting large and hard to manage...)
+        y_preds = classifier.predict(X_test)
+        balanced_acc = metrics.balanced_accuracy_score(y_test, y_preds)
+        msg = f"estimator {key} has {balanced_acc = }; may not have been fit?"
+        assert balanced_acc > 0.66, msg
         try:
             explainer = shap.Explainer(classifier)
         except TypeError:
