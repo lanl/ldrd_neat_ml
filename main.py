@@ -498,6 +498,30 @@ def main():
     fig.savefig("DST_combination_roc.png", dpi=300)
     print("-" * 70)
 
+    # Step 7e: Prepare Cesar's CG-MD simulation data(frame)
+    # for feature importance analysis by using our best classifier
+    # (SVM) to predict the phase separated status of each of his
+    # records
+    print("-" * 70)
+    print("Step 7e: Use experiment-based SVM model to add labels"
+          " to Cesar's CG-MD data, as a precursor to feature importance\n"
+          "analysis of the PEO/DEX system.")
+    # So far, on the binary phase separation PEO/DEX experimental data
+    # from Mihee, which only has % PEO, % DEX, and phase separation status (yes/no),
+    # SVM has been the most accurate ML model. So, let's try using that model
+    # to estimate the phase separated labels on Cesar's CG-MD sim data
+    experiment_svm_clf = estimator_data["svm"]["classifier"]
+    experiment_svm_clf.fit(X_train, y_train)
+    y_pred = experiment_svm_clf.predict(df_cesar_cg[["WT% DEX", "WT% PEO"]].to_numpy())
+    assert y_pred.shape[0] == df_cesar_cg.shape[0]
+    # plot the phase map with predicted labels, for ease
+    # of side-by-side comparison with the original expt
+    # data
+    lib.plot_input_data_cesar_CG(df=df_cesar_cg, y_pred=y_pred)
+    # the phase separation labels in the plot look sensible, so assign them
+    y_pred_cesar_cg_md = y_pred # noqa
+    print("-" * 70)
+
     # Step 8: Feature Importance Analysis
     print("-" * 70)
     print("Step 8: Feature Importance Analysis")
