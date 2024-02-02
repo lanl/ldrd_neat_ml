@@ -24,10 +24,20 @@ from neat_ml import lib
 
 
 def main():
-    # Step 1: Read in the experimental data/format it appropriately
+    # Step 1: Read in the data/format it appropriately
+    # Mihee's experimental PEO/DEX binary phase sep data:
     df = pd.read_excel("neat_ml/data/mihee_peo_dextran_phase_map_experimental.xlsx")
+    # shape (34, 4)
     X, y = lib.preprocess_data(df=df)
+    # read in Cesar's CG-MD simulation data for PEO/DEX:
+    df_cesar_cg = lib.read_in_cesar_cg_md_data()
+    # shape (49, 911)
+
+    # Plot the experimental vs. CG-MD input PEO/Dextran maps
+    # so we get an idea of the phase space we're comparing
+    # (they are a bit different, but mostly overlap, as intended)
     lib.plot_input_data(X, y)
+    lib.plot_input_data_cesar_CG(df=df_cesar_cg)
 
     # Step 1b: also plot triangle phase diagram
     # TODO: use actual 3-species/polymer data--for now we just

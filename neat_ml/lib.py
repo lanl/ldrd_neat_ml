@@ -7,6 +7,7 @@ from scipy.stats import rankdata
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 import ternary
+import pandas as pd
 
 
 # these features were considered potentially interesting
@@ -45,6 +46,22 @@ def preprocess_data(df):
     y[y == "No"] = 0
     y = y.astype(np.int32)
     return X, y
+
+
+def plot_input_data_cesar_CG(df):
+    # Produce a simple scatter plot of Cesar's CG
+    # MD input data, meant for side-by-side comparison
+    # with the expt PEO/DEX binary phase separation data from
+    # Mihee
+    fig, ax = plt.subplots(1, 1)
+    ax.scatter(df["WT% DEX"], df["WT% PEO"], c="gray")
+    ax.set_aspect("equal")
+    ax.set_xlabel("Dextran (wt %)")
+    ax.set_ylabel("PEO (wt %)")
+    ax.set_title("Cesar CG-MD input data\n"
+                 "(phase sep labels unknown)")
+    fig.savefig("cesar_cg_md_input_data.png",
+                dpi=300)
 
 
 def plot_input_data(X, y):
@@ -241,3 +258,35 @@ def plot_ma_shap_vals_per_model(shap_values,
     fig.tight_layout()
     fig.savefig(f"{fig_name}", dpi=300)
     return fig
+
+
+def read_in_cesar_cg_md_data():
+    # CG-MD gyration data:
+    df_cesar_cg_gyr_persistence = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+                                                sheet_name=0)
+    df_cesar_cg_gyr_persistence.dropna(how='all', inplace=True) # shape (49, 10)
+    assert df_cesar_cg_gyr_persistence.isna().sum().sum() == 0
+    # CG-MD RDF data:
+    df_cesar_cg_rdf = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+                                    sheet_name=1)
+    df_cesar_cg_rdf.dropna(how='all', inplace=True) # shape (49, 904)
+    assert df_cesar_cg_rdf.isna().sum().sum() == 0
+    # fuse Cesar's CG-MD data on the WT % columns
+    df_cesar_cg = df_cesar_cg_gyr_persistence.merge(df_cesar_cg_rdf,
+                                                    on=["WT% DEX",
+                                                        "WT% PEO",
+                                                        "WT% WATER"])
+    # we've joined on three columns, so check that the shape/properties
+    # match expectations
+    assert df_cesar_cg.isna().sum().sum() == 0
+    expected_rows = df_cesar_cg_rdf.shape[0]
+    expected_cols = (df_cesar_cg_rdf.shape[1] +
+                     df_cesar_cg_gyr_persistence.shape[1] -
+                     3)
+    assert df_cesar_cg.shape == (expected_rows, expected_cols)
+    # Cesar's binary CG MD simulation data has a different number
+    # of records, and different set of PEO/dex percentages, than
+    # Mihee's original binary experimental data
+    # Mihee's data has shape (34, 4) and Cesar's (49, 10) for gyration
+    # and (49, 904) for RDF --> (49, 911) combined
+    return df_cesar_cg
