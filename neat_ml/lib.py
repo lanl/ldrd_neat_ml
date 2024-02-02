@@ -48,19 +48,29 @@ def preprocess_data(df):
     return X, y
 
 
-def plot_input_data_cesar_CG(df):
+def plot_input_data_cesar_CG(df, y_pred=None):
     # Produce a simple scatter plot of Cesar's CG
     # MD input data, meant for side-by-side comparison
     # with the expt PEO/DEX binary phase separation data from
     # Mihee
     fig, ax = plt.subplots(1, 1)
-    ax.scatter(df["WT% DEX"], df["WT% PEO"], c="gray")
+    if y_pred is not None:
+        c = y_pred
+        title_addition = "(phase sep labels from SVM)"
+        fig_name_addition = "predicted"
+    else:
+        c = "gray"
+        title_addition = "(phase sep labels unknown)"
+        fig_name_addition = "original"
+    im = ax.scatter(df["WT% DEX"], df["WT% PEO"], c=c)
     ax.set_aspect("equal")
     ax.set_xlabel("Dextran (wt %)")
     ax.set_ylabel("PEO (wt %)")
     ax.set_title("Cesar CG-MD input data\n"
-                 "(phase sep labels unknown)")
-    fig.savefig("cesar_cg_md_input_data.png",
+                 f"{title_addition}")
+    if y_pred is not None:
+        fig.colorbar(im, ax=ax, shrink=0.9)
+    fig.savefig(f"cesar_cg_md_input_data_{fig_name_addition}.png",
                 dpi=300)
 
 
