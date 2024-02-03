@@ -18,6 +18,7 @@ import matplotlib
 matplotlib.use("agg")
 import matplotlib.pyplot as plt
 import shap
+from interpret.glassbox import ExplainableBoostingClassifier
 
 
 from neat_ml import lib
@@ -571,7 +572,7 @@ def main():
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
                                     feature_names=df_cesar_cg.columns,
                                     fig_title=f"Random Forest model\n(oob balanced accuracy = {oob_bal_acc_score:.3f})",
-                                    fig_name=f"RF_SHAP_mean_absolute_CG_MD.png",
+                                    fig_name="RF_SHAP_mean_absolute_CG_MD.png",
                                     top_feat_count=10)
 
     svm = SVC(gamma="auto", probability=True)
@@ -587,12 +588,22 @@ def main():
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
                                     feature_names=df_cesar_cg.columns,
                                     fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",
-                                    fig_name=f"SVM_SHAP_mean_absolute_CG_MD.png",
+                                    fig_name="SVM_SHAP_mean_absolute_CG_MD.png",
                                     top_feat_count=10)
 
     # perform EBM analysis
     # TODO: no OOB score available as far as I know, so should eventually
     # check on validation...
+    ebm = ExplainableBoostingClassifier()
+    ebm.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
+    ebm_pred = ebm.predict(df_cesar_cg.to_numpy())
+    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_cg_md, ebm_pred)
+    explain_data = ebm.explain_global().data()
+    lib.plot_ebm_data(explain_data=explain_data,
+                      original_feat_names=df_cesar_cg.columns,
+                      fig_title=f"Top 10 EBM features\n(training balanced accuracy = {ebm_bal_acc})",
+                      fig_name="EBM_top_10_features_cesar_cg.png",
+                      top_feat_count=10)
     print("-" * 70)
 
 
