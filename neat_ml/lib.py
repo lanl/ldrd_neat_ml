@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -250,7 +251,8 @@ def plot_tri_phase_diagram(X,
 def plot_ma_shap_vals_per_model(shap_values,
                                 feature_names,
                                 fig_title: str,
-                                fig_name: str):
+                                fig_name: str,
+                                top_feat_count: Optional[int] = None):
     # plot the mean absolute SHAP values for
     # any models
     # NOTE: shap_values should be for the "positive" class,
@@ -259,7 +261,14 @@ def plot_ma_shap_vals_per_model(shap_values,
     fig, ax = plt.subplots(1, 1)
     abs_shap_values = np.absolute(shap_values)
     mean_abs_shap_values = np.mean(abs_shap_values, axis=0)
-    y_pos = np.arange(len(feature_names))
+    if top_feat_count is None:
+        y_pos = np.arange(len(feature_names))
+    else:
+        # useful to pick only top few features when there are tons
+        sort_idx = np.argsort(mean_abs_shap_values)[::-1]
+        feature_names = feature_names[sort_idx][:top_feat_count]
+        mean_abs_shap_values = mean_abs_shap_values[sort_idx][:top_feat_count]
+        y_pos = np.arange(top_feat_count)
     ax.barh(y_pos, mean_abs_shap_values)
     ax.set_title(fig_title, fontsize=6)
     ax.set_xlabel("mean(|SHAP value|)")

@@ -524,7 +524,7 @@ def main():
 
     # Step 8: Feature Importance Analysis
     print("-" * 70)
-    print("Step 8: Feature Importance Analysis")
+    print("Step 8: Feature Importance Analysis of Mihee Expt Data")
     for key, subdict in estimator_data.items():
         if key == "hard_voting":
             # can't calculate SHAP without probabilities
@@ -552,6 +552,47 @@ def main():
                                         feature_names=df.columns[1:-1],
                                         fig_title=f"{key} model",
                                         fig_name=f"{key}_SHAP_mean_absolute.png")
+    print("-" * 70)
+
+    # Step 8b: Feature Importance Analysis of CG-MD data
+    # TODO: reduce code duplication on SHAP/feat imp analyses?
+    print("-" * 70)
+    print("Step 8b: Feature Importance Analysis of CG-MD Data")
+    # perform SHAP analysis on random forest and SVM
+    # TODO: there's no OOB score for SVM, so should eventually check
+    # on validation...
+    rf = RandomForestClassifier(random_state=0,
+                                oob_score=metrics.balanced_accuracy_score)
+    rf.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
+    oob_bal_acc_score = rf.oob_score_
+    explainer = shap.Explainer(rf)
+    shap_values = explainer.shap_values(df_cesar_cg.to_numpy())
+    positive_class_shap_values = shap_values[1]
+    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
+                                    feature_names=df_cesar_cg.columns,
+                                    fig_title=f"Random Forest model\n(oob balanced accuracy = {oob_bal_acc_score:.3f})",
+                                    fig_name=f"RF_SHAP_mean_absolute_CG_MD.png",
+                                    top_feat_count=10)
+
+    svm = SVC(gamma="auto", probability=True)
+    svm = make_pipeline(StandardScaler(), svm)
+    svm.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
+    # TODO: need actual validation for SVM, not acc on training itself...
+    svm_pred = svm.predict(df_cesar_cg.to_numpy())
+    svm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_cg_md, svm_pred)
+    explainer = shap.KernelExplainer(svm.predict_proba,
+                                     df_cesar_cg.to_numpy())
+    shap_values = explainer.shap_values(df_cesar_cg.to_numpy())
+    positive_class_shap_values = shap_values[1]
+    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
+                                    feature_names=df_cesar_cg.columns,
+                                    fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",
+                                    fig_name=f"SVM_SHAP_mean_absolute_CG_MD.png",
+                                    top_feat_count=10)
+
+    # perform EBM analysis
+    # TODO: no OOB score available as far as I know, so should eventually
+    # check on validation...
     print("-" * 70)
 
 
