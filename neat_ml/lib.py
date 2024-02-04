@@ -1,4 +1,6 @@
+import re
 import os
+from typing import Optional
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -250,7 +252,8 @@ def plot_tri_phase_diagram(X,
 def plot_ma_shap_vals_per_model(shap_values,
                                 feature_names,
                                 fig_title: str,
-                                fig_name: str):
+                                fig_name: str,
+                                top_feat_count: Optional[int] = None):
     # plot the mean absolute SHAP values for
     # any models
     # NOTE: shap_values should be for the "positive" class,
@@ -259,7 +262,14 @@ def plot_ma_shap_vals_per_model(shap_values,
     fig, ax = plt.subplots(1, 1)
     abs_shap_values = np.absolute(shap_values)
     mean_abs_shap_values = np.mean(abs_shap_values, axis=0)
-    y_pos = np.arange(len(feature_names))
+    if top_feat_count is None:
+        y_pos = np.arange(len(feature_names))
+    else:
+        # useful to pick only top few features when there are tons
+        sort_idx = np.argsort(mean_abs_shap_values)[::-1]
+        feature_names = feature_names[sort_idx][:top_feat_count]
+        mean_abs_shap_values = mean_abs_shap_values[sort_idx][:top_feat_count]
+        y_pos = np.arange(top_feat_count)
     ax.barh(y_pos, mean_abs_shap_values)
     ax.set_title(fig_title, fontsize=6)
     ax.set_xlabel("mean(|SHAP value|)")
@@ -300,3 +310,38 @@ def read_in_cesar_cg_md_data():
     # Mihee's data has shape (34, 4) and Cesar's (49, 10) for gyration
     # and (49, 904) for RDF --> (49, 911) combined
     return df_cesar_cg
+
+
+def plot_ebm_data(explain_data: dict,
+                  original_feat_names,
+                  fig_title: str,
+                  fig_name: str,
+                  top_feat_count: int = 10):
+    # plot top top_feat_count features from
+    # ExplainableBoostingClassifier data
+    fig, ax = plt.subplots(1, 1)
+    ax.set_title(f"{fig_title}", fontsize=6)
+    y_pos = np.arange(top_feat_count)
+    feature_scores = np.asarray(explain_data["scores"])
+    feature_names = np.asarray(explain_data["names"])
+    rank_indices = np.argsort(feature_scores)[::-1]
+    top_feature_scores = feature_scores[rank_indices][:top_feat_count]
+    top_feature_names = feature_names[rank_indices][:top_feat_count]
+    # TODO: probably need more robust mapping of
+    # the feature names from EBM machinery back to
+    # original names; this is a quick hack...
+    remapped_top_feature_names = []
+    for feature_name in top_feature_names:
+        feature_1_name = feature_name.split("&")[0].strip()
+        feature_2_name = feature_name.split("&")[1].strip()
+        feature_1_index = int(re.sub(r"\D", "", feature_1_name))
+        feature_2_index = int(re.sub(r"\D", "", feature_2_name))
+        feature_1_name = original_feat_names[feature_1_index]
+        feature_2_name = original_feat_names[feature_2_index]
+        remapped_top_feature_names.append(f"{feature_1_name} & {feature_2_name}")
+    ax.barh(y_pos, top_feature_scores)
+    ax.set_yticks(y_pos, labels=remapped_top_feature_names)
+    ax.set_xlabel("mean abs score")
+    fig.set_size_inches(3, 3)
+    fig.tight_layout()
+    fig.savefig(f"{fig_name}", dpi=300)
