@@ -1,6 +1,6 @@
 import re
 import os
-from typing import Optional
+from typing import Optional, Sequence
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -10,6 +10,8 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 import ternary
 import pandas as pd
+from PIL import Image
+import skimage
 
 
 # these features were considered potentially interesting
@@ -50,7 +52,10 @@ def preprocess_data(df):
     return X, y
 
 
-def plot_input_data_cesar_CG(df, y_pred=None):
+def plot_input_data_cesar_CG(df,
+                             title="Cesar CG-MD input data\n",
+                             fig_name="cesar_cg_md_input_data_",
+                             y_pred=None):
     # Produce a simple scatter plot of Cesar's CG
     # MD input data, meant for side-by-side comparison
     # with the expt PEO/DEX binary phase separation data from
@@ -68,11 +73,11 @@ def plot_input_data_cesar_CG(df, y_pred=None):
     ax.set_aspect("equal")
     ax.set_xlabel("Dextran (wt %)")
     ax.set_ylabel("PEO (wt %)")
-    ax.set_title("Cesar CG-MD input data\n"
+    ax.set_title(f"{title}"
                  f"{title_addition}")
     if y_pred is not None:
         fig.colorbar(im, ax=ax, shrink=0.9)
-    fig.savefig(f"cesar_cg_md_input_data_{fig_name_addition}.png",
+    fig.savefig(f"{fig_name}{fig_name_addition}.png",
                 dpi=300)
 
 
@@ -345,3 +350,55 @@ def plot_ebm_data(explain_data: dict,
     fig.set_size_inches(3, 3)
     fig.tight_layout()
     fig.savefig(f"{fig_name}", dpi=300)
+
+
+def retrieve_image_dims(image_path: str) -> tuple[int, int]:
+    with Image.open(image_path) as img:
+        width, height = img.size
+        return width, height
+
+
+def check_image_dim_consistency(list_img_filepaths: Sequence[str]) -> None:
+    # check that a list of image filepaths
+    # all have the same image pixel dims
+    reference_dims = retrieve_image_dims(list_img_filepaths[0])
+    for img_path in list_img_filepaths[1:]:
+        actual_dims = retrieve_image_dims(img_path)
+        if actual_dims != reference_dims:
+            msg = f"Image {reference_dims = } but {actual_dims =} for {img_path}"
+            raise ValueError(msg)
+
+
+def build_df_from_exp_img_paths(list_img_filepaths: Sequence[str]) -> pd.DataFrame:
+    # take the % PEO / % DEX platereader image filepaths
+    # and construct the initial skeleton of a useful DataFrame
+    prog = re.compile(r".*DEX(\d+)wt_,PEO(\d+)wt_\.tiff")
+    data_dict: dict = {"WT% PEO": [],
+                       "WT% DEX": []}
+    data_dict["image_filepath"] = list_img_filepaths
+    for img_path in list_img_filepaths:
+        match = prog.search(img_path)
+        if match is not None:
+            dex_percent = float(match.group(1))
+            peo_percent = float(match.group(2))
+            data_dict["WT% PEO"].append(peo_percent)
+            data_dict["WT% DEX"].append(dex_percent)
+    df = pd.DataFrame.from_dict(data_dict)
+    return df
+
+
+def skimage_hough_transform(df: pd.DataFrame) -> None:
+    # given the DataFrame of plate reader data/image
+    # filepaths, use sklearn Hough transforms to estimate
+    # the average diameters of the bubbles in each image
+    for index, row in df.iterrows():
+        img_filepath = row.image_filepath
+        image = skimage.io.imread(img_filepath) # shape: (2052, 2456)
+        image = skimage.util.img_as_ubyte(image)
+        edges = skimage.feature.canny(image,
+                                      sigma=3,
+                                      low_threshold=10,
+                                      high_threshold=50)
+        print(image.shape)
+        print(image.dtype)
+        print(edges.shape)
