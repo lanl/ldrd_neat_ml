@@ -57,7 +57,14 @@ def main():
     # the droplet sizes (diameters); perhaps it makes sense to try a few
     # and compare them
 
-    lib.skimage_hough_transform(df=df)
+    lib.skimage_hough_transform(df=df, debug=True)
+    print(df)
+    lib.plot_input_data_cesar_CG(df=df,
+                                 title="Plate Reader Image Data for PEO/DEX\n",
+                                 fig_name="plate_reader_image_points_hough_",
+                                 title_addition="(labels from median Hough radii)",
+                                 y_pred=df["median_radii_skimage_hough"],
+                                 )
 
 
 

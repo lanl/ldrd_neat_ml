@@ -12,6 +12,7 @@ import ternary
 import pandas as pd
 from PIL import Image
 import skimage
+from tqdm import tqdm
 
 
 # these features were considered potentially interesting
@@ -55,6 +56,7 @@ def preprocess_data(df):
 def plot_input_data_cesar_CG(df,
                              title="Cesar CG-MD input data\n",
                              fig_name="cesar_cg_md_input_data_",
+                             title_addition=None,
                              y_pred=None):
     # Produce a simple scatter plot of Cesar's CG
     # MD input data, meant for side-by-side comparison
@@ -63,7 +65,8 @@ def plot_input_data_cesar_CG(df,
     fig, ax = plt.subplots(1, 1)
     if y_pred is not None:
         c = y_pred
-        title_addition = "(phase sep labels from SVM)"
+        if title_addition is None:
+            title_addition = "(phase sep labels from SVM)"
         fig_name_addition = "predicted"
     else:
         c = "gray"
@@ -387,11 +390,16 @@ def build_df_from_exp_img_paths(list_img_filepaths: Sequence[str]) -> pd.DataFra
     return df
 
 
-def skimage_hough_transform(df: pd.DataFrame) -> None:
+def skimage_hough_transform(df: pd.DataFrame,
+                            debug: bool = False) -> None:
     # given the DataFrame of plate reader data/image
     # filepaths, use sklearn Hough transforms to estimate
     # the average diameters of the bubbles in each image
-    for index, row in df.iterrows():
+    median_droplet_radii = np.empty(shape=(df.shape[0]),
+                                    dtype=np.float64)
+    for index, row in tqdm(df.iterrows(),
+                           total=df.shape[0],
+                           desc="skimage_hough_transform"):
         img_filepath = row.image_filepath
         image = skimage.io.imread(img_filepath) # shape: (2052, 2456)
         image = skimage.util.img_as_ubyte(image)
@@ -399,6 +407,25 @@ def skimage_hough_transform(df: pd.DataFrame) -> None:
                                       sigma=3,
                                       low_threshold=10,
                                       high_threshold=50)
-        print(image.shape)
-        print(image.dtype)
-        print(edges.shape)
+        hough_radii = np.arange(2, 22, 2)
+        hough_res = skimage.transform.hough_circle(edges, hough_radii)
+        accums, cx, cy, radii = skimage.transform.hough_circle_peaks(hough_res,
+                                                                     hough_radii,
+                                                                     total_num_peaks=12)
+        median_droplet_radius = np.median(radii)
+        median_droplet_radii[index] = median_droplet_radius
+        wt_dex = row["WT% DEX"]
+        wt_peo = row["WT% PEO"]
+        if debug:
+            # sample/debug plots
+            fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+            image = skimage.color.gray2rgb(image)
+            for center_y, center_x, radius in zip(cy, cx, radii):
+                circy, circx = skimage.draw.circle_perimeter(center_y, center_x, radius,
+                                    shape=image.shape)
+                image[circy, circx] = (220, 20, 20)
+                ax.imshow(image, cmap=plt.cm.gray)
+            ax.set_title(f"Median droplot radius: {median_droplet_radius}")
+            fig.savefig(f"hough_transform_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
+            matplotlib.pyplot.close()
+    df["median_radii_skimage_hough"] = median_droplet_radii
