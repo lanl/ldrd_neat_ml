@@ -397,12 +397,22 @@ def skimage_hough_transform(df: pd.DataFrame,
     # the average diameters of the bubbles in each image
     median_droplet_radii = np.empty(shape=(df.shape[0]),
                                     dtype=np.float64)
+    # 2 % PEO/ 2 % DEX as "background:"
+    background_filepath = (df.loc[(df["WT% PEO"] == 2) & (df["WT% DEX"] == 2)]).image_filepath.values[0]
+    background = skimage.io.imread(background_filepath)
+    background = skimage.util.img_as_ubyte(background)
+    # threshold for background determined empirically
+    background_threshold = np.median(background) + 15
     for index, row in tqdm(df.iterrows(),
                            total=df.shape[0],
                            desc="skimage_hough_transform"):
         img_filepath = row.image_filepath
         image = skimage.io.imread(img_filepath) # shape: (2052, 2456)
         image = skimage.util.img_as_ubyte(image)
+        # anything darker than the background threshold
+        # should be set back to the median; helps remove
+        # the background "dots"
+        image[image < background_threshold] = np.median(image)
         edges = skimage.feature.canny(image,
                                       sigma=3,
                                       low_threshold=10,
@@ -412,7 +422,10 @@ def skimage_hough_transform(df: pd.DataFrame,
         accums, cx, cy, radii = skimage.transform.hough_circle_peaks(hough_res,
                                                                      hough_radii,
                                                                      total_num_peaks=12)
-        median_droplet_radius = np.median(radii)
+        if radii.size == 0:
+            median_droplet_radius = 0
+        else:
+            median_droplet_radius = np.median(radii)
         median_droplet_radii[index] = median_droplet_radius
         wt_dex = row["WT% DEX"]
         wt_peo = row["WT% PEO"]
@@ -424,7 +437,7 @@ def skimage_hough_transform(df: pd.DataFrame,
                 circy, circx = skimage.draw.circle_perimeter(center_y, center_x, radius,
                                     shape=image.shape)
                 image[circy, circx] = (220, 20, 20)
-                ax.imshow(image, cmap=plt.cm.gray)
+                ax.imshow(image, cmap=plt.cm.gray, vmin=0, vmax=255)
             ax.set_title(f"Median droplot radius: {median_droplet_radius}")
             fig.savefig(f"hough_transform_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
