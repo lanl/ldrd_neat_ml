@@ -58,7 +58,6 @@ def main():
     # and compare them
 
     lib.skimage_hough_transform(df=df, debug=True)
-    print(df)
     lib.plot_input_data_cesar_CG(df=df,
                                  title="Plate Reader Image Data for PEO/DEX\n",
                                  fig_name="plate_reader_image_points_hough_",

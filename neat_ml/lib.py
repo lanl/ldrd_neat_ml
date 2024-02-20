@@ -437,7 +437,7 @@ def skimage_hough_transform(df: pd.DataFrame,
                 circy, circx = skimage.draw.circle_perimeter(center_y, center_x, radius,
                                     shape=image.shape)
                 image[circy, circx] = (220, 20, 20)
-                ax.imshow(image, cmap=plt.cm.gray, vmin=0, vmax=255)
+                ax.imshow(image, cmap="gray", vmin=0, vmax=255)
             ax.set_title(f"Median droplot radius: {median_droplet_radius}")
             fig.savefig(f"hough_transform_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
