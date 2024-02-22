@@ -297,6 +297,11 @@ def read_in_cesar_cg_md_data():
     # CG-MD RDF data:
     df_cesar_cg_rdf = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
                                     sheet_name=1)
+    # use sensible column names for RDF values,
+    # otherwise we end up with unlabelled floats
+    rdf_cols = df_cesar_cg_rdf.columns[3:]
+    rdf_cols = [f"RDF_{val}" for val in rdf_cols]
+    df_cesar_cg_rdf.columns.values[3:] = rdf_cols
     df_cesar_cg_rdf.dropna(how='all', inplace=True) # shape (49, 904)
     assert df_cesar_cg_rdf.isna().sum().sum() == 0
     # fuse Cesar's CG-MD data on the WT % columns
