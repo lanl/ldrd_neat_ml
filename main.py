@@ -30,15 +30,17 @@ def main():
     df = pd.read_excel("neat_ml/data/mihee_peo_dextran_phase_map_experimental.xlsx")
     # shape (34, 4)
     X, y = lib.preprocess_data(df=df)
-    # read in Cesar's CG-MD simulation data for PEO/DEX:
-    df_cesar_cg = lib.read_in_cesar_cg_md_data()
-    # shape (49, 911)
+    # read in Cesar's CG/AA-MD simulation data for PEO/DEX:
+    df_cesar_cg = lib.read_in_cesar_cg_md_data() # shape (49, 911)
+    df_cesar_aa = lib.read_in_cesar_all_atom_md_data() # shape (49, 18)
+    df_cesar_combined = lib._merge_dfs(df_cesar_cg, df_cesar_aa)
+    assert df_cesar_combined.shape == (49, 911 + 18 - 3)
 
-    # Plot the experimental vs. CG-MD input PEO/Dextran maps
+    # Plot the experimental vs. CG/AA-MD input PEO/Dextran maps
     # so we get an idea of the phase space we're comparing
     # (they are a bit different, but mostly overlap, as intended)
     lib.plot_input_data(X, y)
-    lib.plot_input_data_cesar_CG(df=df_cesar_cg)
+    lib.plot_input_data_cesar_MD(df=df_cesar_combined)
 
     # Step 1b: also plot triangle phase diagram
     # TODO: use actual 3-species/polymer data--for now we just
@@ -499,28 +501,28 @@ def main():
     fig.savefig("DST_combination_roc.png", dpi=300)
     print("-" * 70)
 
-    # Step 7e: Prepare Cesar's CG-MD simulation data(frame)
+    # Step 7e: Prepare Cesar's CG/AA-MD simulation data(frame)
     # for feature importance analysis by using our best classifier
     # (SVM) to predict the phase separated status of each of his
     # records
     print("-" * 70)
     print("Step 7e: Use experiment-based SVM model to add labels"
-          " to Cesar's CG-MD data, as a precursor to feature importance\n"
+          " to Cesar's CG/AA-MD data, as a precursor to feature importance\n"
           "analysis of the PEO/DEX system.")
     # So far, on the binary phase separation PEO/DEX experimental data
     # from Mihee, which only has % PEO, % DEX, and phase separation status (yes/no),
     # SVM has been the most accurate ML model. So, let's try using that model
-    # to estimate the phase separated labels on Cesar's CG-MD sim data
+    # to estimate the phase separated labels on Cesar's CG/AA-MD sim data
     experiment_svm_clf = estimator_data["svm"]["classifier"]
     experiment_svm_clf.fit(X_train, y_train)
-    y_pred = experiment_svm_clf.predict(df_cesar_cg[["WT% DEX", "WT% PEO"]].to_numpy())
-    assert y_pred.shape[0] == df_cesar_cg.shape[0]
+    y_pred = experiment_svm_clf.predict(df_cesar_combined[["WT% DEX", "WT% PEO"]].to_numpy())
+    assert y_pred.shape[0] == df_cesar_combined.shape[0]
     # plot the phase map with predicted labels, for ease
     # of side-by-side comparison with the original expt
     # data
-    lib.plot_input_data_cesar_CG(df=df_cesar_cg, y_pred=y_pred)
+    lib.plot_input_data_cesar_MD(df=df_cesar_combined, y_pred=y_pred)
     # the phase separation labels in the plot look sensible, so assign them
-    y_pred_cesar_cg_md = y_pred # noqa
+    y_pred_cesar_md = y_pred # noqa
     print("-" * 70)
 
     # Step 8: Feature Importance Analysis
@@ -564,54 +566,54 @@ def main():
                                         fig_name=f"{key}_SHAP_mean_absolute.png")
     print("-" * 70)
 
-    # Step 8b: Feature Importance Analysis of CG-MD data
+    # Step 8b: Feature Importance Analysis of CG/AA-MD data
     # TODO: reduce code duplication on SHAP/feat imp analyses?
     print("-" * 70)
-    print("Step 8b: Feature Importance Analysis of CG-MD Data")
+    print("Step 8b: Feature Importance Analysis of CG/AA-MD Data")
     # perform SHAP analysis on random forest and SVM
     # TODO: there's no OOB score for SVM, so should eventually check
     # on validation...
     rf = RandomForestClassifier(random_state=0,
                                 oob_score=metrics.balanced_accuracy_score)
-    rf.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
+    rf.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     oob_bal_acc_score = rf.oob_score_
     explainer = shap.Explainer(rf)
-    shap_values = explainer.shap_values(df_cesar_cg.to_numpy())
+    shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
     positive_class_shap_values = shap_values[1]
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
-                                    feature_names=df_cesar_cg.columns,
+                                    feature_names=df_cesar_combined.columns,
                                     fig_title=f"Random Forest model\n(oob balanced accuracy = {oob_bal_acc_score:.3f})",
-                                    fig_name="RF_SHAP_mean_absolute_CG_MD.png",
+                                    fig_name="RF_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
 
     svm = SVC(gamma="auto", probability=True)
     svm = make_pipeline(StandardScaler(), svm)
-    svm.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
+    svm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     # TODO: need actual validation for SVM, not acc on training itself...
-    svm_pred = svm.predict(df_cesar_cg.to_numpy())
-    svm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_cg_md, svm_pred)
+    svm_pred = svm.predict(df_cesar_combined.to_numpy())
+    svm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, svm_pred)
     explainer = shap.KernelExplainer(svm.predict_proba,
-                                     df_cesar_cg.to_numpy())
-    shap_values = explainer.shap_values(df_cesar_cg.to_numpy())
+                                     df_cesar_combined.to_numpy())
+    shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
     positive_class_shap_values = shap_values[1]
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
-                                    feature_names=df_cesar_cg.columns,
+                                    feature_names=df_cesar_combined.columns,
                                     fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",
-                                    fig_name="SVM_SHAP_mean_absolute_CG_MD.png",
+                                    fig_name="SVM_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
 
     # perform EBM analysis
     # TODO: no OOB score available as far as I know, so should eventually
     # check on validation...
     ebm = ExplainableBoostingClassifier()
-    ebm.fit(df_cesar_cg.to_numpy(), y_pred_cesar_cg_md)
-    ebm_pred = ebm.predict(df_cesar_cg.to_numpy())
-    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_cg_md, ebm_pred)
+    ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
+    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
     explain_data = ebm.explain_global().data()
     lib.plot_ebm_data(explain_data=explain_data,
-                      original_feat_names=df_cesar_cg.columns,
+                      original_feat_names=df_cesar_combined.columns,
                       fig_title=f"Top 10 EBM features\n(training balanced accuracy = {ebm_bal_acc})",
-                      fig_name="EBM_top_10_features_cesar_cg.png",
+                      fig_name="EBM_top_10_features_cesar_md.png",
                       top_feat_count=10)
     print("-" * 70)
 
