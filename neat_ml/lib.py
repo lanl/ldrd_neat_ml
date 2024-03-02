@@ -53,12 +53,12 @@ def preprocess_data(df):
     return X, y
 
 
-def plot_input_data_cesar_CG(df,
-                             title="Cesar CG-MD input data\n",
-                             fig_name="cesar_cg_md_input_data_",
+def plot_input_data_cesar_MD(df,
+                             title="Cesar MD input data\n",
+                             fig_name="cesar_md_input_data_",
                              title_addition=None,
                              y_pred=None):
-    # Produce a simple scatter plot of Cesar's CG
+    # Produce a simple scatter plot of Cesar's
     # MD input data, meant for side-by-side comparison
     # with the expt PEO/DEX binary phase separation data from
     # Mihee
@@ -299,16 +299,13 @@ def read_in_cesar_cg_md_data():
                                     sheet_name=1)
     # use sensible column names for RDF values,
     # otherwise we end up with unlabelled floats
-    rdf_cols = df_cesar_cg_rdf.columns[3:]
-    rdf_cols = [f"RDF_{val}" for val in rdf_cols]
-    df_cesar_cg_rdf.columns.values[3:] = rdf_cols
+    df_cesar_cg_rdf = _add_df_col_prefix(df=df_cesar_cg_rdf,
+                                         start_index=3,
+                                         prefix="RDF_")
     df_cesar_cg_rdf.dropna(how='all', inplace=True) # shape (49, 904)
     assert df_cesar_cg_rdf.isna().sum().sum() == 0
     # fuse Cesar's CG-MD data on the WT % columns
-    df_cesar_cg = df_cesar_cg_gyr_persistence.merge(df_cesar_cg_rdf,
-                                                    on=["WT% DEX",
-                                                        "WT% PEO",
-                                                        "WT% WATER"])
+    df_cesar_cg = _merge_dfs(df_cesar_cg_gyr_persistence, df_cesar_cg_rdf)
     # we've joined on three columns, so check that the shape/properties
     # match expectations
     assert df_cesar_cg.isna().sum().sum() == 0
@@ -322,6 +319,14 @@ def read_in_cesar_cg_md_data():
     # Mihee's original binary experimental data
     # Mihee's data has shape (34, 4) and Cesar's (49, 10) for gyration
     # and (49, 904) for RDF --> (49, 911) combined
+
+    # to clearly distinguish CG from AA MD data, let's prefix
+    # the columns appropriately
+    # careful of mutability here:
+    # https://github.com/pandas-dev/pandas/issues/34364#issuecomment-1960548120
+    df_cesar_cg = _add_df_col_prefix(df=df_cesar_cg,
+                                     start_index=3,
+                                     prefix="CG_")
     return df_cesar_cg
 
 
@@ -355,7 +360,7 @@ def plot_ebm_data(explain_data: dict,
     ax.barh(y_pos, top_feature_scores)
     ax.set_yticks(y_pos, labels=remapped_top_feature_names)
     ax.set_xlabel("mean abs score")
-    fig.set_size_inches(3, 3)
+    fig.set_size_inches(6, 3)
     fig.tight_layout()
     fig.savefig(f"{fig_name}", dpi=300)
 
@@ -447,3 +452,53 @@ def skimage_hough_transform(df: pd.DataFrame,
             fig.savefig(f"hough_transform_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
     df["median_radii_skimage_hough"] = median_droplet_radii
+
+
+def read_in_cesar_all_atom_md_data():
+    # all-atom enthalpy data:
+    df_cesar_aa_enthalpy = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+                                         sheet_name=0)
+    # some empty (NaN) rows and columns to filter out:
+    for axis in [0, 1]:
+        df_cesar_aa_enthalpy.dropna(axis=axis, how='all', inplace=True)
+    # make sure no NaNs survived the filtering of
+    # AA enthalpy data:
+    assert df_cesar_aa_enthalpy.isna().sum().sum() == 0 # shape: (49, 15)
+
+    # all-atom H-bond data:
+    df_cesar_aa_h_bonds = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+                                        sheet_name=1)
+    # some empty (NaN) rows and columns to filter out:
+    for axis in [0, 1]:
+        df_cesar_aa_h_bonds.dropna(axis=axis, how='all', inplace=True)
+    assert df_cesar_aa_h_bonds.isna().sum().sum() == 0 # shape: (49, 6)
+
+    # fuse Cesar's AA-MD data on the WT % columns
+    df_cesar_aa = _merge_dfs(df_cesar_aa_enthalpy, df_cesar_aa_h_bonds)
+    # the fused df shape should preserve rows
+    # and sum columns (-3 for the WT % combo columns)
+    assert df_cesar_aa.shape == (49, 18)
+    # Prefix the feature columns with "AA_" to distinguish from
+    # the other CG data
+    df_cesar_aa = _add_df_col_prefix(df=df_cesar_aa,
+                                     start_index=3,
+                                     prefix="AA_")
+    return df_cesar_aa
+
+
+def _add_df_col_prefix(df, start_index: int, prefix: str):
+    # add a prefix to a subset of
+    # dataframe column names for clarity
+    rename_dict = {}
+    for old_col_name in df.columns[start_index:]:
+        rename_dict[old_col_name] = f"{prefix}{old_col_name}"
+    df = df.rename(columns=rename_dict)
+    return df
+
+def _merge_dfs(df1, df2):
+    # a common dataframe merge scheme we use
+    df = df1.merge(df2,
+                   on=["WT% DEX",
+                       "WT% PEO",
+                       "WT% WATER"])
+    return df
