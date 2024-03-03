@@ -1,7 +1,9 @@
+from collections import defaultdict
 import re
 import os
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 import numpy as np
+import numpy.typing as npt
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -502,3 +504,65 @@ def _merge_dfs(df1, df2):
                        "WT% PEO",
                        "WT% WATER"])
     return df
+
+
+def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.float64]],
+                                 feature_names: Sequence[str],
+                                 top_feat_count: int) -> Tuple[npt.NDArray, npt.NDArray[np.int64]]:
+    """
+    Parameters
+    ----------
+    pos_class_shap_vals: a sequence of NumPy arrays; each NumPy array corresponds
+                         to a shape (n_records, n_features) collection of SHAP values
+                         for a given ML model (values are for the positive class
+                         selection).
+    features_names: a sequence of strings of the features names of size ``n_features``
+    top_feat_count: an integer representing the number of top features
+                    to consider from each model when assessing the consensus
+
+    Returns
+    -------
+    ranked_feature_names: array of feature names in descending order
+                          of consensus importance (count) in the top
+                          features per model
+    ranked_feature_counts: array of counts (consensus occurrences) for
+                           each feature in ``ranked_feature_names``
+    num_input_models: int
+    """
+    num_input_models = len(pos_class_shap_vals)
+    # calculate the mean absolute SHAP
+    # values for each input ML model
+    means_abs_shap_vals = []
+    for pos_class_shap_arr in pos_class_shap_vals:
+        means_abs_shap_vals.append(np.mean(np.absolute(pos_class_shap_arr), axis=0))
+    # for each input ML model store the
+    # top_feat_count feature names
+    top_feat_data: dict[str, int] = defaultdict(int)
+    for mean_abs_shap_arr in means_abs_shap_vals:
+        sort_idx = np.argsort(mean_abs_shap_arr)[::-1]
+        top_feature_names = feature_names[sort_idx][:top_feat_count]
+        for top_feature_name in top_feature_names:
+            top_feat_data[top_feature_name] += 1
+    top_feat_data = dict(sorted(top_feat_data.items(),
+                                key=lambda item: item[1],
+                                reverse=True))
+    ranked_feature_names = np.asarray(list(top_feat_data.keys()))
+    ranked_feature_counts = np.asarray(list(top_feat_data.values()))
+    return ranked_feature_names, ranked_feature_counts, num_input_models
+
+
+def plot_feat_import_consensus(ranked_feature_names: npt.NDArray[str],
+                               ranked_feature_counts: npt.NDArray[int],
+                               num_input_models: int,
+                               top_feat_count: int,
+                               fig_name: Optional[str] = "feat_imp_consensus.png") -> None:
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    y_pos = np.arange(ranked_feature_names.size)
+    ax.barh(y_pos,
+            (ranked_feature_counts/num_input_models) * 100)
+    ax.set_xlim(0, 100)
+    ax.set_xlabel(f"% ML models where ranked in top {top_feat_count} features")
+    ax.set_yticks(y_pos, labels=ranked_feature_names)
+    ax.set_title(f"Feature importance consensus amongst {num_input_models} models")
+    fig.tight_layout()
+    fig.savefig(fig_name, dpi=300)
