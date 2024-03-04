@@ -76,3 +76,29 @@ def test_feat_import_consensus(pos_shap_vals,
     assert num_input_models == len(pos_shap_vals)
     assert_array_equal(actual_ranked_feat_names, expected_names)
     assert_array_equal(actual_ranked_feat_counts, expected_counts)
+
+
+def test_plot_feat_import_consensus(tmp_path):
+    # crude regression test for plot_feat_import_consensus();
+    # just a few sanity/smoke checks...
+    ranked_feature_names = np.asarray([f"feat_{i}" for i in range(4)])
+    ranked_feature_counts = np.asarray([4, 3, 2, 2])
+    num_input_models = 4
+    top_feat_count = 3
+    fig_name = "tmp_feat_imp_consensus.png"
+    tmp_fig = tmp_path / fig_name
+    actual_fig = lib.plot_feat_import_consensus(ranked_feature_names,
+                                                ranked_feature_counts,
+                                                num_input_models,
+                                                top_feat_count,
+                                                tmp_fig)
+    # check that the plot file was produced:
+    assert tmp_fig.exists()
+    # check that the bar at the bottom is the largest
+    axis = actual_fig.get_axes()[0]
+    actual_patches = axis.patches
+    actual_bar_widths = []
+    for patch in actual_patches:
+        actual_bar_widths.append(patch.get_width())
+    assert np.argmax(actual_bar_widths) == 0
+    assert len(actual_bar_widths) == ranked_feature_counts.size

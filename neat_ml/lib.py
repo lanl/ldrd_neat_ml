@@ -566,3 +566,4 @@ def plot_feat_import_consensus(ranked_feature_names: npt.NDArray[str],
     ax.set_title(f"Feature importance consensus amongst {num_input_models} models")
     fig.tight_layout()
     fig.savefig(fig_name, dpi=300)
+    return fig
