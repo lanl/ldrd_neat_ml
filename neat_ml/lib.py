@@ -508,7 +508,7 @@ def _merge_dfs(df1, df2):
 
 def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.float64]],
                                  feature_names: Sequence[str],
-                                 top_feat_count: int) -> Tuple[npt.NDArray, npt.NDArray[np.int64]]:
+                                 top_feat_count: int) -> Tuple[npt.NDArray[str], npt.NDArray[np.int64], int]:
     """
     Parameters
     ----------
