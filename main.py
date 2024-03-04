@@ -586,6 +586,20 @@ def main():
                                     fig_name="RF_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
 
+    # perform an EBM analysis with feature interactions turned off
+    # (because of: https://github.com/interpretml/interpret/issues/513)
+    # also playing with some overfit guards...
+    ebm = ExplainableBoostingClassifier(interactions=0,
+                                        early_stopping_tolerance=0.0001,
+                                        early_stopping_rounds=25)
+    ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
+    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
+    # around 0.85 (so maybe not quite as overfit as below?)
+    explain_data = ebm.explain_global().data()
+    ebm_feature_scores = np.asarray(explain_data["scores"]) # shape (926,)
+    ebm_feature_names = np.asarray(explain_data["names"]) # shape (926,)
+
     svm = SVC(gamma="auto", probability=True)
     svm = make_pipeline(StandardScaler(), svm)
     svm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
@@ -608,7 +622,8 @@ def main():
      ranked_feature_counts,
      num_input_models) = lib.feature_importance_consensus(
                                      pos_class_shap_vals=[positive_class_shap_values_rfc,
-                                                          positive_class_shap_values_svm],
+                                                          positive_class_shap_values_svm,
+                                                          ebm_feature_scores],
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
