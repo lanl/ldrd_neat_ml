@@ -598,7 +598,6 @@ def main():
     # around 0.85 (so maybe not quite as overfit as below?)
     explain_data = ebm.explain_global().data()
     ebm_feature_scores = np.asarray(explain_data["scores"]) # shape (926,)
-    ebm_feature_names = np.asarray(explain_data["names"]) # shape (926,)
 
     svm = SVC(gamma="auto", probability=True)
     svm = make_pipeline(StandardScaler(), svm)

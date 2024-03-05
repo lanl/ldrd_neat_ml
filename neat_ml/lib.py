@@ -507,8 +507,8 @@ def _merge_dfs(df1, df2):
 
 
 def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.float64]],
-                                 feature_names: Sequence[str],
-                                 top_feat_count: int) -> Tuple[npt.NDArray[str], npt.NDArray[np.int64], int]:
+                                 feature_names: npt.NDArray,
+                                 top_feat_count: int) -> Tuple[npt.NDArray, npt.NDArray[np.int64], int]:
     """
     Parameters
     ----------
@@ -516,7 +516,7 @@ def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.fl
                          to a shape (n_records, n_features) collection of SHAP values
                          for a given ML model (values are for the positive class
                          selection).
-    features_names: a sequence of strings of the features names of size ``n_features``
+    features_names: an array-like of strings of the features names of size ``n_features``
     top_feat_count: an integer representing the number of top features
                     to consider from each model when assessing the consensus
 
@@ -551,11 +551,11 @@ def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.fl
     return ranked_feature_names, ranked_feature_counts, num_input_models
 
 
-def plot_feat_import_consensus(ranked_feature_names: npt.NDArray[str],
-                               ranked_feature_counts: npt.NDArray[int],
+def plot_feat_import_consensus(ranked_feature_names: npt.NDArray,
+                               ranked_feature_counts: npt.NDArray[np.int64],
                                num_input_models: int,
                                top_feat_count: int,
-                               fig_name: Optional[str] = "feat_imp_consensus.png") -> None:
+                               fig_name: Optional[str] = "feat_imp_consensus.png"):
     fig, ax = plt.subplots(1, 1, figsize=(8, 8))
     y_pos = np.arange(ranked_feature_names.size)
     ax.barh(y_pos,
@@ -565,5 +565,5 @@ def plot_feat_import_consensus(ranked_feature_names: npt.NDArray[str],
     ax.set_yticks(y_pos, labels=ranked_feature_names)
     ax.set_title(f"Feature importance consensus amongst {num_input_models} models")
     fig.tight_layout()
-    fig.savefig(fig_name, dpi=300)
+    fig.savefig(fig_name, dpi=300) # type: ignore
     return fig
