@@ -579,12 +579,25 @@ def main():
     oob_bal_acc_score = rf.oob_score_
     explainer = shap.Explainer(rf)
     shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
-    positive_class_shap_values = shap_values[1]
-    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
+    positive_class_shap_values_rfc = shap_values[1]
+    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_rfc,
                                     feature_names=df_cesar_combined.columns,
                                     fig_title=f"Random Forest model\n(oob balanced accuracy = {oob_bal_acc_score:.3f})",
                                     fig_name="RF_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
+
+    # perform an EBM analysis with feature interactions turned off
+    # (because of: https://github.com/interpretml/interpret/issues/513)
+    # also playing with some overfit guards...
+    ebm = ExplainableBoostingClassifier(interactions=0,
+                                        early_stopping_tolerance=0.0001,
+                                        early_stopping_rounds=25)
+    ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
+    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
+    # around 0.85 (so maybe not quite as overfit as below?)
+    explain_data = ebm.explain_global().data()
+    ebm_feature_scores = np.asarray(explain_data["scores"]) # shape (926,)
 
     svm = SVC(gamma="auto", probability=True)
     svm = make_pipeline(StandardScaler(), svm)
@@ -595,13 +608,27 @@ def main():
     explainer = shap.KernelExplainer(svm.predict_proba,
                                      df_cesar_combined.to_numpy())
     shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
-    positive_class_shap_values = shap_values[1]
-    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
+    positive_class_shap_values_svm = shap_values[1]
+    lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_svm,
                                     feature_names=df_cesar_combined.columns,
                                     fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",
                                     fig_name="SVM_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
 
+    # try to find consensus amongst the important
+    # features from different ML models
+    (ranked_feature_names,
+     ranked_feature_counts,
+     num_input_models) = lib.feature_importance_consensus(
+                                     pos_class_shap_vals=[positive_class_shap_values_rfc,
+                                                          positive_class_shap_values_svm,
+                                                          ebm_feature_scores],
+                                     feature_names=df_cesar_combined.columns,
+                                     top_feat_count=10)
+    lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
+                                   ranked_feature_counts=ranked_feature_counts,
+                                   num_input_models=num_input_models,
+                                   top_feat_count=10)
     # perform EBM analysis
     # TODO: no OOB score available as far as I know, so should eventually
     # check on validation...
