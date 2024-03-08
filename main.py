@@ -620,7 +620,7 @@ def main():
     (ranked_feature_names,
      ranked_feature_counts,
      num_input_models) = lib.feature_importance_consensus(
-                                     pos_class_shap_vals=[positive_class_shap_values_rfc,
+                                     pos_class_feat_imps=[positive_class_shap_values_rfc,
                                                           positive_class_shap_values_svm,
                                                           ebm_feature_scores],
                                      feature_names=df_cesar_combined.columns,
