@@ -30,7 +30,15 @@ def test_individual_shap_absolute_plots(tmp_path, n_features, important_index):
     clf = RandomForestClassifier(random_state=0)
     clf.fit(X, y)
     explainer = shap.Explainer(clf)
-    positive_class_shap_values = explainer.shap_values(X)[1]
+    # shap_values(X) is an ndarray with shape (500, n_features, 2) with shap versions >= 0.45.0
+    # and is a list in versions prior to that
+    # see: https://github.com/shap/shap/pull/3318
+    shap_vals = explainer.shap_values(X)
+    if isinstance(shap_vals, list):
+        positive_class_shap_values = shap_vals[1]
+    else:
+        positive_class_shap_values = shap_vals[:, :, 1]
+
     cwd = os.getcwd()
     os.chdir(tmp_path)
     actual_fig = lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values,
