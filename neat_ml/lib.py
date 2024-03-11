@@ -1,3 +1,4 @@
+import importlib.resources
 from collections import defaultdict
 import re
 import os
@@ -292,12 +293,13 @@ def plot_ma_shap_vals_per_model(shap_values,
 
 def read_in_cesar_cg_md_data():
     # CG-MD gyration data:
-    df_cesar_cg_gyr_persistence = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+    data = importlib.resources.files("neat_ml").joinpath("data/CG-PHASE-DESCRIPTORS.xlsx")
+    df_cesar_cg_gyr_persistence = pd.read_excel(data,
                                                 sheet_name=0)
     df_cesar_cg_gyr_persistence.dropna(how='all', inplace=True) # shape (49, 10)
     assert df_cesar_cg_gyr_persistence.isna().sum().sum() == 0
     # CG-MD RDF data:
-    df_cesar_cg_rdf = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_cg_rdf = pd.read_excel(data,
                                     sheet_name=1)
     # use sensible column names for RDF values,
     # otherwise we end up with unlabelled floats
@@ -457,8 +459,9 @@ def skimage_hough_transform(df: pd.DataFrame,
 
 
 def read_in_cesar_all_atom_md_data():
+    data = importlib.resources.files("neat_ml").joinpath("data/AA-PHASE-DESCRIPTORS.xlsx")
     # all-atom enthalpy data:
-    df_cesar_aa_enthalpy = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_aa_enthalpy = pd.read_excel(data,
                                          sheet_name=0)
     # some empty (NaN) rows and columns to filter out:
     for axis in [0, 1]:
@@ -468,7 +471,7 @@ def read_in_cesar_all_atom_md_data():
     assert df_cesar_aa_enthalpy.isna().sum().sum() == 0 # shape: (49, 15)
 
     # all-atom H-bond data:
-    df_cesar_aa_h_bonds = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_aa_h_bonds = pd.read_excel(data,
                                         sheet_name=1)
     # some empty (NaN) rows and columns to filter out:
     for axis in [0, 1]:

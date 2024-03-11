@@ -21,8 +21,6 @@ lint:
     - ruff check .
 
 # a crude end-to-end test of the entire workflow
-# TODO: add proper regression tests for individual
-# parts of the code base
 functional_test:
   stage: test
   rules:
@@ -40,4 +38,4 @@ unit_tests:
   allow_failure: false
   script:
     - python -m pip install -v .
-    - pytest
+    - cd /tmp && python -m pytest --pyargs neat_ml

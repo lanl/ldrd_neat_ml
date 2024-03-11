@@ -1,3 +1,5 @@
+import importlib.resources
+
 from neat_ml import lib
 
 import pytest
@@ -5,6 +7,7 @@ import numpy as np
 import pandas as pd
 from numpy.testing import assert_allclose
 
+data = importlib.resources.files("neat_ml").joinpath("data/Hypothetical_ternary_phase_map.xlsx")
 
 @pytest.mark.parametrize("X, y, clockwise, expected", [
     # based on the 3-sample example here:
@@ -24,7 +27,7 @@ from numpy.testing import assert_allclose
       [35.0, 8.660254037844386]],
     ),
     # Mihee synthetic data with 80 % water
-    (pd.read_excel("neat_ml/data/Hypothetical_ternary_phase_map.xlsx",
+    (pd.read_excel(data,
                    sheet_name=[0],
                    header=1)[0].iloc[..., 4:-1].to_numpy(), # type: ignore
      np.ones(29),
@@ -60,7 +63,7 @@ from numpy.testing import assert_allclose
      [20.0,0.0]]
     ),
     # Mihee synthetic data with 20 % water
-    (pd.read_excel("neat_ml/data/Hypothetical_ternary_phase_map.xlsx",
+    (pd.read_excel(data,
                    sheet_name=[1],
                    header=1)[1].iloc[..., 4:-1].to_numpy(), # type: ignore
      np.ones(43),
