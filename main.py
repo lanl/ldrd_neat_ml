@@ -608,6 +608,9 @@ def main():
                                     fig_name="SVM_SHAP_mean_absolute_MD.png",
                                     top_feat_count=10)
 
+    # might as well include the "native" RF feature importances into the mix
+    native_rf_feature_scores = rf.feature_importances_
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -615,7 +618,8 @@ def main():
      num_input_models) = lib.feature_importance_consensus(
                                      pos_class_feat_imps=[positive_class_shap_values_rfc,
                                                           positive_class_shap_values_svm,
-                                                          ebm_feature_scores],
+                                                          ebm_feature_scores,
+                                                          native_rf_feature_scores],
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
