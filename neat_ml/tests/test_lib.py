@@ -60,6 +60,25 @@ def test_cesar_data_column_prefix_by_type(df, expected_prefix):
     ["Feat_0", "Feat_3", "Feat_1", "Feat_2"],
     [3, 2, 2, 2],
     ),
+    # for cases when i.e., SHAP and non-SHAP feature
+    # importances are combined, SHAP may require the mean
+    # reduction operation but non-SHAP may already be reduced
+    # across all records
+    ([# first two features important for this model (SHAP-style)
+      np.array([[0.9, 0.7, 0.0],
+                [0.8, 0.6, 0.1]]),
+      # last two features important for this model (reduced style,
+      # like native Random Forest feature importances)
+      np.array([0.0, 0.8, 0.6])],
+      np.asarray([f"Feat_{i}" for i in range(3)]),
+      2,
+    # Feat_1 is of overlapping importance
+    # so should show up as important for both;
+    # the other two features should show up as
+    # important once each
+    ["Feat_1", "Feat_0", "Feat_2"],
+    [2, 1, 1],
+    ),
 
     ])
 def test_feat_import_consensus(pos_shap_vals,

@@ -1,2 +1,10 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=68.2.2",
+            "setuptools-scm>=8.0.2"]
+
+[project]
+name = "neat_ml"
+version = "0.0.1.dev0"
+
+[tool.setuptools.package-data]
+"neat_ml.data" = ["*.xlsx"]

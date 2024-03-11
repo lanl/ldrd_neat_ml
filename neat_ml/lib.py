@@ -1,3 +1,4 @@
+import importlib.resources
 from collections import defaultdict
 import re
 import os
@@ -292,12 +293,13 @@ def plot_ma_shap_vals_per_model(shap_values,
 
 def read_in_cesar_cg_md_data():
     # CG-MD gyration data:
-    df_cesar_cg_gyr_persistence = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+    data = importlib.resources.files("neat_ml").joinpath("data/CG-PHASE-DESCRIPTORS.xlsx")
+    df_cesar_cg_gyr_persistence = pd.read_excel(data,
                                                 sheet_name=0)
     df_cesar_cg_gyr_persistence.dropna(how='all', inplace=True) # shape (49, 10)
     assert df_cesar_cg_gyr_persistence.isna().sum().sum() == 0
     # CG-MD RDF data:
-    df_cesar_cg_rdf = pd.read_excel("neat_ml/data/CG-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_cg_rdf = pd.read_excel(data,
                                     sheet_name=1)
     # use sensible column names for RDF values,
     # otherwise we end up with unlabelled floats
@@ -457,8 +459,9 @@ def skimage_hough_transform(df: pd.DataFrame,
 
 
 def read_in_cesar_all_atom_md_data():
+    data = importlib.resources.files("neat_ml").joinpath("data/AA-PHASE-DESCRIPTORS.xlsx")
     # all-atom enthalpy data:
-    df_cesar_aa_enthalpy = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_aa_enthalpy = pd.read_excel(data,
                                          sheet_name=0)
     # some empty (NaN) rows and columns to filter out:
     for axis in [0, 1]:
@@ -468,7 +471,7 @@ def read_in_cesar_all_atom_md_data():
     assert df_cesar_aa_enthalpy.isna().sum().sum() == 0 # shape: (49, 15)
 
     # all-atom H-bond data:
-    df_cesar_aa_h_bonds = pd.read_excel("neat_ml/data/AA-PHASE-DESCRIPTORS.xlsx",
+    df_cesar_aa_h_bonds = pd.read_excel(data,
                                         sheet_name=1)
     # some empty (NaN) rows and columns to filter out:
     for axis in [0, 1]:
@@ -506,16 +509,18 @@ def _merge_dfs(df1, df2):
     return df
 
 
-def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.float64]],
+def feature_importance_consensus(pos_class_feat_imps: Sequence[npt.NDArray[np.float64]],
                                  feature_names: npt.NDArray,
                                  top_feat_count: int) -> Tuple[npt.NDArray, npt.NDArray[np.int64], int]:
     """
     Parameters
     ----------
-    pos_class_shap_vals: a sequence of NumPy arrays; each NumPy array corresponds
-                         to a shape (n_records, n_features) collection of SHAP values
+    pos_class_feat_imps: a sequence of NumPy arrays; each NumPy array corresponds
+                         to either a shape (n_records, n_features) collection of SHAP values
                          for a given ML model (values are for the positive class
-                         selection).
+                         selection), or to a reduced version of this data structure
+                         like with random forest feature importances with shape
+                         (n_features,)
     features_names: an array-like of strings of the features names of size ``n_features``
     top_feat_count: an integer representing the number of top features
                     to consider from each model when assessing the consensus
@@ -529,17 +534,23 @@ def feature_importance_consensus(pos_class_shap_vals: Sequence[npt.NDArray[np.fl
                            each feature in ``ranked_feature_names``
     num_input_models: int
     """
-    num_input_models = len(pos_class_shap_vals)
+    num_input_models = len(pos_class_feat_imps)
     # calculate the mean absolute SHAP
     # values for each input ML model
-    means_abs_shap_vals = []
-    for pos_class_shap_arr in pos_class_shap_vals:
-        means_abs_shap_vals.append(np.mean(np.absolute(pos_class_shap_arr), axis=0))
+    # OR simply the absolute values for already-reduced
+    # feature importances
+    processed_feat_imps = []
+    for pos_class_imp_arr in pos_class_feat_imps:
+        if np.atleast_2d(pos_class_imp_arr).shape[0] > 1:
+            # haven't reduced across the records yet (like raw SHAP importances)
+            processed_feat_imps.append(np.mean(np.absolute(pos_class_imp_arr), axis=0))
+        else:
+            processed_feat_imps.append(np.absolute(pos_class_imp_arr))
     # for each input ML model store the
     # top_feat_count feature names
     top_feat_data: dict[str, int] = defaultdict(int)
-    for mean_abs_shap_arr in means_abs_shap_vals:
-        sort_idx = np.argsort(mean_abs_shap_arr)[::-1]
+    for processed_feat_imp in processed_feat_imps:
+        sort_idx = np.argsort(processed_feat_imp)[::-1]
         top_feature_names = feature_names[sort_idx][:top_feat_count]
         for top_feature_name in top_feature_names:
             top_feat_data[top_feature_name] += 1
@@ -567,3 +578,17 @@ def plot_feat_import_consensus(ranked_feature_names: npt.NDArray,
     fig.tight_layout()
     fig.savefig(fig_name, dpi=300) # type: ignore
     return fig
+
+
+def get_positive_shap_values(shap_values):
+    # for the type handling here, see release 0.45.0 and
+    # https://github.com/shap/shap/pull/3318
+    if isinstance(shap_values, list):
+        positive_class_shap_values = shap_values[1]
+    else:
+        if shap_values.ndim == 3:
+            positive_class_shap_values = shap_values[:, :, 1]
+        else:
+            # XGBoost case?
+            positive_class_shap_values = shap_values
+    return positive_class_shap_values
