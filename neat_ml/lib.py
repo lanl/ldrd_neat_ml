@@ -578,3 +578,17 @@ def plot_feat_import_consensus(ranked_feature_names: npt.NDArray,
     fig.tight_layout()
     fig.savefig(fig_name, dpi=300) # type: ignore
     return fig
+
+
+def get_positive_shap_values(shap_values):
+    # for the type handling here, see release 0.45.0 and
+    # https://github.com/shap/shap/pull/3318
+    if isinstance(shap_values, list):
+        positive_class_shap_values = shap_values[1]
+    else:
+        if shap_values.ndim == 3:
+            positive_class_shap_values = shap_values[:, :, 1]
+        else:
+            # XGBoost case?
+            positive_class_shap_values = shap_values
+    return positive_class_shap_values

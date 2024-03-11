@@ -549,14 +549,7 @@ def main():
             explainer = shap.KernelExplainer(classifier.predict_proba,
                                              X_train)
         shap_values = explainer.shap_values(X_train)
-        if isinstance(shap_values, list):
-            positive_class_shap_values = shap_values[1]
-        else:
-            # XGBoost seems to have some idiosyncracies with SHAP values
-            # https://github.com/shap/shap/issues/352#issuecomment-455795382
-            # NOTE: I'm not actually sure that these correspond to "positive
-            # "class", but it shouldn't matter since we'll take abs value
-            positive_class_shap_values = shap_values
+        positive_class_shap_values = lib.get_positive_shap_values(shap_values)
         assert positive_class_shap_values.shape == X_train.shape
         print("Successfully calculated SHAP values for "
               f"(classifier: {key}) on training data")
@@ -579,7 +572,7 @@ def main():
     oob_bal_acc_score = rf.oob_score_
     explainer = shap.Explainer(rf)
     shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
-    positive_class_shap_values_rfc = shap_values[1]
+    positive_class_shap_values_rfc = lib.get_positive_shap_values(shap_values)
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_rfc,
                                     feature_names=df_cesar_combined.columns,
                                     fig_title=f"Random Forest model\n(oob balanced accuracy = {oob_bal_acc_score:.3f})",
@@ -608,7 +601,7 @@ def main():
     explainer = shap.KernelExplainer(svm.predict_proba,
                                      df_cesar_combined.to_numpy())
     shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
-    positive_class_shap_values_svm = shap_values[1]
+    positive_class_shap_values_svm = lib.get_positive_shap_values(shap_values)
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_svm,
                                     feature_names=df_cesar_combined.columns,
                                     fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",

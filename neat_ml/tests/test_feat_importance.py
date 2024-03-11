@@ -34,10 +34,7 @@ def test_individual_shap_absolute_plots(tmp_path, n_features, important_index):
     # and is a list in versions prior to that
     # see: https://github.com/shap/shap/pull/3318
     shap_vals = explainer.shap_values(X)
-    if isinstance(shap_vals, list):
-        positive_class_shap_values = shap_vals[1]
-    else:
-        positive_class_shap_values = shap_vals[:, :, 1]
+    positive_class_shap_values = lib.get_positive_shap_values(shap_vals)
 
     cwd = os.getcwd()
     os.chdir(tmp_path)
