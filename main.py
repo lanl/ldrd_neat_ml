@@ -10,6 +10,7 @@ from sklearn.ensemble import (RandomForestClassifier, StackingClassifier,
                               VotingClassifier)
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
+from sklearn.feature_selection import SelectKBest, mutual_info_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
@@ -634,6 +635,16 @@ def main():
     positive_class_shap_values_lgb = lib.get_positive_shap_values(shap_values_lgb)
     # TODO: validation on the classifier for lightgbm above...
 
+    # Add SelectKBest + mutual_info_classif feature importance analysis into the mix
+    # let's require a selection of the top 10 features since
+    # that's our current top feature count for consideration in the
+    # consensus analysis below, but I'm not sure it matters since
+    # we can get all feature scores out of the analysis
+    selector_k_mutual = SelectKBest(mutual_info_classif, k=10)
+    selector_k_mutual.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    selector_k_mutual_feat_scores = selector_k_mutual.scores_
+    assert selector_k_mutual_feat_scores.size == df_cesar_combined.shape[1]
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -644,7 +655,8 @@ def main():
                                                           ebm_feature_scores,
                                                           native_rf_feature_scores,
                                                           positive_class_shap_values_xgb_cls,
-                                                          positive_class_shap_values_lgb],
+                                                          positive_class_shap_values_lgb,
+                                                          selector_k_mutual_feat_scores],
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
