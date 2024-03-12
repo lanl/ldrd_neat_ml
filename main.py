@@ -19,6 +19,7 @@ matplotlib.use("agg")
 import matplotlib.pyplot as plt
 import shap
 from interpret.glassbox import ExplainableBoostingClassifier
+import lightgbm as lgb
 
 
 from neat_ml import lib
@@ -620,6 +621,19 @@ def main():
     positive_class_shap_values_xgb_cls = lib.get_positive_shap_values(shap_values_xgb_cls)
     # TODO: validation on the classifier for xgb above...
 
+
+    # add lightgbm + SHAP feature importances into the mix
+    lgb_bst = lgb.LGBMClassifier(n_estimators=500,
+                                 objective="binary",
+                                 n_jobs=-1,
+                                 importance_type="split",
+                                 random_state=0)
+    lgb_bst.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    explainer = shap.Explainer(lgb_bst)
+    shap_values_lgb = explainer.shap_values(df_cesar_combined.to_numpy())
+    positive_class_shap_values_lgb = lib.get_positive_shap_values(shap_values_lgb)
+    # TODO: validation on the classifier for lightgbm above...
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -629,7 +643,8 @@ def main():
                                                           positive_class_shap_values_svm,
                                                           ebm_feature_scores,
                                                           native_rf_feature_scores,
-                                                          positive_class_shap_values_xgb_cls],
+                                                          positive_class_shap_values_xgb_cls,
+                                                          positive_class_shap_values_lgb],
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
