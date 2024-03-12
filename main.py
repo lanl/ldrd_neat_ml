@@ -611,6 +611,15 @@ def main():
     # might as well include the "native" RF feature importances into the mix
     native_rf_feature_scores = rf.feature_importances_
 
+
+    # add XGBoost + SHAP feature importances into the mix
+    xgb_cls = xgb.XGBClassifier(random_state=0)
+    xgb_cls.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    explainer = shap.Explainer(xgb_cls)
+    shap_values_xgb_cls = explainer.shap_values(df_cesar_combined.to_numpy())
+    positive_class_shap_values_xgb_cls = lib.get_positive_shap_values(shap_values_xgb_cls)
+    # TODO: validation on the classifier for xgb above...
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -619,7 +628,8 @@ def main():
                                      pos_class_feat_imps=[positive_class_shap_values_rfc,
                                                           positive_class_shap_values_svm,
                                                           ebm_feature_scores,
-                                                          native_rf_feature_scores],
+                                                          native_rf_feature_scores,
+                                                          positive_class_shap_values_xgb_cls],
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,
