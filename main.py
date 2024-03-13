@@ -1,3 +1,5 @@
+import pickle
+from pathlib import Path
 import os
 import numpy as np
 from numpy.testing import assert_allclose
@@ -600,10 +602,19 @@ def main():
     # TODO: need actual validation for SVM, not acc on training itself...
     svm_pred = svm.predict(df_cesar_combined.to_numpy())
     svm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, svm_pred)
-    explainer = shap.KernelExplainer(svm.predict_proba,
-                                     df_cesar_combined.to_numpy())
-    shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
-    positive_class_shap_values_svm = lib.get_positive_shap_values(shap_values)
+    # cache SVM SHAP because it takes several minutes
+    # to compute
+    svm_shap_positive_cache_file = "svm_shap_cache_positive_vals.npy"
+    if not Path(svm_shap_positive_cache_file).exists():
+        explainer = shap.KernelExplainer(svm.predict_proba,
+                                         df_cesar_combined.to_numpy())
+        shap_values = explainer.shap_values(df_cesar_combined.to_numpy())
+        positive_class_shap_values_svm = lib.get_positive_shap_values(shap_values)
+        with open(svm_shap_positive_cache_file, 'wb') as f:
+            np.save(f, positive_class_shap_values_svm)
+    else:
+        with open(svm_shap_positive_cache_file, 'rb') as f:
+            positive_class_shap_values_svm = np.load(f)
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_svm,
                                     feature_names=df_cesar_combined.columns,
                                     fig_title=f"SVM model\n(training balanced accuracy = {svm_bal_acc:.3f})",
@@ -666,11 +677,24 @@ def main():
     # perform EBM analysis
     # TODO: no OOB score available as far as I know, so should eventually
     # check on validation...
-    ebm = ExplainableBoostingClassifier()
-    ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
-    ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
-    ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
-    explain_data = ebm.explain_global().data()
+    # TODO: are feature interactions really believable/useful here?
+    # not enough records... and it adds a lot of calculation time...
+    # see: https://github.com/interpretml/interpret/issues/513
+
+    # cache the interactions-enabled EBM work because it
+    # is fairly slow
+    cached_ebm_interact_explain_data = "cached_ebm_interact_explain_data.p"
+    if not Path(cached_ebm_interact_explain_data).exists():
+        ebm = ExplainableBoostingClassifier()
+        ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+        ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
+        ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
+        explain_data = ebm.explain_global().data()
+        with open(cached_ebm_interact_explain_data, "wb") as cache_file:
+            pickle.dump(explain_data, cache_file)
+    else:
+        with open(cached_ebm_interact_explain_data, "rb") as cache_file:
+            explain_data = pickle.load(cache_file)
     lib.plot_ebm_data(explain_data=explain_data,
                       original_feat_names=df_cesar_combined.columns,
                       fig_title=f"Top 10 EBM features\n(training balanced accuracy = {ebm_bal_acc})",
