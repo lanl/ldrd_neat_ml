@@ -12,7 +12,7 @@ from sklearn.ensemble import (RandomForestClassifier, StackingClassifier,
                               VotingClassifier)
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
-from sklearn.feature_selection import SelectKBest, mutual_info_classif
+from sklearn.feature_selection import mutual_info_classif, f_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
@@ -651,10 +651,11 @@ def main():
     # that's our current top feature count for consideration in the
     # consensus analysis below, but I'm not sure it matters since
     # we can get all feature scores out of the analysis
-    selector_k_mutual = SelectKBest(mutual_info_classif, k=10)
-    selector_k_mutual.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
-    selector_k_mutual_feat_scores = selector_k_mutual.scores_
-    assert selector_k_mutual_feat_scores.size == df_cesar_combined.shape[1]
+    k_best_metrics = [mutual_info_classif, f_classif]
+    k_best_scores = lib.select_k_best_scores(X=df_cesar_combined,
+                                             y=y_pred_cesar_md,
+                                             k=10,
+                                             metrics=k_best_metrics)
 
     # try to find consensus amongst the important
     # features from different ML models
@@ -666,8 +667,8 @@ def main():
                                                           ebm_feature_scores,
                                                           native_rf_feature_scores,
                                                           positive_class_shap_values_xgb_cls,
-                                                          positive_class_shap_values_lgb,
-                                                          selector_k_mutual_feat_scores],
+                                                          positive_class_shap_values_lgb] +
+                                                          k_best_scores,
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
     lib.plot_feat_import_consensus(ranked_feature_names=ranked_feature_names,

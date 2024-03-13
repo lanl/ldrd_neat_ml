@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import rankdata
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectKBest
 import ternary
 import pandas as pd
 from PIL import Image
@@ -592,3 +593,14 @@ def get_positive_shap_values(shap_values):
             # XGBoost case?
             positive_class_shap_values = shap_values
     return positive_class_shap_values
+
+
+def select_k_best_scores(X, y, k, metrics):
+    res = []
+    for metric in metrics:
+        selector = SelectKBest(metric, k=k)
+        selector.fit(X.to_numpy(), y)
+        selector_feat_scores = selector.scores_
+        assert selector_feat_scores.size == X.shape[1]
+        res.append(selector_feat_scores)
+    return res
