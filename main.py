@@ -668,6 +668,10 @@ def main():
                                              k=10,
                                              metrics=k_best_metrics)
 
+    # might as well add lightgbm "native" feature importances into
+    # the consensus feature importance analysis mix
+    lgb_native_feature_importances = lgb_bst.feature_importances_
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -678,7 +682,8 @@ def main():
                                                           ebm_feature_scores,
                                                           native_rf_feature_scores,
                                                           positive_class_shap_values_xgb_cls,
-                                                          positive_class_shap_values_lgb] +
+                                                          positive_class_shap_values_lgb,
+                                                          lgb_native_feature_importances] +
                                                           k_best_scores,
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)
