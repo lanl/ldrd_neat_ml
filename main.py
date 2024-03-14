@@ -16,6 +16,7 @@ from sklearn.feature_selection import mutual_info_classif, f_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
+from sklearn.utils import check_array
 import xgboost as xgb
 import matplotlib
 matplotlib.use("agg")
@@ -39,6 +40,16 @@ def main():
     df_cesar_aa = lib.read_in_cesar_all_atom_md_data() # shape (49, 18)
     df_cesar_combined = lib._merge_dfs(df_cesar_cg, df_cesar_aa)
     assert df_cesar_combined.shape == (49, 911 + 18 - 3)
+    # some of the columns are apparently just constant values,
+    # so filter those out (they can't possibly contribute to
+    # ML target selection)
+    col_inds_where_constant = np.argwhere(np.diff(df_cesar_combined, axis=0).sum(axis=0) == 0).ravel()
+    constant_cols = df_cesar_combined.columns[col_inds_where_constant]
+    print("filtering out constant MD data colums:", constant_cols)
+    df_cesar_combined.drop(labels=constant_cols,
+                           axis="columns",
+                           inplace=True)
+    check_array(df_cesar_combined)
 
     # Plot the experimental vs. CG/AA-MD input PEO/Dextran maps
     # so we get an idea of the phase space we're comparing
