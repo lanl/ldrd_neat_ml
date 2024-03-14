@@ -9,7 +9,7 @@ from sklearn.model_selection import (train_test_split, cross_val_score,
                                      StratifiedKFold, GridSearchCV,
                                      cross_val_predict)
 from sklearn.ensemble import (RandomForestClassifier, StackingClassifier,
-                              VotingClassifier)
+                              VotingClassifier, ExtraTreesClassifier)
 from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.feature_selection import mutual_info_classif, f_classif
@@ -635,6 +635,10 @@ def main():
     # might as well include the "native" RF feature importances into the mix
     native_rf_feature_scores = rf.feature_importances_
 
+    # Try using LIME with RF for feature importances:
+    rf_lime_scores = lib.build_lime_data(X=df_cesar_combined, model=rf)
+    assert rf_lime_scores.shape == df_cesar_combined.shape
+
 
     # add XGBoost + SHAP feature importances into the mix
     xgb_cls = xgb.XGBClassifier(random_state=0)
@@ -643,6 +647,10 @@ def main():
     shap_values_xgb_cls = explainer.shap_values(df_cesar_combined.to_numpy())
     positive_class_shap_values_xgb_cls = lib.get_positive_shap_values(shap_values_xgb_cls)
     # TODO: validation on the classifier for xgb above...
+
+    # Try using LIME with XGB for feature importances:
+    xgb_cls_lime_scores = lib.build_lime_data(X=df_cesar_combined, model=xgb_cls)
+    assert xgb_cls_lime_scores.shape == df_cesar_combined.shape
 
 
     # add lightgbm + SHAP feature importances into the mix
@@ -672,6 +680,24 @@ def main():
     # the consensus feature importance analysis mix
     lgb_native_feature_importances = lgb_bst.feature_importances_
 
+    # try using ExtraTrees in the consensus feature importance
+    # analysis as well
+    extra_t_cls = ExtraTreesClassifier(random_state=0,
+                                       n_estimators=500,
+                                       bootstrap=True,
+                                       oob_score=metrics.balanced_accuracy_score)
+    extra_t_cls.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
+    oob_bal_acc_score = extra_t_cls.oob_score_
+    expected_et_oob = 0.70
+    msg = f"{oob_bal_acc_score = } for extra trees classifier, but expected at least {expected_et_oob}"
+    assert oob_bal_acc_score >= expected_et_oob, msg
+    extra_t_native_feat_imp = extra_t_cls.feature_importances_
+
+    # Try using LIME with ExtraTrees for feature importances:
+    extra_t_cls_lime_scores = lib.build_lime_data(X=df_cesar_combined, model=extra_t_cls)
+    assert extra_t_cls_lime_scores.shape == df_cesar_combined.shape
+
+
     # try to find consensus amongst the important
     # features from different ML models
     (ranked_feature_names,
@@ -683,7 +709,11 @@ def main():
                                                           native_rf_feature_scores,
                                                           positive_class_shap_values_xgb_cls,
                                                           positive_class_shap_values_lgb,
-                                                          lgb_native_feature_importances] +
+                                                          lgb_native_feature_importances,
+                                                          rf_lime_scores,
+                                                          xgb_cls_lime_scores,
+                                                          extra_t_cls_lime_scores,
+                                                          extra_t_native_feat_imp] +
                                                           k_best_scores,
                                      feature_names=df_cesar_combined.columns,
                                      top_feat_count=10)

@@ -2,7 +2,9 @@ from neat_ml import lib
 
 import pytest
 import numpy as np
+import pandas as pd
 from numpy.testing import assert_array_equal
+from sklearn.ensemble import RandomForestClassifier
 
 
 def test_cesar_cg_rdf_labels():
@@ -121,3 +123,18 @@ def test_plot_feat_import_consensus(tmp_path):
         actual_bar_widths.append(patch.get_width())
     assert np.argmax(actual_bar_widths) == 0
     assert len(actual_bar_widths) == ranked_feature_counts.size
+
+
+@pytest.mark.parametrize("important_col", [0, 1, 2])
+def test_build_lime_data(important_col):
+    # very simple dataset to check the most basic
+    # properties of the LIME data structure generation
+    data = np.zeros(shape=(4, 3), dtype=np.float64)
+    data[:-1, important_col] = 1.0
+    y = np.asarray([1, 1, 1, 0])
+    X = pd.DataFrame(data=data, columns=["1", "2", "3"])
+    rf = RandomForestClassifier(random_state=0)
+    rf.fit(X, y)
+    lime_actual = lib.build_lime_data(X=X, model=rf)
+    assert lime_actual.shape == X.shape
+    assert_array_equal(lime_actual.argmax(axis=1), important_col)

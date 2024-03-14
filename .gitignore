@@ -25,3 +25,9 @@ __pycache__/
 
 
 ~$*
+
+*.png
+*.p
+*.html
+*.npy
+joblib_cache
