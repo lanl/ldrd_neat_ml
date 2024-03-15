@@ -9,6 +9,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata
+import lime
+import joblib
+from sklearn.utils.validation import check_is_fitted
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest
@@ -18,6 +21,7 @@ from PIL import Image
 import skimage
 from tqdm import tqdm
 
+memory = joblib.Memory("joblib_cache", verbose=0)
 
 # these features were considered potentially interesting
 # for machine learning-based prediction of polymer
@@ -604,3 +608,49 @@ def select_k_best_scores(X, y, k, metrics):
         assert selector_feat_scores.size == X.shape[1]
         res.append(selector_feat_scores)
     return res
+
+
+@memory.cache
+def build_lime_data(X, model):
+    """
+    LIME feature importances are calculated one record
+    at a time, and spit out as a dictionary-like data
+    structure, so we need to do a bit of work to get
+    things in good shape for the consensus feature importance
+    analysis.
+
+    Parameters
+    ----------
+    X: should be the DataFrame containing the design matrix
+    model: should be a pre-fit ML model for which feature importances
+           are to be calculated for
+
+    Returns
+    -------
+    feat_importances: the feature importances for each record
+                      in a NumPy array with same shape as X.
+
+    Notes
+    -----
+    Only desiged to work with tabular data.
+    """
+    check_is_fitted(model)
+    out = np.empty(shape=X.shape, dtype=np.float64)
+    explainer_lime = lime.lime_tabular.LimeTabularExplainer(X.to_numpy(),
+                                                            feature_names=X.columns)
+    for index, row in tqdm(X.iterrows(),
+                           total=X.shape[0],
+                           desc="build LIME feature importance array"):
+        exp = explainer_lime.explain_instance(X.to_numpy()[index],
+                                              model.predict_proba,
+                                              num_features=X.shape[1])
+        exp_arr = np.asarray(list(exp.as_map().values())[0])
+        # sort the feature importance scores to order them
+        # alongside the columns (first score is for column 0, etc...)
+        exp_arr = exp_arr[exp_arr[:, 0].argsort()]
+        # discard the col indices and only keep the scores, to match other
+        # feature importance approaches
+        lime_local_scores = exp_arr[:, 1]
+        assert lime_local_scores.size == X.shape[1]
+        out[index, :] = lime_local_scores
+    return out
