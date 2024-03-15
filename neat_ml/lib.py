@@ -641,7 +641,7 @@ def build_lime_data(X, model):
     for index, row in tqdm(X.iterrows(),
                            total=X.shape[0],
                            desc="build LIME feature importance array"):
-        exp = explainer_lime.explain_instance(X.to_numpy()[1],
+        exp = explainer_lime.explain_instance(X.to_numpy()[index],
                                               model.predict_proba,
                                               num_features=X.shape[1])
         exp_arr = np.asarray(list(exp.as_map().values())[0])

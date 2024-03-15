@@ -125,8 +125,14 @@ def test_plot_feat_import_consensus(tmp_path):
     assert len(actual_bar_widths) == ranked_feature_counts.size
 
 
-@pytest.mark.parametrize("important_col", [0, 1, 2])
-def test_build_lime_data(important_col):
+@pytest.mark.parametrize("important_col, expected", [
+    # should be easy to predict the important
+    # feature for the non-zero rows
+    (0, [0, 0, 0]),
+    (1, [1, 1, 1]),
+    (2, [2, 2, 2]),
+])
+def test_build_lime_data(important_col, expected):
     # very simple dataset to check the most basic
     # properties of the LIME data structure generation
     data = np.zeros(shape=(4, 3), dtype=np.float64)
@@ -137,4 +143,22 @@ def test_build_lime_data(important_col):
     rf.fit(X, y)
     lime_actual = lib.build_lime_data(X=X, model=rf)
     assert lime_actual.shape == X.shape
-    assert_array_equal(lime_actual.argmax(axis=1), important_col)
+    # the last row has no "signal" so is harder
+    # to predict LIME value for, but the score
+    # of the important_col should be negative I think
+    # because of an absence of value there
+    assert_array_equal(lime_actual.argmax(axis=1)[:-1], expected)
+    assert lime_actual[-1].argmax() != important_col
+
+
+def test_build_lime_row_selection():
+    # regression test for:
+    # https://gitlab.lanl.gov/treddy/ldrd_neat_ml/-/merge_requests/36#note_279748
+    data = np.eye(3, k=1)
+    y = np.asarray([1, 1, 0])
+    X = pd.DataFrame(data=data, columns=["1", "2", "3"])
+    rf = RandomForestClassifier(random_state=0)
+    rf.fit(X, y)
+    lime_actual = lib.build_lime_data(X=X, model=rf)
+    assert lime_actual.shape == X.shape
+    assert_array_equal(lime_actual.argmax(axis=1), [1, 2, 0])
