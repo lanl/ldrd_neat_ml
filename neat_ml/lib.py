@@ -654,3 +654,53 @@ def build_lime_data(X, model):
         assert lime_local_scores.size == X.shape[1]
         out[index, :] = lime_local_scores
     return out
+
+
+def plot_top_feat_corrs(ranked_feature_names: npt.NDArray,
+                        X: pd.DataFrame,
+                        y: npt.NDArray,
+                        n: int = 10):
+    """
+    Plot correlations between the top-ranked consensus
+    features and the response.
+
+    Parameters
+    ----------
+    ranked_feature_names: array of strings in order of descending
+                          consensus feature importance (the first
+                          feature name is present in the most feature
+                          importance techniques "top features" sets)
+    X: DataFrame for the design matrix
+    y: NumPy array containing the response values
+    n: integer number of top features to plot correlations for
+    """
+    # TODO: generalize to support n != 10 subplots
+    fig, axs = plt.subplots(5, 2, figsize=(8, 8))
+    axs = axs.ravel()
+    for idx, ax in enumerate(axs):
+        feature_name = ranked_feature_names[idx]
+        feature_vals = X[feature_name]
+        ax.scatter(feature_vals, y)
+        ax.set_ylabel("Phase Separated?")
+        ax.set_yticks([0, 1])
+        ax.set_yticklabels(["no", "yes"])
+        ax.set_title(f"({idx}) Feature: {feature_name}")
+        ax.set_xlabel("Feature Value")
+        R = np.corrcoef(feature_vals, y).ravel()[1]
+        if R >= 0:
+            color = "green"
+        else:
+            color = "red"
+        center_x = (ax.get_xlim()[1] + ax.get_xlim()[0]) / 2
+        center_y = (ax.get_ylim()[1] + ax.get_ylim()[0]) / 2
+        ax.text(center_x,
+                center_y,
+                f"{R = :.2f}",
+                color=color)
+        ax.plot(np.unique(feature_vals),
+                np.poly1d(np.polyfit(feature_vals, y, 1))(np.unique(feature_vals)),
+                color=color,
+                ls="--",
+                alpha=0.3)
+    fig.tight_layout()
+    fig.savefig("top_feature_response_corrs.png", dpi=300)
