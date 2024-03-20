@@ -721,6 +721,10 @@ def main():
                                    ranked_feature_counts=ranked_feature_counts,
                                    num_input_models=num_input_models,
                                    top_feat_count=10)
+    lib.plot_top_feat_corrs(ranked_feature_names=ranked_feature_names,
+                            X=df_cesar_combined,
+                            y=y_pred_cesar_md,
+                            n=10) # NOTE: only supports n=10 for now
     # perform EBM analysis
     # TODO: no OOB score available as far as I know, so should eventually
     # check on validation...
