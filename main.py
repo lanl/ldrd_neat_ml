@@ -1,3 +1,4 @@
+import argparse
 import pickle
 from pathlib import Path
 import os
@@ -29,7 +30,7 @@ import lightgbm as lgb
 from neat_ml import lib
 
 
-def main():
+def main(random_state: int):
     # Step 1: Read in the data/format it appropriately
     # Mihee's experimental PEO/DEX binary phase sep data:
     df = pd.read_excel("neat_ml/data/mihee_peo_dextran_phase_map_experimental.xlsx")
@@ -425,15 +426,15 @@ def main():
         validation_hard_preds = estimator_data[estimator_name]["train_predictions_hard"]
         ent_weights.append(1 / lib.entropy(validation_hard_preds))
         ent_ensemble_members.append(estimator_name)
-    ent_weights = np.asarray(ent_weights)
-    ent_weights /= np.sum(ent_weights)
+    ent_weights_arr = np.asarray(ent_weights)
+    ent_weights_arr /= np.sum(ent_weights)
     print("ent_weights:", ent_weights)
     entropy_clf = VotingClassifier(estimators=[("rfc", estimator_data["rfc"]["classifier"]),
                                               ("xgb_class", estimator_data["xgb_class"]["classifier"]),
                                               ("svm", make_pipeline(StandardScaler(), estimator_data["svm"]["classifier"])),
                                              ],
                                        voting="soft",
-                                       weights=ent_weights,
+                                       weights=ent_weights_arr,
                                        n_jobs=-1)
 
     entropy_clf.fit(X_train, y_train)
@@ -581,7 +582,7 @@ def main():
     # perform SHAP analysis on random forest and SVM
     # TODO: there's no OOB score for SVM, so should eventually check
     # on validation...
-    rf = RandomForestClassifier(random_state=0,
+    rf = RandomForestClassifier(random_state=random_state,
                                 oob_score=metrics.balanced_accuracy_score)
     rf.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     oob_bal_acc_score = rf.oob_score_
@@ -599,7 +600,8 @@ def main():
     # also playing with some overfit guards...
     ebm = ExplainableBoostingClassifier(interactions=0,
                                         early_stopping_tolerance=0.0001,
-                                        early_stopping_rounds=25)
+                                        early_stopping_rounds=25,
+                                        random_state=random_state)
     ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
     ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
@@ -607,7 +609,7 @@ def main():
     explain_data = ebm.explain_global().data()
     ebm_feature_scores = np.asarray(explain_data["scores"]) # shape (926,)
 
-    svm = SVC(gamma="auto", probability=True)
+    svm = SVC(gamma="auto", probability=True, random_state=random_state)
     svm = make_pipeline(StandardScaler(), svm)
     svm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     # TODO: need actual validation for SVM, not acc on training itself...
@@ -624,7 +626,7 @@ def main():
         with open(svm_shap_positive_cache_file, 'wb') as f:
             np.save(f, positive_class_shap_values_svm)
     else:
-        with open(svm_shap_positive_cache_file, 'rb') as f:
+        with open(svm_shap_positive_cache_file, 'rb') as f: # type: ignore[assignment]
             positive_class_shap_values_svm = np.load(f)
     lib.plot_ma_shap_vals_per_model(shap_values=positive_class_shap_values_svm,
                                     feature_names=df_cesar_combined.columns,
@@ -641,7 +643,7 @@ def main():
 
 
     # add XGBoost + SHAP feature importances into the mix
-    xgb_cls = xgb.XGBClassifier(random_state=0)
+    xgb_cls = xgb.XGBClassifier(random_state=random_state)
     xgb_cls.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     explainer = shap.Explainer(xgb_cls)
     shap_values_xgb_cls = explainer.shap_values(df_cesar_combined.to_numpy())
@@ -658,7 +660,7 @@ def main():
                                  objective="binary",
                                  n_jobs=-1,
                                  importance_type="split",
-                                 random_state=0)
+                                 random_state=random_state)
     lgb_bst.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
     explainer = shap.Explainer(lgb_bst)
     shap_values_lgb = explainer.shap_values(df_cesar_combined.to_numpy())
@@ -682,7 +684,7 @@ def main():
 
     # try using ExtraTrees in the consensus feature importance
     # analysis as well
-    extra_t_cls = ExtraTreesClassifier(random_state=0,
+    extra_t_cls = ExtraTreesClassifier(random_state=random_state,
                                        n_estimators=500,
                                        bootstrap=True,
                                        oob_score=metrics.balanced_accuracy_score)
@@ -736,7 +738,7 @@ def main():
     # is fairly slow
     cached_ebm_interact_explain_data = "cached_ebm_interact_explain_data.p"
     if not Path(cached_ebm_interact_explain_data).exists():
-        ebm = ExplainableBoostingClassifier()
+        ebm = ExplainableBoostingClassifier(random_state=random_state)
         ebm.fit(df_cesar_combined.to_numpy(), y_pred_cesar_md)
         ebm_pred = ebm.predict(df_cesar_combined.to_numpy())
         ebm_bal_acc = metrics.balanced_accuracy_score(y_pred_cesar_md, ebm_pred)
@@ -744,7 +746,7 @@ def main():
         with open(cached_ebm_interact_explain_data, "wb") as cache_file:
             pickle.dump(explain_data, cache_file)
     else:
-        with open(cached_ebm_interact_explain_data, "rb") as cache_file:
+        with open(cached_ebm_interact_explain_data, "rb") as cache_file: # type: ignore[assignment]
             explain_data = pickle.load(cache_file)
     lib.plot_ebm_data(explain_data=explain_data,
                       original_feat_names=df_cesar_combined.columns,
@@ -756,4 +758,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Main ML workflow CLI for LDRD NEAT DR project.")
+    parser.add_argument('-s',
+                        '--random_seed',
+                        default=0,
+                        type=int,
+                        # TODO: expand the scope of the random seed argument to include other
+                        # random seeds in the workflow?
+                        help="The random seed used for the estimators involved in feature importance analysis.")
+    args = parser.parse_args()
+    random_state = args.random_seed
+
+    main(random_state=random_state)
