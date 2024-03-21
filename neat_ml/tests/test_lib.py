@@ -162,3 +162,21 @@ def test_build_lime_row_selection():
     lime_actual = lib.build_lime_data(X=X, model=rf)
     assert lime_actual.shape == X.shape
     assert_array_equal(lime_actual.argmax(axis=1), [1, 2, 0])
+
+
+def test_plot_ebm_data_non_interacting(tmp_path):
+    # plot_ebm_data didn't originally support
+    # non-interacting top features
+    scores = np.asarray([0.8, 0.3])
+    names = np.asarray(["feature_0000", "feature_0001"])
+    fig_title = "Test"
+    fig_name = "test.png"
+    tmp_fig = tmp_path / fig_name
+    explain_data = {"scores": scores,
+                    "names": names}
+    # for now, simply check for absence of error:
+    lib.plot_ebm_data(explain_data=explain_data,
+                      original_feat_names=["feat_1", "feat_2"],
+                      fig_title=fig_title,
+                      fig_name=tmp_fig,
+                      top_feat_count=2)

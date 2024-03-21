@@ -359,13 +359,18 @@ def plot_ebm_data(explain_data: dict,
     # original names; this is a quick hack...
     remapped_top_feature_names = []
     for feature_name in top_feature_names:
-        feature_1_name = feature_name.split("&")[0].strip()
-        feature_2_name = feature_name.split("&")[1].strip()
-        feature_1_index = int(re.sub(r"\D", "", feature_1_name))
-        feature_2_index = int(re.sub(r"\D", "", feature_2_name))
-        feature_1_name = original_feat_names[feature_1_index]
-        feature_2_name = original_feat_names[feature_2_index]
-        remapped_top_feature_names.append(f"{feature_1_name} & {feature_2_name}")
+        if "&" not in feature_name:
+            feature_index = int(re.sub(r"\D", "", feature_name))
+            feature_name = original_feat_names[feature_index]
+            remapped_top_feature_names.append(f"{feature_name}")
+        else:
+            feature_1_name = feature_name.split("&")[0].strip()
+            feature_2_name = feature_name.split("&")[1].strip()
+            feature_1_index = int(re.sub(r"\D", "", feature_1_name))
+            feature_2_index = int(re.sub(r"\D", "", feature_2_name))
+            feature_1_name = original_feat_names[feature_1_index]
+            feature_2_name = original_feat_names[feature_2_index]
+            remapped_top_feature_names.append(f"{feature_1_name} & {feature_2_name}")
     ax.barh(y_pos, top_feature_scores)
     ax.set_yticks(y_pos, labels=remapped_top_feature_names)
     ax.set_xlabel("mean abs score")
