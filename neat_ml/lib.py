@@ -65,7 +65,9 @@ def plot_input_data_cesar_MD(df,
                              title="Cesar MD input data\n",
                              fig_name="cesar_md_input_data_",
                              title_addition=None,
-                             y_pred=None):
+                             y_pred=None,
+                             norm=None,
+                             cbar_label=""):
     # Produce a simple scatter plot of Cesar's
     # MD input data, meant for side-by-side comparison
     # with the expt PEO/DEX binary phase separation data from
@@ -80,14 +82,15 @@ def plot_input_data_cesar_MD(df,
         c = "gray"
         title_addition = "(phase sep labels unknown)"
         fig_name_addition = "original"
-    im = ax.scatter(df["WT% DEX"], df["WT% PEO"], c=c)
+    im = ax.scatter(df["WT% DEX"], df["WT% PEO"], c=c, norm=norm)
     ax.set_aspect("equal")
     ax.set_xlabel("Dextran (wt %)")
     ax.set_ylabel("PEO (wt %)")
     ax.set_title(f"{title}"
                  f"{title_addition}")
     if y_pred is not None:
-        fig.colorbar(im, ax=ax, shrink=0.9)
+        cbar = fig.colorbar(im, ax=ax, shrink=0.9)
+        cbar.set_label(cbar_label)
     fig.savefig(f"{fig_name}{fig_name_addition}.png",
                 dpi=300)
 
@@ -414,21 +417,23 @@ def build_df_from_exp_img_paths(list_img_filepaths: Sequence[str]) -> pd.DataFra
     return df
 
 
+@memory.cache
 def skimage_hough_transform(df: pd.DataFrame,
-                            debug: bool = False) -> None:
+                            debug: bool = False) -> pd.DataFrame:
     # given the DataFrame of plate reader data/image
     # filepaths, use sklearn Hough transforms to estimate
     # the average diameters of the bubbles in each image
-    median_droplet_radii = np.empty(shape=(df.shape[0]),
+    df_new = df.copy()
+    median_droplet_radii = np.empty(shape=(df_new.shape[0]),
                                     dtype=np.float64)
     # 2 % PEO/ 2 % DEX as "background:"
-    background_filepath = (df.loc[(df["WT% PEO"] == 2) & (df["WT% DEX"] == 2)]).image_filepath.values[0]
+    background_filepath = (df_new.loc[(df_new["WT% PEO"] == 2) & (df_new["WT% DEX"] == 2)]).image_filepath.values[0]
     background = skimage.io.imread(background_filepath)
     background = skimage.util.img_as_ubyte(background)
     # threshold for background determined empirically
     background_threshold = np.median(background) + 15
-    for index, row in tqdm(df.iterrows(),
-                           total=df.shape[0],
+    for index, row in tqdm(df_new.iterrows(),
+                           total=df_new.shape[0],
                            desc="skimage_hough_transform"):
         img_filepath = row.image_filepath
         image = skimage.io.imread(img_filepath) # shape: (2052, 2456)
@@ -465,7 +470,62 @@ def skimage_hough_transform(df: pd.DataFrame,
             ax.set_title(f"Median droplot radius: {median_droplet_radius}")
             fig.savefig(f"hough_transform_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
-    df["median_radii_skimage_hough"] = median_droplet_radii
+    df_new["median_radii_skimage_hough"] = median_droplet_radii
+    return df_new
+
+
+@memory.cache
+def blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
+    # given the DataFrame of plate reader data/image
+    # filepaths, use blob detection approaches to estimate
+    # the radii of the "bubbles" in each image
+    # Currently only uses the Determinant of Hessian (DoH)
+    # approach from skimage.
+
+    # TODO: expand to include the other techniques mentioned at:
+    # https://scikit-image.org/docs/stable/auto_examples/features_detection/plot_blob.html
+    df_new = df.copy()
+    median_droplet_radii = np.empty(shape=(df_new.shape[0]),
+                                    dtype=np.float64)
+    num_blobs = np.empty(shape=(df_new.shape[0]),
+                         dtype=np.int64)
+    for index, row in tqdm(df_new.iterrows(),
+                           total=df_new.shape[0],
+                           desc="skimage_blob_doh"):
+        img_filepath = row.image_filepath
+        image = skimage.io.imread(img_filepath) # shape: (2052, 2456)
+        image = skimage.util.img_as_ubyte(image)
+        A = skimage.feature.blob_doh(image,
+                                     min_sigma=15,
+                                     max_sigma=500,
+                                     num_sigma=200)
+        num_blobs_img = A.shape[0]
+        blob_radii = A[:, 2]
+        median_droplet_radii[index] = np.median(blob_radii)
+        num_blobs[index] = num_blobs_img
+        if debug:
+            wt_dex = row["WT% DEX"]
+            wt_peo = row["WT% PEO"]
+            # sample/debug plots
+            fig, axs = plt.subplots(1, 2, figsize=(8, 8))
+            image = skimage.color.gray2rgb(image)
+            axs[0].imshow(image)
+            axs[0].set_title("original")
+            for center_y, center_x, radius in A:
+                patch = matplotlib.patches.Circle((center_x, center_y),
+                                                  radius,
+                                                  color="red",
+                                                  lw=1,
+                                                  fill=False)
+                axs[1].add_patch(patch)
+            axs[1].imshow(image)
+            axs[1].set_title(f"DoH num droplets identified: {num_blobs_img}")
+            fig.savefig(f"DoH_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
+            matplotlib.pyplot.close()
+    df_new["median_radii_DoH"] = median_droplet_radii
+    df_new["num_blobs_DoH"] = num_blobs
+    df_new.fillna(0, inplace=True)
+    return df_new
 
 
 def read_in_cesar_all_atom_md_data():
