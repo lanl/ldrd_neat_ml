@@ -48,7 +48,7 @@ def main():
     # Produce a standard plot of the binary phase system
     # points (we don't have phase "labels" yet)
     # TODO: should rename this function to something more generic
-    lib.plot_input_data_cesar_CG(df=df,
+    lib.plot_input_data_cesar_MD(df=df,
                                  title="Plate Reader Image Data for PEO/DEX\n",
                                  fig_name="plate_reader_image_points_",
                                  )
@@ -57,14 +57,34 @@ def main():
     # the droplet sizes (diameters); perhaps it makes sense to try a few
     # and compare them
 
-    lib.skimage_hough_transform(df=df, debug=True)
-    lib.plot_input_data_cesar_CG(df=df,
+    # 1) Using the Hough Transform
+
+    df = lib.skimage_hough_transform(df=df, debug=True)
+    lib.plot_input_data_cesar_MD(df=df,
                                  title="Plate Reader Image Data for PEO/DEX\n",
                                  fig_name="plate_reader_image_points_hough_",
                                  title_addition="(labels from median Hough radii)",
                                  y_pred=df["median_radii_skimage_hough"],
+                                 cbar_label="median Hough radii",
                                  )
 
+    # 2) Using Blob Detection Techniques
+    df = lib.blob_detection(df=df, debug=True)
+    lib.plot_input_data_cesar_MD(df=df,
+                                 title="Plate Reader Image Data for PEO/DEX\n",
+                                 fig_name="plate_reader_image_points_DoH_sigma",
+                                 title_addition="(labels from median DoH sigma/radii)",
+                                 y_pred=df["median_radii_DoH"],
+                                 cbar_label="median DoH sigma",
+                                 )
+    lib.plot_input_data_cesar_MD(df=df,
+                                 title="Plate Reader Image Data for PEO/DEX\n",
+                                 fig_name="plate_reader_image_points_DoH_num_blobs",
+                                 title_addition="(labels from DoH num blobs)",
+                                 y_pred=df["num_blobs_DoH"],
+                                 norm="symlog",
+                                 cbar_label="symlog scaled blob count",
+                                 )
 
 
 
