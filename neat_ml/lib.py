@@ -489,6 +489,10 @@ def blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
                                     dtype=np.float64)
     num_blobs = np.empty(shape=(df_new.shape[0]),
                          dtype=np.int64)
+    median_droplet_radii_log = np.empty(shape=(df_new.shape[0]),
+                                        dtype=np.float64)
+    num_blobs_log = np.empty(shape=(df_new.shape[0]),
+                             dtype=np.int64)
     for index, row in tqdm(df_new.iterrows(),
                            total=df_new.shape[0],
                            desc="skimage_blob_doh"):
@@ -499,31 +503,50 @@ def blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
                                      min_sigma=15,
                                      max_sigma=500,
                                      num_sigma=200)
+        # LoG is *very* slow; the sigma bounds
+        # were determined empirically on a single
+        # sample image
+        B = skimage.feature.blob_log(image,
+                                     min_sigma=10,
+                                     max_sigma=25,
+                                     num_sigma=400)
         num_blobs_img = A.shape[0]
+        num_blobs_img_log = B.shape[0]
         blob_radii = A[:, 2]
+        assert B.shape[1] == 3
+        # the sigma -> radius conversion factor is based on
+        # skimage docs for LoG
+        blob_radii_log = B[:, 2] * np.sqrt(2)
+        B[:, 2] = blob_radii_log
         median_droplet_radii[index] = np.median(blob_radii)
+        median_droplet_radii_log[index] = np.median(blob_radii_log)
         num_blobs[index] = num_blobs_img
+        num_blobs_log[index] = num_blobs_img_log
         if debug:
             wt_dex = row["WT% DEX"]
             wt_peo = row["WT% PEO"]
             # sample/debug plots
-            fig, axs = plt.subplots(1, 2, figsize=(8, 8))
+            fig, axs = plt.subplots(1, 3, figsize=(12, 8))
             image = skimage.color.gray2rgb(image)
             axs[0].imshow(image)
             axs[0].set_title("original")
-            for center_y, center_x, radius in A:
-                patch = matplotlib.patches.Circle((center_x, center_y),
-                                                  radius,
-                                                  color="red",
-                                                  lw=1,
-                                                  fill=False)
-                axs[1].add_patch(patch)
+            for ind, mat in enumerate([A, B]):
+                for center_y, center_x, radius in mat:
+                    patch = matplotlib.patches.Circle((center_x, center_y),
+                                                      radius,
+                                                      color="red",
+                                                      lw=1,
+                                                      fill=False)
+                    axs[ind + 1].add_patch(patch)
             axs[1].imshow(image)
             axs[1].set_title(f"DoH num droplets identified: {num_blobs_img}")
-            fig.savefig(f"DoH_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
+            axs[2].imshow(image)
+            axs[2].set_title(f"LoG num droplets identified: {num_blobs_img_log}")
+            fig.savefig(f"DoH_LoG_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
     df_new["median_radii_DoH"] = median_droplet_radii
     df_new["num_blobs_DoH"] = num_blobs
+    df_new["num_blobs_LoG"] = num_blobs_log
     df_new.fillna(0, inplace=True)
     return df_new
 
