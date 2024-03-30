@@ -85,6 +85,14 @@ def main():
                                  norm="symlog",
                                  cbar_label="symlog scaled blob count",
                                  )
+    lib.plot_input_data_cesar_MD(df=df,
+                                 title="Plate Reader Image Data for PEO/DEX\n",
+                                 fig_name="plate_reader_image_points_LoG_num_blobs",
+                                 title_addition="(labels from LoG num blobs)",
+                                 y_pred=df["num_blobs_LoG"],
+                                 norm="symlog",
+                                 cbar_label="symlog scaled blob count",
+                                 )
 
 
 
