@@ -545,6 +545,7 @@ def blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
             fig.savefig(f"DoH_LoG_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
     df_new["median_radii_DoH"] = median_droplet_radii
+    df_new["median_radii_LoG"] = median_droplet_radii_log
     df_new["num_blobs_DoH"] = num_blobs
     df_new["num_blobs_LoG"] = num_blobs_log
     df_new.fillna(0, inplace=True)
