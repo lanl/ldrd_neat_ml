@@ -558,8 +558,6 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
     # use SimpleBlobDetector from OpenCV as an alternative
     # approach to blob detection
     df_new = df.copy()
-    median_droplet_radii = np.empty(shape=(df_new.shape[0]),
-                                    dtype=np.float64)
     num_blobs = np.empty(shape=(df_new.shape[0]),
                          dtype=np.int64)
     for index, row in tqdm(df_new.iterrows(),
@@ -567,13 +565,13 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
                            desc="OpenCV SimpleBlobDetector"):
         img_filepath = row.image_filepath
         image = cv2.imread(img_filepath, cv2.IMREAD_GRAYSCALE)
-        params = cv2.SimpleBlobDetector_Params()
+        params = cv2.SimpleBlobDetector_Params() # type: ignore[attr-defined]
         # adjust parameters for blob detection
         # some empirical adjustments to achieve
         # reasonable-looking phase maps
         params.filterByArea = True
         params.minArea = 300
-        detector = cv2.SimpleBlobDetector_create(params)
+        detector = cv2.SimpleBlobDetector_create(params) # type: ignore[attr-defined]
         # actual detection of blobs happens:
         keypoints = detector.detect(image)
         num_blobs_img = len(keypoints)
@@ -586,7 +584,7 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
             image_orig = skimage.color.gray2rgb(image)
             axs[0].imshow(image_orig)
             axs[0].set_title("original")
-            blob_image = cv2.drawKeypoints(image.copy(),
+            blob_image = cv2.drawKeypoints(image.copy(), #type: ignore[call-overload]
                                            keypoints,
                                            None,
                                            (255, 0, 0),
