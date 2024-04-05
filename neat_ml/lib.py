@@ -558,11 +558,14 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
     # use SimpleBlobDetector from OpenCV as an alternative
     # approach to blob detection
     df_new = df.copy()
+    median_droplet_radii = np.empty(shape=(df_new.shape[0]),
+                                    dtype=np.float64)
     num_blobs = np.empty(shape=(df_new.shape[0]),
                          dtype=np.int64)
     for index, row in tqdm(df_new.iterrows(),
                            total=df_new.shape[0],
                            desc="OpenCV SimpleBlobDetector"):
+        blob_radii_img = []
         img_filepath = row.image_filepath
         image = cv2.imread(img_filepath, cv2.IMREAD_GRAYSCALE)
         params = cv2.SimpleBlobDetector_Params() # type: ignore[attr-defined]
@@ -574,6 +577,15 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
         detector = cv2.SimpleBlobDetector_create(params) # type: ignore[attr-defined]
         # actual detection of blobs happens:
         keypoints = detector.detect(image)
+        # NOTE: I don't think OpenCV gives us the blob radii
+        # "for free," but we can estimate radii on the assumption
+        # of circular blobs (mostly seems true for our images)
+        for keypoint in keypoints:
+            blob_radii_img.append(keypoint.size)
+        blob_radii_img = np.sqrt(np.asarray(blob_radii_img) / np.pi)
+        if len(blob_radii_img) == 0:
+            blob_radii_img = [0]
+        median_droplet_radii[index] = np.median(blob_radii_img)
         num_blobs_img = len(keypoints)
         num_blobs[index] = num_blobs_img
         if debug:
@@ -594,6 +606,7 @@ def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame
             fig.savefig(f"OpenCV_blob_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
             matplotlib.pyplot.close()
     df_new["num_blobs_opencv"] = num_blobs
+    df_new["median_radii_opencv"] = median_droplet_radii
     return df_new
 
 

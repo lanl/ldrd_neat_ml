@@ -110,6 +110,13 @@ def main():
                                  norm="symlog",
                                  cbar_label="symlog scaled blob count",
                                  )
+    lib.plot_input_data_cesar_MD(df=df,
+                                 title="Plate Reader Image Data for PEO/DEX\n",
+                                 fig_name="plate_reader_image_points_OpenCV_radii",
+                                 title_addition="(labels from OpenCV median radii)",
+                                 y_pred=df["median_radii_opencv"],
+                                 cbar_label="median OpenCV radii",
+                                 )
 
 
 
