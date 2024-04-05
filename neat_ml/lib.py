@@ -20,6 +20,7 @@ import pandas as pd
 from PIL import Image
 import skimage
 from tqdm import tqdm
+import cv2
 
 memory = joblib.Memory("joblib_cache", verbose=0)
 
@@ -550,6 +551,51 @@ def blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
     df_new["num_blobs_LoG"] = num_blobs_log
     df_new.fillna(0, inplace=True)
     return df_new
+
+
+@memory.cache
+def opencv_blob_detection(df: pd.DataFrame, debug: bool = False) -> pd.DataFrame:
+    # use SimpleBlobDetector from OpenCV as an alternative
+    # approach to blob detection
+    df_new = df.copy()
+    num_blobs = np.empty(shape=(df_new.shape[0]),
+                         dtype=np.int64)
+    for index, row in tqdm(df_new.iterrows(),
+                           total=df_new.shape[0],
+                           desc="OpenCV SimpleBlobDetector"):
+        img_filepath = row.image_filepath
+        image = cv2.imread(img_filepath, cv2.IMREAD_GRAYSCALE)
+        params = cv2.SimpleBlobDetector_Params() # type: ignore[attr-defined]
+        # adjust parameters for blob detection
+        # some empirical adjustments to achieve
+        # reasonable-looking phase maps
+        params.filterByArea = True
+        params.minArea = 300
+        detector = cv2.SimpleBlobDetector_create(params) # type: ignore[attr-defined]
+        # actual detection of blobs happens:
+        keypoints = detector.detect(image)
+        num_blobs_img = len(keypoints)
+        num_blobs[index] = num_blobs_img
+        if debug:
+            # Draw circles around the blobs vs. original image
+            wt_dex = row["WT% DEX"]
+            wt_peo = row["WT% PEO"]
+            fig, axs = plt.subplots(1, 2, figsize=(12, 8))
+            image_orig = skimage.color.gray2rgb(image)
+            axs[0].imshow(image_orig)
+            axs[0].set_title("original")
+            blob_image = cv2.drawKeypoints(image.copy(), #type: ignore[call-overload]
+                                           keypoints,
+                                           None,
+                                           (255, 0, 0),
+                                           cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            axs[1].imshow(blob_image)
+            axs[1].set_title(f"OpenCV SimpleBlobDetector (Found {num_blobs_img} blobs)")
+            fig.savefig(f"OpenCV_blob_index_{index}_{wt_peo}_peo_{wt_dex}_dex.png", dpi=300)
+            matplotlib.pyplot.close()
+    df_new["num_blobs_opencv"] = num_blobs
+    return df_new
+
 
 
 def read_in_cesar_all_atom_md_data():
