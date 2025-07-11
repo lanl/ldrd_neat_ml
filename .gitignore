@@ -27,6 +27,8 @@ __pycache__/
 ~$*
 
 *.png
+!neat_ml/tests/baseline/*.png
+!neat_ml/data/Figures_for_Manuscript/*.png
 *.p
 *.html
 *.npy

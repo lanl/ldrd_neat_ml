@@ -28,6 +28,7 @@ functional_test:
       when: always
   allow_failure: false
   script:
+    - python -m neat_ml.plot_manuscript_figures
     - python main.py
 
 unit_tests:
