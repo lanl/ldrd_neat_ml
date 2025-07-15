@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 import os
-import sys
 import re
 from pathlib import Path
 from typing import Dict, Optional, TypedDict, cast
@@ -101,11 +100,7 @@ def titration_diagram(
     None
         Displays the plot and writes image to output_path.
     """
-    try:
-        df = pd.read_csv(file_path)
-    except FileNotFoundError:
-        print(f"Error: The file '{file_path}' was not found.",
-              file=sys.stderr)
+    df = pd.read_csv(file_path)
 
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
@@ -183,21 +178,10 @@ def plot_two_scatter(
         Displays the plot and writes image to output_path.
     """
 
-    try:
-        xls = pd.ExcelFile(excel_file)
-    except FileNotFoundError:
-        print(
-            f"Error: The file '{excel_file}' was not found.",
-            file=sys.stderr
-        )
-
+    xls = pd.ExcelFile(excel_file)
     missing = [s for s in (sheet1, sheet2) if s not in xls.sheet_names]
-    
     if missing:
-        print(
-            f"Error: Sheet(s) {missing} not found in '{excel_file}'.",
-            file=sys.stderr
-        )
+        raise ValueError(f"Worksheet(s) {missing!r} not found in {excel_file!r}")
     
     df1 = xls.parse(sheet1)
     df2 = xls.parse(sheet2)
@@ -283,12 +267,8 @@ def mathematical_model(
     None
         Displays the plot and writes the image to output_path.
     """
-    try:
-        df = pd.read_csv(file_path)
-    except FileNotFoundError:
-        print(f"Error: '{file_path}' not found.", file=sys.stderr)
-        return
-    
+    df = pd.read_csv(file_path)
+
     model_vars = load_parameters_from_json(json_path)
 
     A: float = model_vars["MODEL_A"]
@@ -408,11 +388,8 @@ def phase_diagram_exp(
     -------
         None
     """
-    try:
-        df = pd.read_csv(file_path)
-    except FileNotFoundError:
-        print(f"Error: '{file_path}' not found.", file=sys.stderr)
 
+    df = pd.read_csv(file_path)
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
     figure_utils.plot_gmm_decision_regions(
@@ -700,26 +677,17 @@ def plot_figures() -> None:
     make_binodal_comparison_figures(FIG_6_XLS, OUT_DIR)
     make_phase_diagram_figures(CSV_PHASE_DIR, OUT_DIR)
 
-    if MAT_MODEL_CSV.is_file():
-        mathematical_model(
-            file_path=str(MAT_MODEL_CSV),
-            json_path=str(JSON_PATH),
-            x_col="Sodium Citrate (wt%)",
-            y_col="PEO 8 kg/mol (wt%)",
-            phase_col="Phase_Separation_2nd",
-            xrange=[0, 21],
-            yrange=[0, 38],
-            output_path=str(MAT_MODEL_PNG),
-        )
-    else:
-        raise FileNotFoundError(
-            f"Mathematical model CSV not found: {MAT_MODEL_CSV}"
-        )
+    mathematical_model(
+        file_path=str(MAT_MODEL_CSV),
+        json_path=str(JSON_PATH),
+        x_col="Sodium Citrate (wt%)",
+        y_col="PEO 8 kg/mol (wt%)",
+        phase_col="Phase_Separation_2nd",
+        xrange=[0, 21],
+        yrange=[0, 38],
+        output_path=str(MAT_MODEL_PNG),
+    )
 
 
 if __name__ == "__main__":
-    try:
-        plot_figures()
-    except Exception as exc:
-        print(f"Figure generation failed: {exc}")
-
+    plot_figures()
