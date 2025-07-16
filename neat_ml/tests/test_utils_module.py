@@ -5,6 +5,7 @@ from typing import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.testing as npt
 import pandas as pd
 import pytest
 from matplotlib.testing.compare import compare_images
@@ -43,17 +44,27 @@ def test_axis_ranges() -> None:
     df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
     df_b = pd.DataFrame({"x": [0, 7], "y": [1, 4]})
     xr, yr = figure_utils._axis_ranges(df_a, df_b, "x", "y", pad=1)
-    assert xr == [0, 7 + 1]
-    assert yr == [0, 5 + 1]
+
+    actual_xr = np.array(xr)
+    desired_xr = np.array([0, 7 + 1])
+    npt.assert_array_equal(actual_xr,desired_xr)
+
+    actual_yr = np.array(yr)
+    desired_yr = np.array([0, 5 + 1])
+    npt.assert_array_equal(actual_yr,desired_yr)
 
 
 def test_standardise_labels_mapping() -> None:
     raw = np.array([9, 9, 1])
     x_comp = np.array([[10, 10], [11, 11], [0.1, 0.1]])
     std, mapping = figure_utils._standardise_labels(raw, x_comp)
+    
     assert mapping[1] == 1
     assert mapping[9] == 0
-    assert std.tolist() == [0, 0, 1]
+    
+    actual_std = std
+    desired_std = np.array([0, 0, 1])
+    npt.assert_array_equal(actual_std, desired_std)
 
 
 def test_extract_boundary_from_contour() -> None:
@@ -71,10 +82,10 @@ def test_gmmwrapper_predict_matches_gmm() -> None:
     x_comp = rng.uniform(0, 20, (20, 2))
 
     wrapper = figure_utils.GMMWrapper(gmm, x_comp, feats)
-    preds_direct = gmm.predict(feats)
-    preds_wrapper = wrapper.predict(x_comp)
+    desired = gmm.predict(feats)
+    actual   = wrapper.predict(x_comp)
 
-    assert np.array_equal(preds_direct, preds_wrapper)
+    npt.assert_array_equal(actual, desired)
 
 
 def test_set_axis_style_equal_aspect() -> None:
