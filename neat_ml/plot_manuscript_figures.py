@@ -481,7 +481,8 @@ def make_titration_figures(
         and save files to the disk.
     """
     wb = pd.ExcelFile(xls_path)
-    assert wb.sheet_names, f"No sheets found in {xls_path}"
+    if not wb.sheet_names:
+        raise ValueError(f"No sheets found in Excel file: {xls_path}")
 
     for sheet in wb.sheet_names:
         sheet=str(sheet)
@@ -555,7 +556,8 @@ def make_binodal_comparison_figures(
         sheet.
     """
     wb = pd.ExcelFile(xls_path)
-    assert wb.sheet_names, f"No sheets found in {xls_path}"
+    if not wb.sheet_names:
+        raise ValueError(f"No sheets found in Excel file: {xls_path}")
 
     groups: Dict[str, Dict[str, str]] = {}
     for sheet in wb.sheet_names:
@@ -566,9 +568,10 @@ def make_binodal_comparison_figures(
             groups.setdefault(ds_id, {})[kind] = sheet
 
     for ds_id, kinds in groups.items():
-        assert {"Titrate", "TECAN"} <= kinds.keys(), (
-            f"Dataset '{ds_id}' is missing a Titrate or TECAN sheet."
-        )
+        if not {"Titrate", "TECAN"} <= kinds.keys():
+            raise ValueError(
+                f"Dataset '{ds_id}' is missing its Titrate or TECAN sheet."
+                )
 
     for ds_id, kinds in groups.items():
         s_titrate, s_tecan = kinds["Titrate"], kinds["TECAN"]
@@ -638,7 +641,8 @@ def make_phase_diagram_figures(
         This function does not return a value; it saves files to disk.
     """
     csv_files = sorted(p for p in csv_dir.iterdir() if p.suffix.lower() == ".csv")
-    assert csv_files, f"No CSV files found in {csv_dir}"
+    if not csv_files:
+        raise ValueError(f"No CSV files found in directory: {csv_dir}")
 
     for csv_path in csv_files:
         df = pd.read_csv(csv_path)
