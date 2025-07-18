@@ -29,18 +29,18 @@ def baseline_dir() -> Path:
     return Path(__file__).parent / "baseline"
 
 
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0) -> None:
+def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0):
     diff = compare_images(str(baseline), str(result), tol=tol)
     assert diff is None, f"Images differ: {diff}"
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
 
-def test_safe_read_excel_raises(tmp_path: Path) -> None:
+def test_safe_read_excel_raises(tmp_path: Path):
     non_existent = tmp_path / "missing.xlsx"
     with pytest.raises(FileNotFoundError):
         figure_utils._safe_read_excel(non_existent, sheet_name="foo")
 
-def test_axis_ranges() -> None:
+def test_axis_ranges():
     df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
     df_b = pd.DataFrame({"x": [0, 7], "y": [1, 4]})
     xr, yr = figure_utils._axis_ranges(df_a, df_b, "x", "y", pad=1)
@@ -54,7 +54,7 @@ def test_axis_ranges() -> None:
     npt.assert_array_equal(actual_yr,desired_yr)
 
 
-def test_standardise_labels_mapping() -> None:
+def test_standardise_labels_mapping():
     raw = np.array([9, 9, 1])
     x_comp = np.array([[10, 10], [11, 11], [0.1, 0.1]])
     std, mapping = figure_utils._standardise_labels(raw, x_comp)
@@ -67,7 +67,7 @@ def test_standardise_labels_mapping() -> None:
     npt.assert_array_equal(actual_std, desired_std)
 
 
-def test_extract_boundary_from_contour() -> None:
+def test_extract_boundary_from_contour():
     z = np.array([[0, 1],
                   [1, 0]])
     xs = ys = np.arange(2)
@@ -75,7 +75,7 @@ def test_extract_boundary_from_contour() -> None:
     assert boundary is not None and boundary.shape[1] == 2
 
 
-def test_gmmwrapper_predict_matches_gmm() -> None:
+def test_gmmwrapper_predict_matches_gmm():
     rng = np.random.default_rng(0)
     feats = rng.uniform(0, 1, (20, 1))
     gmm = GaussianMixture(n_components=2, random_state=0).fit(feats)
@@ -88,7 +88,7 @@ def test_gmmwrapper_predict_matches_gmm() -> None:
     npt.assert_array_equal(actual, desired)
 
 
-def test_set_axis_style_equal_aspect() -> None:
+def test_set_axis_style_equal_aspect():
     fig, ax = plt.subplots()
     figure_utils._set_axis_style(ax, [0, 10], [0, 5])
     assert ax.get_aspect() == 1.0
@@ -107,7 +107,7 @@ def test_plotters_visual_and_logic(
     synthetic_df: pd.DataFrame,
     plotter: Callable,
     fname: str,
-) -> None:
+):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
 
     if plotter is figure_utils.plot_gmm_decision_regions:

@@ -32,7 +32,7 @@ def baseline_dir() -> Path:
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
 
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0) -> None:
+def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0):
     """
     Fail if the two PNGs differ by more than tol.
     A return value of None means *identical within tolerance*.
@@ -44,7 +44,7 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     tmp_path: Path,
     baseline_dir: Path,
     synthetic_df: pd.DataFrame,
-) -> None:
+):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
     gmm, labels, boundary = figure_utils.plot_gmm_decision_regions(
         df=synthetic_df,
@@ -74,7 +74,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     tmp_path: Path,
     baseline_dir: Path,
     synthetic_df: pd.DataFrame,
-) -> None:
+):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
     figure_utils.plot_gmm_composition_phase(
         df=synthetic_df,
@@ -123,7 +123,7 @@ def test_visual_regression_on_helpers(
     writer: Callable,
     fname: str,
     extra_kwargs: dict,
-) -> None:
+):
     
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
@@ -150,7 +150,7 @@ def test_visual_regression_on_helpers(
     assert_same_image(out_png, baseline_dir / fname)
 
 
-def test_plot_two_scatter_visual_regression(tmp_path: Path, baseline_dir: Path) -> None:
+def test_plot_two_scatter_visual_regression(tmp_path: Path, baseline_dir: Path):
     xlsx = tmp_path / "scatter.xlsx"
     with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
         pd.DataFrame({"X": [1, 2, 3], "Y": [3, 2, 1]}).to_excel(
