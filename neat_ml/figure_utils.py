@@ -222,8 +222,8 @@ def _standardise_labels(
     }
     distances = {lbl: np.linalg.norm(c) for lbl, c in centroids.items()}
 
-    near_lbl = min(distances, key=lambda lbl: distances[lbl])
-    far_lbl  = max(distances, key=lambda lbl: distances[lbl])
+    near_lbl = min(distances, key=lambda lbl: float(distances[lbl]))
+    far_lbl  = max(distances, key=lambda lbl: float(distances[lbl]))
 
     label_map = {far_lbl: 0, near_lbl: 1}
     std_labels = np.vectorize(label_map.get)(cluster_labels)
