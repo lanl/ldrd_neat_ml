@@ -177,7 +177,6 @@ def run_opencv(
         desc="OpenCV SimpleBlobDetector",
     ):
         img_path = row.image_filepath
-
         num_blobs, median_r, bubble_data = cached_detect(img_path)
 
         df_bubbles = pd.DataFrame(bubble_data)
