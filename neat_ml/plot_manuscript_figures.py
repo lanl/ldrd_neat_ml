@@ -1,9 +1,6 @@
-
-from __future__ import annotations
 import os
-import re
 from pathlib import Path
-from typing import Dict, Optional, TypedDict, cast
+from typing import Optional, TypedDict, cast
 
 import numpy as np
 import pandas as pd
@@ -15,8 +12,8 @@ import json
 from . import figure_utils
 
 PHASE_COLS = ("Phase_Separation_1st", "Phase_Separation_2nd")
-FIG_3_XLS = Path("neat_ml/data/figure_data/Figure_3_Data.xlsx")
-FIG_6_XLS = Path("neat_ml/data/figure_data/Figure_6_Data.xlsx")
+FIG_3_CSV = Path("neat_ml/data/figure_data/Titration_Figures/")
+FIG_6_CSV = Path("neat_ml/data/figure_data/Binodal_Comparison_Figures/")
 CSV_PHASE_DIR = Path("neat_ml/data/Binary_Mixture_Phase_Information")
 OUT_DIR = Path("neat_ml/data/Figures_for_Manuscript")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,9 +26,6 @@ JSON_PATH = Path(
 MAT_MODEL_PNG = OUT_DIR / (
     "PEO8K_Sodium_Citrate_Phase_Diagram_Experiment_Literature_Comparison.png"
 )
-
-_PAIR_RE = re.compile(r"Figure6_(Titrate|TECAN)_(.+)")
-
 
 class ModelVars(TypedDict):
     MODEL_A: float
@@ -147,9 +141,8 @@ def titration_diagram(
     print(f"Plot saved successfully to {output_path}")
 
 def plot_two_scatter(
-    excel_file: str,
-    sheet1: str,
-    sheet2: str,
+    csv1_path: str,
+    csv2_path: str,
     output_path: str,
     xlim: Optional[list[int]] = None,
     ylim: Optional[list[int]] = None,
@@ -159,12 +152,10 @@ def plot_two_scatter(
 
     Parameters
     ----------
-    excel_file : str
-        Path to Excel file containing both sheets.
-    sheet1 : str
-        Name of the first sheet.
-    sheet2 : str
-        Name of the second sheet.
+    csv1_path : str
+        Path to Titration.CSV file
+    csv2_path : str
+        Path to TECAN.CSV file
     output_path : str
         Path to save the output image.
     xlim : Optional[list[float]]
@@ -178,13 +169,8 @@ def plot_two_scatter(
         Displays the plot and writes image to output_path.
     """
 
-    xls = pd.ExcelFile(excel_file)
-    missing = [s for s in (sheet1, sheet2) if s not in xls.sheet_names]
-    if missing:
-        raise ValueError(f"Worksheet(s) {missing!r} not found in {excel_file!r}")
-    
-    df1 = xls.parse(sheet1)
-    df2 = xls.parse(sheet2)
+    df1 = pd.read_csv(csv1_path)
+    df2 = pd.read_csv(csv2_path)
 
     x_col = list(df2.columns)[0]
     y_col = list(df2.columns)[1]
@@ -236,9 +222,9 @@ def mathematical_model(
     x_col: str,
     y_col: str,
     phase_col: str,
-    xrange: list[int],
-    yrange: list[int],
     output_path: str,
+    xrange: list[int] = [0, 20],
+    yrange: list[int] = [0, 20],
 ):
     """
     Generate and save a phase diagram plot from composition data.
@@ -450,26 +436,23 @@ def phase_diagram_exp(
     print(f"Plot saved to '{output_path}'.")
 
 def make_titration_figures(
-    xls_path: Path, 
+    csv_dir: Path,
     out_dir: Path
 ) -> None:
     """
-    Processes an Excel workbook to generate titration plots from each sheet.
+    Processes a CSV file to generate titration plots from each sheet.
 
-    This function iterates through each sheet of a specified Excel file. For
-    each sheet, it extracts tabular data, saves it to a new CSV file, and
-    then generates a corresponding titration phase diagram as a PNG image.
+    This function generates titration phase diagram as a PNG image.
 
-    The first row of each sheet is expected to contain the titles for the
-    x-axis, y-axis, and phase columns, respectively. The resulting CSV and
-    PNG files are named after the source sheet and are saved in the
+    The first row of each CSV file is expected to contain the titles for the
+    x-axis, y-axis, and phase columns, respectively. The resulting
+    PNG files are named after the CSV file and are saved in the
     specified output directory.
 
     Parameters
     ----------
-    xls_path : Path
-        The file path to the input Excel workbook (.xls or .xlsx)
-        containing the titration data.
+    csv_dir : Path
+        The file path to the input csv files containing the titration data.
     out_dir : Path
         The path to the directory where the output CSV files and PNG
         images will be saved.
@@ -480,35 +463,14 @@ def make_titration_figures(
         This function does not return any value; its purpose is to create
         and save files to the disk.
     """
-    wb = pd.ExcelFile(xls_path)
-    if not wb.sheet_names:
-        raise ValueError(f"No sheets found in Excel file: {xls_path}")
 
-    for sheet in wb.sheet_names:
-        sheet=str(sheet)
-        titles = figure_utils._safe_read_excel(
-            xls_path, 
-            sheet_name=sheet, 
-            header=None, 
-            nrows=1
-        )
-        x_title, y_title, phase_title = titles.iloc[0]
-
-        df = figure_utils._safe_read_excel(
-            xls_path,
-            sheet_name=sheet,
-            header=None,
-            skiprows=1,
-            names=[x_title, y_title, phase_title],
-        )
-
+    for csv_path in sorted(csv_dir.glob("*.csv")):
+        df = pd.read_csv(csv_path)
+        x_title, y_title, phase_title = df.columns[:3]
         x_rng = [0, int(df[x_title].max()) + 1]
         y_rng = [0, int(df[y_title].max()) + 1]
 
-        csv_path = out_dir / f"{sheet.replace(' ', '_')}.csv"
-        df.to_csv(csv_path, index=False)
-
-        png_path = out_dir / f"{sheet.replace(' ', '_')}_Titration_Phase_Diagram.png"
+        png_path = out_dir / f"{csv_path.stem}_Titration_Phase_Diagram.png"
 
         titration_diagram(
             file_path=str(csv_path),
@@ -521,7 +483,7 @@ def make_titration_figures(
         )
 
 def make_binodal_comparison_figures(
-    xls_path: Path, 
+    csv_dir: Path,
     out_dir: Path
 ) -> None:
     """
@@ -538,8 +500,8 @@ def make_binodal_comparison_figures(
 
     Parameters
     ----------
-    xls_path : Path
-        The file path to the input Excel workbook.
+    csv_dir : Path
+        The file path to the input CSV file directory.
     out_dir : Path
         The path to the directory where the output CSV files and PNG
         images will be saved.
@@ -555,59 +517,29 @@ def make_binodal_comparison_figures(
         If any dataset ID is missing its corresponding "Titrate" or "TECAN"
         sheet.
     """
-    wb = pd.ExcelFile(xls_path)
-    if not wb.sheet_names:
-        raise ValueError(f"No sheets found in Excel file: {xls_path}")
 
-    groups: Dict[str, Dict[str, str]] = {}
-    for sheet in wb.sheet_names:
-        sheet = str(sheet)
-        m = _PAIR_RE.fullmatch(sheet)
-        if m:
-            kind, ds_id = m.groups()
-            groups.setdefault(ds_id, {})[kind] = sheet
+    titrate: dict[str, Path] = {}
+    tecan:   dict[str, Path] = {}
 
-    for ds_id, kinds in groups.items():
-        if not {"Titrate", "TECAN"} <= kinds.keys():
-            raise ValueError(
-                f"Dataset '{ds_id}' is missing its Titrate or TECAN sheet."
-                )
+    for p in csv_dir.glob("*_Titrate.csv"):
+        titrate[p.stem[:-8]] = p       # strip '_Titrate'
+    for p in csv_dir.glob("*_TECAN.csv"):
+        tecan[p.stem[:-6]] = p         # strip '_TECAN'
 
-    for ds_id, kinds in groups.items():
-        s_titrate, s_tecan = kinds["Titrate"], kinds["TECAN"]
-        titles = figure_utils._safe_read_excel(
-            xls_path, 
-            sheet_name=s_titrate, 
-            header=None, 
-            nrows=1
-        )
-        x_title, y_title = titles.iloc[0]
+    for ds_id in sorted(titrate):
+        csv_tit = titrate[ds_id]
+        csv_tec = tecan[ds_id]
 
-        df_tit = figure_utils._safe_read_excel(
-            xls_path,
-            sheet_name=s_titrate,
-            header=None,
-            skiprows=1,
-            names=[x_title, y_title],
-        )
-        df_tec = figure_utils._safe_read_excel(
-            xls_path,
-            sheet_name=s_tecan,
-            header=None,
-            skiprows=1,
-            names=[x_title, y_title],
-        )
-
-        x_rng, y_rng = figure_utils._axis_ranges(df_tit, df_tec, x_title, y_title)
-        df_tit.to_csv(out_dir / f"{ds_id}_Titrate.csv", index=False)
-        df_tec.to_csv(out_dir / f"{ds_id}_TECAN.csv", index=False)
+        df_tit = pd.read_csv(csv_tit)
+        df_tec = pd.read_csv(csv_tec)
+        x_col, y_col = df_tit.columns[:2]
+        x_rng, y_rng = figure_utils._axis_ranges(df_tit, df_tec, x_col, y_col)
 
         png_path = out_dir / f"Figure_6_{ds_id}_Binodal_Comparison.png"
 
         plot_two_scatter(
-            excel_file=str(xls_path),
-            sheet1=s_titrate,
-            sheet2=s_tecan,
+            csv1_path=str(csv_tit),
+            csv2_path=str(csv_tec),
             output_path=str(png_path),
             xlim=x_rng,
             ylim=y_rng,
@@ -673,23 +605,63 @@ def make_phase_diagram_figures(
                 output_path=str(png_path),
             )
 
-def plot_figures() -> None:
+def plot_figures(
+    titration_csv_dir: Path = FIG_3_CSV,
+    binodal_csv_dir:   Path = FIG_6_CSV,
+    csv_phase_dir: Path = CSV_PHASE_DIR,
+    out_dir: Path = OUT_DIR,
+    mat_model_csv: Path = MAT_MODEL_CSV,
+    json_path: Path = JSON_PATH,
+    xrange: list[int] = [0, 21],
+    yrange: list[int] = [0, 38]
+) -> None:
     """
     Run all three figure-generation pipelines.
+
+    The routine is a thin orchestrator: it delegates the heavy
+    lifting to the specialised helper functions defined in
+    this module (make_titration_figures, make_binodal_comparison_figures,
+    make_phase_diagram_figures, and mathematical_model).
+    Each parameter has a sensible module-level default so that
+
+    Parameters
+    ----------
+    titration_csv_dir : pathlib.Path, default FIG_3_CSV
+        CSV files containing individual titration datasets
+    binodal_csv_dir : pathlib.Path, default FIG_6_CSV
+        CSV files containing paired “Titrate/TECAN” binodal data
+    csv_phase_dir : pathlib.Path, default CSV_PHASE_DIR
+        Directory containing one or more CSV files with composition/phase data
+    out_dir : pathlib.Path, default OUT_DIR
+        Destination directory for all generated artefacts (PNGs and any
+        intermediate CSV exports).
+    mat_model_csv : pathlib.Path, default MAT_MODEL_CSV
+        Single CSV sheet that feeds the mathematical model comparison plot
+    json_path : pathlib.Path, default JSON_PATH
+        JSON file containing the calibrated model parameters
+        MODEL_A, MODEL_B, MODEL_C and MODEL_R2.
+
+    Returns
+    -------
+    None
+        The function is executed for its side-effects: it writes a collection
+        of PNG files to out_dir.  No value is returned.
     """
-    make_titration_figures(FIG_3_XLS, OUT_DIR)
-    make_binodal_comparison_figures(FIG_6_XLS, OUT_DIR)
-    make_phase_diagram_figures(CSV_PHASE_DIR, OUT_DIR)
+    make_titration_figures(titration_csv_dir, out_dir)
+    make_binodal_comparison_figures(binodal_csv_dir, out_dir)
+    make_phase_diagram_figures(csv_phase_dir, out_dir)
+
+    model_png = out_dir / MAT_MODEL_PNG.name
 
     mathematical_model(
-        file_path=str(MAT_MODEL_CSV),
-        json_path=str(JSON_PATH),
+        file_path=str(mat_model_csv),
+        json_path=str(json_path),
         x_col="Sodium Citrate (wt%)",
         y_col="PEO 8 kg/mol (wt%)",
         phase_col="Phase_Separation_2nd",
-        xrange=[0, 21],
-        yrange=[0, 38],
-        output_path=str(MAT_MODEL_PNG),
+        xrange=xrange,
+        yrange=yrange,
+        output_path=str(model_png),
     )
 
 

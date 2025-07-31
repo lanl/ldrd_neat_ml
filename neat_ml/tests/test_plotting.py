@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import Callable
@@ -32,12 +30,12 @@ def baseline_dir() -> Path:
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
 
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0):
+def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 10.0):
     """
     Fail if the two PNGs differ by more than tol.
-    A return value of None means *identical within tolerance*.
+    A return value of None means identical within tolerance.
     """
-    diff = compare_images(str(baseline), str(result), tol=tol)
+    diff = compare_images(str(expected_image), str(actual_image), tol=tol)
     assert diff is None, f"Images differ: {diff}"
 
 def test_plot_gmm_decision_regions_visual_and_logic(
@@ -65,8 +63,8 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     plt.close(fig)
 
     assert_same_image(
-        result=out_png,
-        baseline=baseline_dir / "gmm_decision_regions.png",
+        expected_image=baseline_dir / "gmm_decision_regions.png",
+        actual_image=out_png,
     )
 
 
@@ -92,8 +90,8 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     plt.close(fig)
 
     assert_same_image(
-        result=out_png,
-        baseline=baseline_dir / "gmm_composition_phase.png",
+        expected_image=baseline_dir / "gmm_composition_phase.png",
+        actual_image=out_png,
     )
 
 @pytest.mark.parametrize(
@@ -147,27 +145,191 @@ def test_visual_regression_on_helpers(
     arr = plt.imread(out_png)
     assert np.ptp(arr[..., :3]) > 0.0
 
-    assert_same_image(out_png, baseline_dir / fname)
+    assert_same_image(
+        expected_image=baseline_dir / fname,
+        actual_image=out_png)
 
 
 def test_plot_two_scatter_visual_regression(tmp_path: Path, baseline_dir: Path):
-    xlsx = tmp_path / "scatter.xlsx"
-    with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
-        pd.DataFrame({"X": [1, 2, 3], "Y": [3, 2, 1]}).to_excel(
-            w, sheet_name="A", index=False
-        )
-        pd.DataFrame({"X": [1, 2, 3], "Y": [1, 2, 3]}).to_excel(
-            w, sheet_name="B", index=False
-        )
+    csv1 = tmp_path / "scatter_A.csv"
+    pd.DataFrame({"X": [1, 2, 3], "Y": [3, 2, 1]}).to_csv(csv1, index=False)
+
+    csv2 = tmp_path / "scatter_B.csv"
+    pd.DataFrame({"X": [1, 2, 3], "Y": [1, 2, 3]}).to_csv(csv2, index=False)
 
     out_png = tmp_path / "plot_two_scatter.png"
     pmf.plot_two_scatter(
-        excel_file=str(xlsx),
-        sheet1="A",
-        sheet2="B",
+        csv1_path=str(csv1),
+        csv2_path=str(csv2),
         output_path=str(out_png),
         xlim=[0, 4],
         ylim=[0, 4],
     )
 
-    assert_same_image(out_png, baseline_dir / "plot_two_scatter.png")
+    assert_same_image(
+        expected_image=baseline_dir / "plot_two_scatter.png",
+        actual_image=out_png)
+
+
+def test_load_parameters_missing_keys(tmp_path: Path):
+    """
+    The JSON is valid but omits MODEL_C -> KeyError expected.
+    """
+    bad_params = tmp_path / "bad_params.json"
+    json.dump({"MODEL_A": 0.1, "MODEL_B": 0.0, "MODEL_R2": 0.99}, bad_params.open("w"))
+
+    with pytest.raises(KeyError) as exc:
+        pmf.load_parameters_from_json(str(bad_params))
+
+    expected = f"{bad_params} is missing required keys: {{'MODEL_C'}}"
+    assert exc.value.args[0] == expected
+
+def test_make_phase_diagram_no_csv_files(tmp_path: Path):
+    """
+    Empty directory should raise 'No CSV files found in directory'.
+    """
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    with pytest.raises(ValueError) as exc:
+        pmf.make_phase_diagram_figures(empty_dir, tmp_path / "out")
+
+    expected = f"No CSV files found in directory: {empty_dir}"
+    assert str(exc.value) == expected
+
+def test_make_phase_diagram_bad_csv_columns(tmp_path: Path):
+    """
+    A CSV with only 3 columns triggers the ValueError in the try/except block.
+    """
+    bad_dir = tmp_path / "bad_csv"
+    bad_dir.mkdir()
+    demo_csv = bad_dir / "demo.csv"
+
+    pd.DataFrame({"A": [1], "B": [2], "C": [3]}).to_csv(demo_csv, index=False)
+
+    with pytest.raises(ValueError) as exc:
+        pmf.make_phase_diagram_figures(bad_dir, tmp_path / "out")
+
+    expected = f"CSV {demo_csv} must have at least five columns; got 3"
+    assert str(exc.value) == expected
+
+
+def _build_titration_dir(dir_: Path, df: pd.DataFrame) -> Path:
+    """
+    Directory with one titration CSV (X,Y,Phase).
+    """
+    dir_.mkdir()
+    df[["X", "Y", "Phase"]].to_csv(dir_ / "Synthetic.csv", index=False)
+    return dir_
+
+
+def _build_binodal_dir(dir_: Path, df: pd.DataFrame) -> Path:
+    """
+    Directory with paired *_Titrate.csv / *_TECAN.csv files.
+    """
+    dir_.mkdir()
+    tit = df[["X", "Y"]].iloc[:5]
+    tec = df[["X", "Y"]].iloc[5:10]
+    tit.to_csv(dir_ / "Synthetic_Titrate.csv", index=False)
+    tec.to_csv(dir_ / "Synthetic_TECAN.csv", index=False)
+    return dir_
+
+
+def _build_phase_dir(dir_: Path, df: pd.DataFrame) -> Path:
+    """
+    Directory with one CSV suitable for make_phase_diagram_figures.
+    """
+    dir_.mkdir()
+    out = pd.DataFrame(
+        {
+            "Junk1": 0,
+            "Junk2": 0,
+            "Junk3": 0,
+            "X": df["X"],
+            "Y": df["Y"],
+            "Phase_Separation_1st": df["Phase"],
+            "Phase_Separation_2nd": df["Phase"],
+        }
+    )
+    out.to_csv(dir_ / "demo.csv", index=False)
+    return dir_
+
+
+def _build_model_csv(path: Path, df: pd.DataFrame) -> Path:
+    out = pd.DataFrame(
+        {
+            "Sodium Citrate (wt%)": df["X"],
+            "PEO 8 kg/mol (wt%)": df["Y"],
+            "Phase_Separation_2nd": df["Phase"],
+        }
+    )
+    out.to_csv(path, index=False)
+    return path
+
+@pytest.mark.parametrize(
+    "target, builder",
+    [
+        ("titration", _build_titration_dir),
+        ("binodal", _build_binodal_dir),
+        ("phase", _build_phase_dir),
+        ("pipeline", None),
+    ],
+    ids=["make_titration", "make_binodal", "make_phase", "plot_figures"],
+)
+def test_wrappers_and_pipeline(
+    target: str,
+    builder: Callable[[Path, pd.DataFrame], Path] | None,
+    synthetic_df: pd.DataFrame,
+    tmp_path: Path,
+    baseline_dir: Path,
+):
+    work = tmp_path / "work"
+    work.mkdir()
+    out_dir = work / "out"
+    out_dir.mkdir()
+
+    if target == "titration":
+        assert builder is not None
+        tit_dir = builder(work / "tit_dir", synthetic_df)
+        pmf.make_titration_figures(tit_dir, out_dir)
+
+    elif target == "binodal":
+        assert builder is not None
+        bin_dir = builder(work / "bin_dir", synthetic_df)
+        pmf.make_binodal_comparison_figures(bin_dir, out_dir)
+
+    elif target == "phase":
+        assert builder is not None
+        phase_dir = builder(work / "phase_dir", synthetic_df)
+        pmf.make_phase_diagram_figures(phase_dir, out_dir)
+
+    else:
+        tit_dir = _build_titration_dir(work / "tit_dir", synthetic_df)
+        bin_dir = _build_binodal_dir(work / "bin_dir", synthetic_df)
+        phase_dir = _build_phase_dir(work / "phase_dir", synthetic_df)
+        model_csv = _build_model_csv(work / "model.csv", synthetic_df)
+
+        params = work / "params.json"
+        json.dump(
+            {"MODEL_A": 0.955, "MODEL_B": -5.73, "MODEL_C": 581, "MODEL_R2": 0.9993},
+            params.open("w"),
+        )
+
+        pmf.plot_figures(
+            titration_csv_dir=tit_dir,
+            binodal_csv_dir=bin_dir,
+            csv_phase_dir=phase_dir,
+            out_dir=out_dir,
+            mat_model_csv=model_csv,
+            json_path=params,
+            xrange=[0, 20],
+            yrange=[0, 20],
+        )
+
+    pngs = sorted(out_dir.glob("*.png"))
+    assert pngs, f"{target} produced no PNGs"
+
+    for png in pngs:
+        assert_same_image(
+            expected_image=baseline_dir / png.name,
+            actual_image=png)

@@ -1,7 +1,4 @@
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Tuple, Optional, Any, Sequence
+from typing import Tuple, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -9,42 +6,6 @@ from matplotlib.lines import Line2D
 from skimage import measure 
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import pairwise_distances_argmin_min
-
-def _safe_read_excel(
-    path: Path, *, 
-    sheet_name: str, 
-    **kwargs: Any
-) -> pd.DataFrame:
-    """
-    Safely reads a sheet from an Excel file, providing 
-    a clear error if the file is missing.
-
-    This function acts as a wrapper around `pandas.read_excel`. 
-    It first verifies the existence of the file at the 
-    specified path before attempting to read it. Any additional
-    keyword arguments are passed directly to the underlying
-    pandas function.
-
-    Parameters
-    ----------
-    path : Path
-        The file path to the Excel workbook.
-    sheet_name : str
-        The name of the sheet to read from the workbook.
-    **kwargs : Any
-        Additional keyword arguments to pass to `pandas.read_excel`.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing the data from the specified Excel sheet.
-    """
-    if not path.is_file():
-        raise FileNotFoundError(f"Required file not found: {path}")
-    
-    df = pd.read_excel(path, sheet_name=sheet_name, **kwargs)
-    return df
-
 
 def _axis_ranges(
     df1: pd.DataFrame,

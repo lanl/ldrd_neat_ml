@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Callable
 
@@ -34,11 +32,6 @@ def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0):
     assert diff is None, f"Images differ: {diff}"
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
-
-def test_safe_read_excel_raises(tmp_path: Path):
-    non_existent = tmp_path / "missing.xlsx"
-    with pytest.raises(FileNotFoundError):
-        figure_utils._safe_read_excel(non_existent, sheet_name="foo")
 
 def test_axis_ranges():
     df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
