@@ -9,7 +9,7 @@ import pytest
 from matplotlib.testing.compare import compare_images
 from sklearn.mixture import GaussianMixture
 
-from neat_ml import figure_utils
+from neat_ml.utils import figure_utils
 
 @pytest.fixture(scope="session")
 def synthetic_df() -> pd.DataFrame:
@@ -27,7 +27,7 @@ def baseline_dir() -> Path:
     return Path(__file__).parent / "baseline"
 
 
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 10.0):
+def assert_same_image(result: Path, baseline: Path, *, tol: float = 1.0):
     diff = compare_images(str(baseline), str(result), tol=tol)
     assert diff is None, f"Images differ: {diff}"
 
@@ -112,7 +112,13 @@ def test_plotters_visual_and_logic(
             ax=ax,
             xrange=[0, 20],
             yrange=[0, 20],
-            decision_alpha=1.0,
+            n_components=2,
+            random_state=42,
+            boundary_color="red",
+            resolution=200,
+            decision_alpha=1,
+            plot_regions=True,
+            region_colors=["aquamarine", "lightsteelblue"],
         )
         assert labels.shape == (len(synthetic_df),)
         assert boundary is None or boundary.shape[1] == 2

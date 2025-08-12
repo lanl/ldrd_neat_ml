@@ -12,7 +12,7 @@ def _axis_ranges(
     df2: pd.DataFrame,
     x_col: str,
     y_col: str,
-    pad: int = 2,
+    pad: int,
 ) -> Tuple[list[int], list[int]]:
     """
     Calculates shared axis ranges for plotting two DataFrames.
@@ -115,7 +115,7 @@ def extract_boundary_from_contour(
     z: np.ndarray,
     xs: np.ndarray,
     ys: np.ndarray,
-    level: float = 0.5
+    level: float
 ) -> Optional[np.ndarray]:
     """
     Extracts the longest boundary contour from a grid at 
@@ -222,13 +222,13 @@ def plot_gmm_decision_regions(
     ax,
     xrange: Sequence[float],
     yrange: Sequence[float],
-    n_components: int = 2,
-    random_state: int = 42,
-    region_colors: Optional[list[str]] = None,
-    boundary_color: str = "red",
-    resolution: int = 200,
-    decision_alpha: float = 0.3,
-    plot_regions: bool = True
+    n_components: int,
+    random_state: int,
+    boundary_color: str,
+    resolution: int,
+    decision_alpha: float,
+    plot_regions: bool,
+    region_colors: Optional[list[str]],
 ) -> Tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
     """
     Trains a GMM and creates contour traces for phase 

@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 from matplotlib.testing.compare import compare_images
 
-from neat_ml import plot_manuscript_figures as pmf
-from neat_ml import figure_utils
+from neat_ml.utils import lib_plotting as pmf
+from neat_ml.utils import figure_utils
 
 @pytest.fixture(scope="session")
 def synthetic_df() -> pd.DataFrame:
@@ -30,7 +30,7 @@ def baseline_dir() -> Path:
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
 
-def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 10.0):
+def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 1.0):
     """
     Fail if the two PNGs differ by more than tol.
     A return value of None means identical within tolerance.
@@ -52,7 +52,13 @@ def test_plot_gmm_decision_regions_visual_and_logic(
         ax=ax,
         xrange=[0, 20],
         yrange=[0, 20],
-        decision_alpha=1.0,
+        n_components=2,
+        random_state=42,
+        boundary_color="red",
+        resolution=200,
+        decision_alpha=1,
+        plot_regions=True,
+        region_colors=["aquamarine", "lightsteelblue"],
     )
     assert labels.shape == (len(synthetic_df),)
     assert boundary is None or boundary.shape[1] == 2
@@ -131,8 +137,7 @@ def test_visual_regression_on_helpers(
         test_params = {
           "MODEL_A": 0.955,
           "MODEL_B": -5.73,
-          "MODEL_C": 581,
-          "MODEL_R2": 0.9993
+          "MODEL_C": 581
         }
         with open(json_file_path, 'w') as f:
             json.dump(test_params, f)
@@ -176,7 +181,7 @@ def test_load_parameters_missing_keys(tmp_path: Path):
     The JSON is valid but omits MODEL_C -> KeyError expected.
     """
     bad_params = tmp_path / "bad_params.json"
-    json.dump({"MODEL_A": 0.1, "MODEL_B": 0.0, "MODEL_R2": 0.99}, bad_params.open("w"))
+    json.dump({"MODEL_A": 0.1, "MODEL_B": 0.0}, bad_params.open("w"))
 
     with pytest.raises(KeyError) as exc:
         pmf.load_parameters_from_json(str(bad_params))
@@ -184,15 +189,38 @@ def test_load_parameters_missing_keys(tmp_path: Path):
     expected = f"{bad_params} is missing required keys: {{'MODEL_C'}}"
     assert exc.value.args[0] == expected
 
+def test_load_parameters_wrong_value_type(tmp_path: Path):
+    """
+    Tests that a TypeError is raised if a parameter value is not a number.
+    
+    The JSON file contains all required keys, but the value for 'MODEL_B'
+    is a string, which should trigger a TypeError.
+    """
+    bad_params_file = tmp_path / "bad_value_type.json"
+    
+    invalid_data = {"MODEL_A": 10.5, "MODEL_B": "not-a-number", "MODEL_C": 20.0}
+    with open(bad_params_file, "w") as f:
+        json.dump(invalid_data, f)
+
+    with pytest.raises(TypeError) as exc:
+        pmf.load_parameters_from_json(str(bad_params_file))
+
+    expected_msg = "Parameter 'MODEL_B' must be a number, but got str."
+    assert exc.value.args[0] == expected_msg
+
 def test_make_phase_diagram_no_csv_files(tmp_path: Path):
     """
     Empty directory should raise 'No CSV files found in directory'.
     """
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
+    phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
 
     with pytest.raises(ValueError) as exc:
-        pmf.make_phase_diagram_figures(empty_dir, tmp_path / "out")
+        pmf.make_phase_diagram_figures(
+            empty_dir, 
+            tmp_path / "out", 
+            phase_cols)
 
     expected = f"No CSV files found in directory: {empty_dir}"
     assert str(exc.value) == expected
@@ -204,11 +232,15 @@ def test_make_phase_diagram_bad_csv_columns(tmp_path: Path):
     bad_dir = tmp_path / "bad_csv"
     bad_dir.mkdir()
     demo_csv = bad_dir / "demo.csv"
+    phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
 
     pd.DataFrame({"A": [1], "B": [2], "C": [3]}).to_csv(demo_csv, index=False)
 
     with pytest.raises(ValueError) as exc:
-        pmf.make_phase_diagram_figures(bad_dir, tmp_path / "out")
+        pmf.make_phase_diagram_figures(
+            bad_dir, 
+            tmp_path / "out",
+            phase_cols)
 
     expected = f"CSV {demo_csv} must have at least five columns; got 3"
     assert str(exc.value) == expected
@@ -287,6 +319,7 @@ def test_wrappers_and_pipeline(
     work.mkdir()
     out_dir = work / "out"
     out_dir.mkdir()
+    phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
 
     if target == "titration":
         assert builder is not None
@@ -301,17 +334,18 @@ def test_wrappers_and_pipeline(
     elif target == "phase":
         assert builder is not None
         phase_dir = builder(work / "phase_dir", synthetic_df)
-        pmf.make_phase_diagram_figures(phase_dir, out_dir)
+        pmf.make_phase_diagram_figures(phase_dir, out_dir, phase_cols)
 
     else:
         tit_dir = _build_titration_dir(work / "tit_dir", synthetic_df)
         bin_dir = _build_binodal_dir(work / "bin_dir", synthetic_df)
         phase_dir = _build_phase_dir(work / "phase_dir", synthetic_df)
         model_csv = _build_model_csv(work / "model.csv", synthetic_df)
+        model_png = work / 'model.png'
 
         params = work / "params.json"
         json.dump(
-            {"MODEL_A": 0.955, "MODEL_B": -5.73, "MODEL_C": 581, "MODEL_R2": 0.9993},
+            {"MODEL_A": 0.955, "MODEL_B": -5.73, "MODEL_C": 581},
             params.open("w"),
         )
 
@@ -321,7 +355,9 @@ def test_wrappers_and_pipeline(
             csv_phase_dir=phase_dir,
             out_dir=out_dir,
             mat_model_csv=model_csv,
+            mat_model_png=model_png,
             json_path=params,
+            phase_cols=phase_cols,
             xrange=[0, 20],
             yrange=[0, 20],
         )
