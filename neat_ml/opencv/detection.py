@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Dict, Tuple, Sequence
 
@@ -15,7 +13,9 @@ import warnings
 
 __all__: Sequence[str] = [
     "collect_tiff_paths", 
+    "_detect_single_image",
     "build_df_from_img_paths", 
+    "_save_debug_overlay",
     "run_opencv"
 ]
 

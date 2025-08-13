@@ -11,19 +11,13 @@ The module offers three public functions:
 All heavy lifting happens in process_image; the other helpers are mere
 orchestration wrappers.
 """
-
-from __future__ import annotations
-
 import os
 from pathlib import Path
 from typing import Iterable, Tuple
 import cv2
 import numpy as np
 
-SUPPORTED_EXTS: Tuple[str, ...] = (".tiff", ".tif")
-
 __all__ = [
-    "SUPPORTED_EXTS",
     "process_image",
     "iter_images",
     "process_directory",
@@ -80,7 +74,7 @@ def process_image(
 
 def iter_images(root: Path) -> Iterable[Path]:
     """
-    Recursively yield all files under  root  whose extension is TIFF.
+    Recursively yield all files under  root  whose extension is TIFF or tiff.
 
     Parameters
     ----------
@@ -92,11 +86,13 @@ def iter_images(root: Path) -> Iterable[Path]:
     Iterable[pathlib.Path]
         Absolute paths of discovered images.
     """
+    
+    SUPPORTED_EXTS: Tuple[str, ...] = (".tiff", ".tif")
+
     for dirpath, _, files in os.walk(root):
         for name in files:
             if name.lower().endswith(SUPPORTED_EXTS):
                 yield Path(dirpath) / name
-
 
 def process_directory(
     input_dir: Path, 
