@@ -1,6 +1,10 @@
 image: python:3.12.1
 
 before_script:
+  - apt-get update && apt-get install -y --no-install-recommends git git-lfs
+  - git lfs version
+  - git lfs install
+  - git lfs pull 
   - python --version
   - python -m venv venv
   - source venv/bin/activate
