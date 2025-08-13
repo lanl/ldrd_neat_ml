@@ -1,10 +1,13 @@
 image: python:3.12.1
 
 before_script:
-  - apt-get update && apt-get install -y --no-install-recommends git git-lfs
+  - set -euxo pipefail
+  - apt-get update
+  - apt-get install -y --no-install-recommends ca-certificates curl gnupg git git-lfs
+  - git --version
   - git lfs version
   - git lfs install
-  - git lfs pull 
+  - git lfs pull
   - python --version
   - python -m venv venv
   - source venv/bin/activate
