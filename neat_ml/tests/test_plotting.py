@@ -28,8 +28,6 @@ def baseline_dir() -> Path:
     """Directory that stores the reference (golden) images."""
     return Path(__file__).parent / "baseline"
 
-pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
-
 def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 1e-4):
     """
     Fail if the two PNGs differ by more than tol.
