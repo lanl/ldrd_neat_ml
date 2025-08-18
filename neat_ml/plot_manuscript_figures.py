@@ -5,8 +5,8 @@ from neat_ml.utils import lib_plotting
 if __name__ == "__main__":
 
     """
-    A complete wrapper method to the plotting of all assocaited
-    manuscript figures. The varibles defined below is used as
+    A complete wrapper for plotting all associated manuscript
+    figures. The variables defined below are used as
     function arguments for lib_plotting.plot_figures()
     """
 
