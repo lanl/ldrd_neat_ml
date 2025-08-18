@@ -27,7 +27,7 @@ def baseline_dir() -> Path:
     return Path(__file__).parent / "baseline"
 
 
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 1.0):
+def assert_same_image(result: Path, baseline: Path, *, tol: float = 1e-4):
     diff = compare_images(str(baseline), str(result), tol=tol)
     assert diff is None, f"Images differ: {diff}"
 

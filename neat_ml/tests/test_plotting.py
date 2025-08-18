@@ -30,7 +30,7 @@ def baseline_dir() -> Path:
 
 pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
 
-def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 1.0):
+def assert_same_image(expected_image: Path, actual_image: Path, *, tol: float = 1e-4):
     """
     Fail if the two PNGs differ by more than tol.
     A return value of None means identical within tolerance.
