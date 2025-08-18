@@ -604,7 +604,7 @@ def plot_figures(
     csv_phase_dir : pathlib.Path
         Directory containing one or more CSV files with composition/phase data
     out_dir : pathlib.Path
-        Destination directory for all generated artefacts (PNGs and any
+        Destination directory for all generated artifacts (PNGs and any
         intermediate CSV exports).
     mat_model_csv : pathlib.Path
         Single CSV sheet that feeds the mathematical model comparison plot
@@ -614,7 +614,7 @@ def plot_figures(
         JSON file containing the calibrated model parameters
         MODEL_A, MODEL_B, and MODEL_C.
     phase_cols: Tuple[str, str]
-        Tuple of strings to represent the phase conlumn names 
+        Tuple of strings to represent the phase column names 
     xrange: list[int]
         X-axis range for the plot
     yrange: list[int]

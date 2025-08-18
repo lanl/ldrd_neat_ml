@@ -33,7 +33,7 @@ def _axis_ranges(
     y_col : str
         The name of the column representing the y-axis.
     pad : int, optional
-        The padding to add to the maximum axis value. Defaults to 2.
+        The padding to add to the maximum axis value.
 
     Returns
     -------
@@ -52,7 +52,7 @@ class GMMWrapper:
 
     This class bridges the gap between a GMM trained on 
     1D phase data and the 2D composition space of a phase 
-    iagram. For any given composition point (x, y), it 
+    diagram. For any given composition point (x, y), it 
     finds the nearest experimental data point in the 
     composition space and uses that point's phase to predict
     a cluster label with the GMM.

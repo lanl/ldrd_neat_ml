@@ -20,19 +20,6 @@ def synthetic_df() -> pd.DataFrame:
     phase = (x + y > 20.0).astype(int)
     return pd.DataFrame({"X": x, "Y": y, "Phase": phase})
 
-
-@pytest.fixture(scope="session")
-def baseline_dir() -> Path:
-    """Directory that stores the reference (golden) images."""
-    return Path(__file__).parent / "baseline"
-
-
-def assert_same_image(result: Path, baseline: Path, *, tol: float = 1e-4):
-    diff = compare_images(str(baseline), str(result), tol=tol)
-    assert diff is None, f"Images differ: {diff}"
-
-pytestmark = pytest.mark.usefixtures("baseline_dir", "synthetic_df")
-
 def test_axis_ranges():
     df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
     df_b = pd.DataFrame({"x": [0, 7], "y": [1, 4]})
@@ -96,7 +83,6 @@ def test_set_axis_style_equal_aspect():
 )
 def test_plotters_visual_and_logic(
     tmp_path: Path,
-    baseline_dir: Path,
     synthetic_df: pd.DataFrame,
     plotter: Callable,
     fname: str,
@@ -140,4 +126,5 @@ def test_plotters_visual_and_logic(
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
 
-    assert_same_image(out_png, baseline_dir / fname)
+    baseline_dir = Path ('neat_ml/tests/baseline/')
+    compare_images(str(baseline_dir / fname), str(out_png), tol=1e-4)
