@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Callable
+from importlib import resources
+from typing import Callable, Generator, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +20,15 @@ def synthetic_df() -> pd.DataFrame:
     y = rng.uniform(0.0, 20.0, 30)
     phase = (x + y > 20.0).astype(int)
     return pd.DataFrame({"X": x, "Y": y, "Phase": phase})
+
+@pytest.fixture(scope="session")
+def baseline_dir() -> Generator[Any, Any, Any]:
+    """
+    Directory that stores the reference (golden) images.
+    """
+    ref = resources.files("neat_ml.tests") / "baseline"
+    with resources.as_file(ref) as path:
+        yield path
 
 def test_axis_ranges():
     df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
@@ -84,6 +94,7 @@ def test_set_axis_style_equal_aspect():
 def test_plotters_visual_and_logic(
     tmp_path: Path,
     synthetic_df: pd.DataFrame,
+    baseline_dir: Path,
     plotter: Callable,
     fname: str,
 ):
@@ -125,6 +136,5 @@ def test_plotters_visual_and_logic(
     out_png = tmp_path / fname
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
-
-    baseline_dir = Path ('neat_ml/tests/baseline/')
+    
     compare_images(str(baseline_dir / fname), str(out_png), tol=1e-4)

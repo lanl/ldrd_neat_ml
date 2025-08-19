@@ -1,7 +1,8 @@
 import json
 import re
 from pathlib import Path
-from typing import Callable
+from importlib import resources
+from typing import Callable, Generator, Any
 import matplotlib
 matplotlib.use("Agg")
 
@@ -23,8 +24,18 @@ def synthetic_df() -> pd.DataFrame:
     phase = (x + y > 20.0).astype(int)
     return pd.DataFrame({"X": x, "Y": y, "Phase": phase})
 
+@pytest.fixture(scope="session")
+def baseline_dir() -> Generator[Any, Any, Any]:
+    """
+    Directory that stores the reference (golden) images.
+    """
+    ref = resources.files("neat_ml.tests") / "baseline"
+    with resources.as_file(ref) as path:
+        yield path
+
 def test_plot_gmm_decision_regions_visual_and_logic(
     tmp_path: Path,
+    baseline_dir: Path,
     synthetic_df: pd.DataFrame,
 ):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
@@ -52,7 +63,6 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
     
-    baseline_dir = Path ("neat_ml/tests/baseline/")
     compare_images(
         str(baseline_dir / "gmm_decision_regions.png"), 
         str(out_png), 
@@ -60,6 +70,7 @@ def test_plot_gmm_decision_regions_visual_and_logic(
 
 def test_plot_gmm_composition_phase_visual_and_logic(
     tmp_path: Path,
+    baseline_dir: Path,    
     synthetic_df: pd.DataFrame,
 ):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
@@ -77,8 +88,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     out_png = tmp_path / "gmm_composition_phase.png"
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
-    
-    baseline_dir = Path ("neat_ml/tests/baseline/")
+
     compare_images(
         str(baseline_dir / "gmm_composition_phase.png"), 
         str(out_png), 
@@ -106,6 +116,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
 )
 def test_visual_regression_on_helpers(
     tmp_path: Path,
+    baseline_dir: Path,
     synthetic_df: pd.DataFrame,
     writer: Callable,
     fname: str,
@@ -133,14 +144,16 @@ def test_visual_regression_on_helpers(
     arr = plt.imread(out_png)
     assert np.ptp(arr[..., :3]) > 0.0
     
-    baseline_dir = Path ("neat_ml/tests/baseline/")
     compare_images(
         str(baseline_dir / fname), 
         str(out_png), 
         tol=1e-4)
 
 
-def test_plot_two_scatter_visual_regression(tmp_path: Path):
+def test_plot_two_scatter_visual_regression(
+    tmp_path: Path,
+    baseline_dir: Path,
+):
     csv1 = tmp_path / "scatter_A.csv"
     pd.DataFrame({"X": [1, 2, 3], "Y": [3, 2, 1]}).to_csv(csv1, index=False)
 
@@ -155,7 +168,6 @@ def test_plot_two_scatter_visual_regression(tmp_path: Path):
         xlim=[0, 4],
         ylim=[0, 4],
     )
-    baseline_dir = Path ("neat_ml/tests/baseline/")
     compare_images(
         str(baseline_dir/ "plot_two_scatter.png"), 
         str(out_png), 
@@ -282,6 +294,7 @@ def _build_model_csv(path: Path, df: pd.DataFrame) -> Path:
 
 def test_wrappers_and_pipeline(
     synthetic_df: pd.DataFrame,
+    baseline_dir: Path,
     tmp_path: Path,
 ):
     work = tmp_path / "work"
@@ -318,7 +331,6 @@ def test_wrappers_and_pipeline(
     pngs = sorted(out_dir.glob("*.png"))
     assert pngs, "The main pipeline produced no PNGs"
 
-    baseline_dir = Path ("neat_ml/tests/baseline/")
     for png in pngs:
         compare_images(
             str(baseline_dir / png.name), 
