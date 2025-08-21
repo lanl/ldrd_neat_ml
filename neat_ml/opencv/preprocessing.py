@@ -26,10 +26,10 @@ __all__ = [
 def process_image(
     img: np.ndarray,
     *,
-    clip_limit: float = 2.0,
-    tile_grid_size: Tuple[int, int] = (8, 8),
-    ksize: Tuple[int, int] = (5, 5),
-    alpha: float = 1.5,
+    clip_limit: float,
+    tile_grid_size: Tuple[int, int],
+    ksize: Tuple[int, int],
+    alpha: float,
 ) -> np.ndarray:
     """
     Enhance local contrast with CLAHE, then sharpen the image.
@@ -38,19 +38,19 @@ def process_image(
     ----------
     img : np.ndarray
         Single-channel 8-bit image loaded via cv2.IMREAD_GRAYSCALE.
-    clip_limit : float, default 2.0
+    clip_limit : float
         Higher values increase contrast; values ≈ 2 are usually safe.
-    tile_grid_size : tuple[int, int], default (8, 8)
+    tile_grid_size : tuple[int, int]
         Size (cols, rows) of the CLAHE tiles.
-    ksize : tuple[int, int], default (5, 5)
+    ksize : tuple[int, int]
         Gaussian kernel for the un-sharp mask.
-    alpha : float, default 1.5
+    alpha : float
         Sharpening strength; 0 disables sharpening.
 
     Returns
     -------
     np.ndarray
-        Image with identical shape and dtype as  img .
+        Image with identical shape and dtype as img.
     """
     clahe = cv2.createCLAHE(
         clipLimit=clip_limit, 
@@ -122,7 +122,13 @@ def process_directory(
         out_path = output_dir / in_path.name
         img = cv2.imread(str(in_path), cv2.IMREAD_GRAYSCALE)
         if img is not None:
-            processed = process_image(img)
+            processed = process_image(
+                img,
+                clip_limit=2.0,
+                tile_grid_size=(8,8),
+                ksize=(5,5),
+                alpha=1.5
+            )
             cv2.imwrite(str(out_path), processed)
         else:
             print(f"\n[WARNING] Could not read file, skipping: {in_path}")
