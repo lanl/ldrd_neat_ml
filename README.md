@@ -119,7 +119,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect`
+`python run_workflow.py --config <YAML file> --steps detect,analysis`
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -140,37 +140,6 @@ place the outputs under ``roots:work`` filepath from the `.yaml` file
 For information relevant to running the workflow:  
 
 `python run_workflow.py --help`
-
-## Installation
-
-Download the package from the following GitLab repository:  
-
-```bash
-git clone ssh://git@lisdi-git.lanl.gov:10022/ldrd_dr_neat/ldrd_neat_ml.git
-
-```
-
-To set up the environment:  
-
-```bash
-
-cd ldrd_neat_ml
-conda env create -n ldrd_neat_ml "python>=3.10"
-conda activate ldrd_neat_ml
-
-pip install -r requirements.txt
-```
-
-## Running the OpenCV detection
-
-To run the workflow, user must follow the instructions 
-give below. 
-
-You can find the relevant information from:  
-
-`python run_workflow.py --help`
-
-Sample incantation: `python run_workflow.py --config <YAML file> --steps detect`
 
 ## Running the Main ML workflow
 
