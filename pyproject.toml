@@ -6,6 +6,9 @@ requires = ["setuptools>=68.2.2",
 name = "neat_ml"
 version = "0.0.1.dev0"
 
+[tool.ruff]
+exclude = ["neat_ml/sam2"]
+
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
 "neat_ml.tests.data.images" = ["*.tiff"]

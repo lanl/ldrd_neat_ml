@@ -6,6 +6,8 @@ before_script:
   - python -m venv venv
   - source venv/bin/activate
   - python -m pip install -U mypy ruff pandas-stubs "numpy>=1.26.3,<=2.1.3" matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest shap interpret types-tqdm types-Pillow scikit-image lightgbm lime opencv-python-headless==4.10.0.84 pyyaml types-pyyaml
+  - git submodule update --init --recursive
+  - pip install -e ./neat_ml/sam2/
 
 stages:
   - lint
