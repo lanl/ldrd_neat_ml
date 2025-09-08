@@ -9,8 +9,6 @@ from pathlib import Path
 import pickle
 from tqdm import tqdm
 import joblib
-import argparse
-import json
 
 from skimage.measure import label, regionprops, find_contours
 from matplotlib.patches import Rectangle
@@ -305,9 +303,6 @@ def run_bubblesam(
     pd.DataFrame
         One row per image with detection statistics.
     """
-    if "image_filepath" not in df_imgs.columns:
-        raise ValueError("Input DataFrame must contain 'image_filepath' column.")
-
     cfg_m = {**DEFAULT_MODEL_CFG, **(model_cfg or {})}
     cfg_s = {**DEFAULT_MASK_SETTINGS, **(mask_settings or {})}
     out_dir = Path(output_dir).expanduser()
@@ -331,22 +326,5 @@ def run_bubblesam(
     summary.fillna(0, inplace=True)
 
     (out_dir / "bubblesam_summary.csv").write_text(summary.to_csv(index=False))
-    print(f"[BubbleSAM] processed {len(df_imgs)} images → {out_dir}")
+    print(f"[BubbleSAM] processed {len(df_imgs)} images -> {out_dir}")
     return summary
-
-if __name__ == "__main__":
-
-    ap = argparse.ArgumentParser(description="Run SAM-2 bubble detection")
-    ap.add_argument("csv", type=Path, help="CSV with image_filepath column")
-    ap.add_argument("out_dir", type=Path, help="Output directory")
-    ap.add_argument("--debug", action="store_true", help="Save overlay PNGs")
-    ap.add_argument("--mask_cfg", type=Path, help="JSON file with mask settings")
-    ap.add_argument("--model_cfg", type=Path, help="JSON file with model settings")
-    args = ap.parse_args()
-
-    df_in = pd.read_csv(args.csv)
-    msk_cfg = json.load(args.mask_cfg.open()) if args.mask_cfg else None
-    mdl_cfg = json.load(args.model_cfg.open()) if args.model_cfg else None
-
-    run_bubblesam(df_in, args.out_dir, model_cfg=mdl_cfg,
-                  mask_settings=msk_cfg, debug=args.debug)

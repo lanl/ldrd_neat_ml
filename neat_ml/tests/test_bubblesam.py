@@ -1,12 +1,15 @@
 from pathlib import Path
-from typing import Tuple, List
+from importlib import resources
 
 import numpy as np
 import numpy.testing as npt
+from numpy.typing import NDArray
 import pandas as pd
 import cv2
 import pytest
 import torch
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.testing.compare import compare_images
 
@@ -18,11 +21,7 @@ from neat_ml.bubblesam.bubblesam import (
 )
 from neat_ml.bubblesam.SAM import SAMModel
 
-# pytestmark = pytest.mark.integration
-
-CHECKPOINT: Path = (
-    Path("./neat_ml/sam2/checkpoints/sam2_hiera_large.pt").expanduser().resolve()
-)
+CHECKPOINT: Path = Path("./neat_ml/sam2/checkpoints/sam2_hiera_large.pt")
 
 def _skip_unless_available() -> None:
     """
@@ -49,16 +48,15 @@ def test_setup_cuda_does_not_crash_on_cpu(monkeypatch):
         checkpoint_path=str(CHECKPOINT),
         device="cpu",
     )
-    
     try:
         model.setup_cuda()
     except Exception as e:
         pytest.fail(f"setup_cuda() raised an unexpected exception on CPU: {e}")
 
 @pytest.mark.skipif(
-        not torch.cuda.is_available(), 
-        reason="This test requires a CUDA-enabled GPU"
-    )
+    not torch.cuda.is_available(),
+    reason="This test requires a CUDA-enabled GPU"
+)
 def test_setup_cuda_on_real_gpu():
     """
     Verifies that setup_cuda() correctly configures torch backends on
@@ -66,7 +64,7 @@ def test_setup_cuda_on_real_gpu():
     """
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    
+
     model = SAMModel(
         model_config="sam2_hiera_l.yaml",
         checkpoint_path=str(CHECKPOINT),
@@ -74,54 +72,19 @@ def test_setup_cuda_on_real_gpu():
     )
     model.setup_cuda()
     if torch.cuda.get_device_properties(0).major >= 8:
-        assert torch.backends.cuda.matmul.allow_tf32 is True
-        assert torch.backends.cudnn.allow_tf32 is True
+        npt.assert_(torch.backends.cuda.matmul.allow_tf32, "TF32 matmul not enabled")
+        npt.assert_(torch.backends.cudnn.allow_tf32, "TF32 cuDNN not enabled")
 
-@pytest.fixture(scope="session")
-def dummy_rgb(tmp_path_factory) -> Tuple[np.ndarray, Path]:
-    """
-    Return a plain 100✕100 gray RGB image and its on-disk path.
-    """
-    img = np.full((100, 100, 3), 200, np.uint8)
-    fpath = tmp_path_factory.mktemp("imgs") / "dummy.png"
-    cv2.imwrite(str(fpath), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    return img, fpath
-
-
-@pytest.fixture(scope="session")
-def baseline_dir() -> Path:
-    """
-    Folder where baseline PNGs are stored / recorded.
-    """
-    base = Path(__file__).parent / "baseline"
-    base.mkdir(exist_ok=True)
-    return base
-
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def real_sam_model() -> SAMModel:
     """
     Actual SAM-2 network on CPU
     """
-    model = SAMModel(
+    return SAMModel(
         model_config="sam2_hiera_l.yaml",
         checkpoint_path=str(CHECKPOINT),
         device="cpu",
     )
-    return model
-
-def _cmp_or_record(expected: Path, actual: Path, *, tol: float = 1e-4) -> None:
-    """
-    Compare two images pixel-wise using matplotlib's helper.
-    If the expected image does not exist, copy actual -> expected
-    and mark the test as xfailed.
-    """
-    if expected.exists():
-        diff = compare_images(str(expected), str(actual), tol=tol)
-        assert diff is None, f"image diff too large: {diff}"
-    else:
-        expected.write_bytes(actual.read_bytes())
-        pytest.xfail(f"Recorded baseline -> {expected.relative_to(Path.cwd())}")
 
 def test_show_anns_no_error():
     """
@@ -135,48 +98,46 @@ def test_show_anns_no_error():
     show_anns(masks)
     plt.close(fig)
 
-
-def test_save_masks_creates_pngs(tmp_path):
+def test_save_masks_creates_pngs(tmp_path: Path):
     """
     save_masks() must write one PNG per mask with correct pixel values.
     """
     seg = np.zeros((10, 10), bool)
     seg[2:8, 2:8] = True
     masks = [{"segmentation": seg, "area": int(seg.sum())}]
-    save_masks(masks, tmp_path)
+    save_masks(masks, str(tmp_path))
     out_file = tmp_path / "mask_0.png"
-    assert out_file.exists()
-    
+    npt.assert_(out_file.exists(), f"Expected file not found: {out_file}")
+
     actual = cv2.imread(str(out_file), cv2.IMREAD_GRAYSCALE)
     expected = seg.astype(np.uint8) * 255
     npt.assert_array_equal(actual, expected)
 
-@pytest.fixture(scope="session")
-def image_with_circles_fixture(tmp_path_factory) -> Tuple[np.ndarray, Path]:
+@pytest.fixture(scope="module")
+def image_with_circles_fixture(tmp_path_factory) -> Path:
     """
-    Return a 100x100 black RGB image with two white circles and its path.
+    Return a path to a 100x100 black RGB image with two white circles.
     """
     img = np.zeros((100, 100, 3), np.uint8)
-    white_color = (255, 255, 255)
-    filled = -1
-    
-    cv2.circle(img, center=(30, 30), radius=10, color=white_color, thickness=filled)
-    cv2.circle(img, center=(70, 65), radius=15, color=white_color, thickness=filled)
-
+    white, filled = (255, 255, 255), -1
+    cv2.circle(img, center=(30, 30), radius=10, color=white, thickness=filled)
+    cv2.circle(img, center=(70, 65), radius=15, color=white, thickness=filled)
     fpath = tmp_path_factory.mktemp("imgs") / "circles.png"
     cv2.imwrite(str(fpath), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    return img, fpath
+    return fpath
 
 def test_process_image_generates_pngs_cpu(
-    tmp_path, image_with_circles_fixture, real_sam_model, baseline_dir
+    tmp_path: Path, image_with_circles_fixture: Path, real_sam_model: SAMModel
 ):
     """
     process_image(debug=True) should run the real model, save two PNGs,
     and match (or record) deterministic baselines.
     """
     np.random.seed(0)
-    img_arr, img_fp = image_with_circles_fixture
+    img_fp = image_with_circles_fixture
+    stem = Path(img_fp).stem
     out_dir = tmp_path / "run"
+
     df = process_image(
         image_path=str(img_fp),
         output_dir=str(out_dir),
@@ -184,37 +145,42 @@ def test_process_image_generates_pngs_cpu(
         mask_settings={},
         debug=True,
     )
-    assert not df.empty
-    
-    overlay_png = next(out_dir.glob("*_with_mask.png"))
-    contour_png = next(out_dir.glob("*_filtered_contours.png"))
+    npt.assert_(not df.empty, "process_image returned empty dataframe")
 
-    _cmp_or_record(baseline_dir / overlay_png.name, overlay_png)
-    _cmp_or_record(baseline_dir / contour_png.name, contour_png)
+    actual_overlay  = out_dir / f"{stem}_with_mask.png"
+    actual_contours = out_dir / f"{stem}_filtered_contours.png"
 
+    with resources.as_file(resources.files(__package__) / "baseline") as baseline_dir:
+        desired_overlay  = baseline_dir / actual_overlay.name
+        desired_contours = baseline_dir / actual_contours.name
 
-def test_sam_internal_api(dummy_rgb, real_sam_model):
+        compare_images(str(desired_overlay),  str(actual_overlay),  tol=1e-4)
+        compare_images(str(desired_contours), str(actual_contours), tol=1e-4)
+
+def test_sam_internal_api(real_sam_model: SAMModel):
     """
     Call _build_model() and generate_masks() directly to confirm they
     execute and return plausible results on CPU.
     """
     torch_model = real_sam_model._build_model()
-    assert isinstance(torch_model, torch.nn.Module)
-    masks: List[dict] = real_sam_model.generate_masks(
-        output_dir=".", image=dummy_rgb[0], mask_settings={}
+    npt.assert_(isinstance(torch_model, torch.nn.Module), "Not a torch module")
+
+    dummy_rgb = np.full((100, 100, 3), 200, np.uint8)
+    masks = real_sam_model.generate_masks(
+        output_dir=".", image=dummy_rgb, mask_settings={}
     )
-    npt.assert_array_less(0, len(masks))
-    
+    npt.assert_(len(masks) > 0, "No masks generated")
+
     seg = masks[0]["segmentation"]
-    assert isinstance(seg, np.ndarray)
+    npt.assert_(isinstance(seg, np.ndarray), "Segmentation is not an ndarray")
     npt.assert_equal(seg.dtype, np.dtype("bool"))
-    assert "area" in masks[0]
+    npt.assert_("area" in masks[0], "Missing 'area' key in mask")
     npt.assert_equal(masks[0]["area"], seg.sum())
 
-def test_run_bubblesam_cpu(tmp_path, image_with_circles_fixture):
+def test_run_bubblesam_cpu(tmp_path: Path, image_with_circles_fixture: Path):
     """
     End-to-end test on CPU: run_bubblesam should produce a summary CSV
-    and two additional columns.
+    with expected columns.
     """
     mask_settings = {
         "points_per_side": 8,
@@ -226,19 +192,20 @@ def test_run_bubblesam_cpu(tmp_path, image_with_circles_fixture):
         "box_nms_thresh": 0.1,
         "crop_n_points_downscale_factor": 1,
         "min_mask_region_area": 5,
-        "use_m2m": True
+        "use_m2m": True,
     }
-    df_in = pd.DataFrame({"image_filepath": [str(image_with_circles_fixture[1])]})
+    df_in = pd.DataFrame({"image_filepath": [str(image_with_circles_fixture)]})
     out_dir = tmp_path / "summary_run"
-    
+
     summary = run_bubblesam(
         df_in,
         out_dir,
-        model_cfg={"device": "cpu"}, 
+        model_cfg={"device": "cpu"},
         mask_settings=mask_settings,
         debug=False,
     )
 
     expected_cols = {"image_filepath", "median_radii_SAM", "num_blobs_SAM"}
-    assert expected_cols.issubset(summary.columns)
-    npt.assert_array_less(0, summary.loc[0, "num_blobs_SAM"])
+    npt.assert_(expected_cols.issubset(set(summary.columns)), "Missing expected columns")
+    arr: NDArray[np.int64] = np.asarray(summary["num_blobs_SAM"], dtype=np.int64)
+    npt.assert_array_less(0, arr)
