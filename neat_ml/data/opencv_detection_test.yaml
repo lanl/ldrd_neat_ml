@@ -1,6 +1,5 @@
 roots:
   work: neat_ml/tests/data/
-  results: neat_ml/tests/data/
 
 datasets:
   - id: Test
