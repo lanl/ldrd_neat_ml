@@ -1,13 +1,28 @@
 image: python:3.12.1
 
+variables:
+  GIT_STRATEGY: fetch          # ensure the repo is actually checked out
+  GIT_LFS_SKIP_SMUDGE: "1"     # faster clone; will fetch LFS explicitly
+
 before_script:
   - set -euxo pipefail
-  - apt-get update
-  - apt-get install -y --no-install-recommends ca-certificates curl gnupg git git-lfs
-  - git --version
+  - echo "PWD=$PWD"
+  - echo "CI_PROJECT_DIR=$CI_PROJECT_DIR"
+  - test -d "$CI_PROJECT_DIR/.git"    # fail early if repo not present
+
+  # Get Git LFS binary WITHOUT install.sh (no hooks touched)
+  - GIT_LFS_VERSION="3.5.1"
+  - curl -sSL -o /tmp/git-lfs.tgz "https://github.com/git-lfs/git-lfs/releases/download/v${GIT_LFS_VERSION}/git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz"
+  - tar -C /tmp -xzf /tmp/git-lfs.tgz
+  - export PATH="/tmp/git-lfs-${GIT_LFS_VERSION}:$PATH"
   - git lfs version
-  - git lfs install
-  - git lfs pull
+
+  # Don’t modify repo hooks; just ensure filters are available globally.
+  - git lfs install --skip-repo
+
+  - git -C "$CI_PROJECT_DIR" lfs fetch --include="neat_ml/tests/**,neat_ml/data/images/**" --exclude=""
+  - git -C "$CI_PROJECT_DIR" lfs checkout --include="neat_ml/tests/**,neat_ml/data/images/**" --exclude=""
+
   - python --version
   - python -m venv venv
   - source venv/bin/activate
@@ -35,6 +50,7 @@ functional_test:
       when: always
   allow_failure: false
   script:
+    - python run_workflow.py --config neat_ml/data/opencv_detection_test.yaml --steps detect
     - python main.py
 
 unit_tests:
