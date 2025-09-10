@@ -79,8 +79,10 @@ def get_path_structure(
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
+    steps_set = set(steps)
 
     base_proc = work_root / ds_id / method / class_label / time_label
+
 
     if method == 'OpenCV':
         paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
