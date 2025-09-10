@@ -1,11 +1,15 @@
+
+
 import argparse
 import logging
 import yaml
 from pathlib import Path
 import warnings
 
-from neat_ml.workflow.lib_workflow import (get_path_structure, 
-                                           stage_detect)
+from neat_ml.workflow.lib_workflow import (_as_steps_set,
+                                           get_path_structure, 
+                                           stage_detect,
+                                           stage_analyze_features)
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +24,7 @@ def main(config_path: str, steps_str: str) -> None:
     steps_str : str
         Comma list of steps or 'all'.
     """
-    steps = [s.strip() for s in steps_str.split(",") if s.strip()]
+    steps: list[str] = _as_steps_set(steps_str)
 
     with open(config_path, "r") as fh:
         cfg = yaml.safe_load(fh)
@@ -49,6 +53,12 @@ def main(config_path: str, steps_str: str) -> None:
             else:
                 warnings.warn("Output dataframe empty.")
 
+    if "analysis" in steps:
+        log.info("\n--- STAGE: ANALYSIS ---")
+        for ds in datasets:
+            paths = get_path_structure(roots, ds, steps)
+            stage_analyze_features(ds, paths)
+    
     log.info("Workflow finished.")
 
 if __name__ == "__main__":
@@ -65,14 +75,15 @@ if __name__ == "__main__":
     parser.add_argument(
         '--steps',
         type=str,
-        default="detect",
+        default="all",
         help=(
-            "Comma-separated list of steps to run. Defaults to 'detect'.\n"
-            "Available steps: detect\n"
-            "Example: --steps \"detect\""
+            "Comma-separated list of steps to run or 'all'. Defaults to 'all'.\n"
+            "Available steps: detect,analysis\n"
+            "Example: --steps \"detect,analysis\""
         )
     )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
     main(args.config, args.steps)
+
