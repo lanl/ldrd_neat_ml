@@ -9,6 +9,14 @@ from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
 
+def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
+    """
+    Assert a log record exists with the given level and exact message.
+    """
+    matched = any(rec.levelno == level and rec.getMessage() == expected_message for rec in caplog.records)
+    if not matched:
+        dump = "\n".join(f"[{r.levelname}] {r.getMessage()}" for r in caplog.records)
+        raise AssertionError(f"Expected log at level {level} with message:\n{expected_message}\nGot:\n{dump}")
 
 def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """
