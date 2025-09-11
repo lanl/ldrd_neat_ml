@@ -224,9 +224,18 @@ def stage_analyze_features(dataset_config: Dict[str, Any], paths: Dict[str, Path
     composition_cols: list[str] = list(dataset_config.get("composition_cols", []))
     analysis_cfg: Dict[str, Any] = dict(dataset_config.get("analysis", {}))
 
-    input_dir: Path = Path(
-        analysis_cfg.get("input_dir", paths.get("det_dir", ""))
+    # input_dir: Path = Path(
+    #     analysis_cfg.get("input_dir", paths.get("det_dir", ""))
+    # )
+    input_dir_val: Optional[str] = (
+        analysis_cfg.get("input_dir")
+        or (str(paths["det_dir"]) if "det_dir" in paths and paths["det_dir"] else None)
     )
+    if not input_dir_val:
+        log.error("No analysis input_dir provided and det_dir unavailable. Skipping '%s'.", ds_id)
+        return
+
+    input_dir: Path = Path(input_dir_val)
     per_image_csv: Path = Path(
         analysis_cfg.get("per_image_csv", paths.get("per_csv", Path()))
     )
@@ -260,6 +269,12 @@ def stage_analyze_features(dataset_config: Dict[str, Any], paths: Dict[str, Path
     if composition_csv and not Path(composition_csv).exists():
         log.error("Composition CSV '%s' missing for '%s'.", composition_csv, ds_id)
         return
+    
+    method_key = mode.lower()
+    expected_pattern: Optional[str] = "*_bubble_data.pkl" if method_key == "opencv" else "*_masks_filtered.pkl" if method_key == "bubblesam" else None
+    if expected_pattern is not None and not any(input_dir.rglob(expected_pattern)):
+        log.error("No detection outputs matching '%s' under '%s' for dataset '%s' (mode='%s'). Skipping.",
+                  expected_pattern, input_dir, ds_id, mode)
 
     aggregate_csv.parent.mkdir(parents=True, exist_ok=True)
     per_image_csv.parent.mkdir(parents=True, exist_ok=True)
