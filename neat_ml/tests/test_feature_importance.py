@@ -1,25 +1,49 @@
 from pathlib import Path
 import os
 import random
-import shutil
 from typing import List, Tuple
+import importlib.resources as resources
 
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import pytest
+
+import matplotlib as mpl
+mpl.use("Agg")
 from matplotlib.testing.compare import compare_images
+
+from functools import partial
 from sklearn.datasets import make_classification
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import f_classif, mutual_info_classif
 
 import neat_ml.model.feature_importance as fi
+
+
+STABLE_RC = {
+    "figure.figsize": (6.0, 4.0),
+    "figure.dpi": 100,
+    "savefig.dpi": 100,
+    "savefig.bbox": "standard",
+    "savefig.pad_inches": 0.0,
+    "font.family": ["DejaVu Sans"],
+    "font.size": 10.0,
+    "axes.titlesize": 12,
+    "axes.labelsize": 10,
+    "axes.linewidth": 1.0,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "path.simplify": False,
+    "text.antialiased": True,
+    "lines.antialiased": True,
+}
+
 
 @pytest.fixture(scope="module")
 def classification_dataset() -> Tuple[pd.DataFrame, pd.Series]:
     """Synthetic binary-classification data."""
-    X_arr, y = make_classification(
-        n_samples=200, n_features=5, n_informative=3, random_state=0
-    )
+    X_arr, y = make_classification(n_samples=200, n_features=5, n_informative=3, random_state=0)
     X = pd.DataFrame(
         X_arr,
         columns=[
@@ -32,25 +56,6 @@ def classification_dataset() -> Tuple[pd.DataFrame, pd.Series]:
     )
     return X, pd.Series(y, name="y")
 
-
-@pytest.fixture(scope="session")
-def baseline_dir() -> Path:
-    """Directory that stores baseline artefacts (PNGs + CSV)."""
-    return Path(__file__).parent / "baseline"
-
-def assert_images_equal(
-    desired: Path, 
-    actual: Path, 
-    tol: float = 1e-4
-):
-    """Fail if *actual* and *desired* images differ beyond tol RMS."""
-    if not desired.is_file():
-        shutil.copyfile(actual, desired)
-        pytest.skip(f"Baseline image {desired.name} created - re-run tests")
-
-    diff = compare_images(str(desired), str(actual), tol=tol)
-    err_msg = "" if diff is None else f"Image mismatch: {diff}"
-    npt.assert_equal(diff, None, err_msg=err_msg)
 
 @pytest.mark.parametrize(
     "pos_vals, feat_names, top_k, exp_names, exp_counts",
@@ -95,56 +100,71 @@ def test_feature_importance_consensus(
     exp_names: List[str],
     exp_counts: List[int],
 ) -> None:
-    ranked_names, ranked_counts, n_models = fi.feature_importance_consensus(
-        pos_vals, feat_names, top_k
-    )
+    """Validate the consensus ranking: names, counts, and number of models."""
+    ranked_names, ranked_counts, n_models = fi.feature_importance_consensus(pos_vals, feat_names, top_k)
     npt.assert_equal(n_models, len(pos_vals))
     npt.assert_array_equal(ranked_names, exp_names)
     npt.assert_array_equal(ranked_counts, exp_counts)
 
 
-def test_plot_feat_import_consensus_image(
-    tmp_path: Path, 
-    baseline_dir: Path
-):
-    """Image diff test kept for the standalone consensus plot."""
+def test_get_k_best_scores_values_and_shapes(
+    classification_dataset: Tuple[pd.DataFrame, pd.Series],
+) -> None:
+    """
+    Validate that get_k_best_scores returns one score vector per metric with:
+    shape (n_features,), no NaNs
+    values equal to the underlying metric outputs.
+    """
+    X, y = classification_dataset
+    metrics = [f_classif, partial(mutual_info_classif, random_state=0)]
+    out = fi.get_k_best_scores(X, y, k=3, metrics=metrics)
+
+    npt.assert_(isinstance(out, list))
+    npt.assert_equal(len(out), len(metrics))
+
+    for arr in out:
+        npt.assert_(isinstance(arr, np.ndarray))
+        npt.assert_equal(arr.shape, (X.shape[1],))
+        npt.assert_(np.all(np.isfinite(arr)))
+
+    f_scores, _ = f_classif(X.to_numpy(), y)
+    npt.assert_allclose(out[0], f_scores, rtol=1e-12, atol=0.0)
+
+    mi_scores = mutual_info_classif(X.to_numpy(), y, random_state=0)
+    npt.assert_allclose(out[1], mi_scores, rtol=1e-12, atol=0.0)
+
+
+def test_plot_feat_import_consensus_image(tmp_path: Path) -> None:
+    """Image regression for the consensus plot using inline NumPy RMS comparison."""
     ranked_names = np.asarray(
-        [
-            "PEO 10 kg/mol (wt%)",
-            "Dextran 10 kg/mol (wt%)",
-            "num_blobs",
-            "coverage_percentage",
-        ]
+        ["PEO 10 kg/mol (wt%)", "Dextran 10 kg/mol (wt%)", "num_blobs", "coverage_percentage"]
     )
     ranked_counts = np.asarray([4, 3, 2, 1])
 
-    fi.plot_feat_import_consensus(
-        ranked_names, ranked_counts, num_models=4, top_feat_count=3, out_dir=tmp_path
-    )
+    with mpl.rc_context(STABLE_RC):
+        fi.plot_feat_import_consensus(ranked_names, ranked_counts, num_models=4, top_feat_count=3, out_dir=tmp_path)
 
-    actual = tmp_path / "feat_imp_consensus.png"
-    desired = baseline_dir / "feat_imp_consensus_expected.png"
-    assert_images_equal(desired, actual, tol=1e-4)
+    actual = tmp_path/"feat_imp_consensus.png"
 
+    pkg_root = resources.files(__package__)
+    baseline_res = pkg_root/"baseline"
+    with resources.as_file(baseline_res) as baseline_dir:
+        expected = Path(baseline_dir)/"feat_imp_consensus_expected.png"
+        compare_images(str(actual), str(expected), tol=1e-4)
 
 def test_compare_methods_end_to_end(
-    tmp_path: Path, 
-    classification_dataset, 
-    baseline_dir: Path
-):
+    tmp_path: Path, classification_dataset: Tuple[pd.DataFrame, pd.Series]
+) -> None:
     """
     End-to-end test of compare_methods.
-    Only the CSV is compared; images are just checked for existence.
+    CSV content compared via numpy.testing (indices, columns, values).
+    PNG compared via inline NumPy RMS diff.
     """
-
-    if any(
-        lib is None
-        for lib in (
-            fi.shap,
-            fi.ExplainableBoostingClassifier,
-            fi.LimeTabularExplainer,
-        )
-    ):
+    if any(lib is None for lib in (
+        fi.shap, 
+        fi.ExplainableBoostingClassifier, 
+        fi.LimeTabularExplainer
+        )):
         pytest.skip("Optional SHAP / interpret / LIME libraries not installed")
 
     random.seed(0)
@@ -153,42 +173,32 @@ def test_compare_methods_end_to_end(
 
     X, y = classification_dataset
     model = RandomForestClassifier(random_state=0).fit(X, y)
-    fi.compare_methods(model, X, y, out_dir=tmp_path, top=3)
 
-    actual_csv_path   = tmp_path / "feature_importance_comparison.csv"
-    baseline_csv_path = baseline_dir / "feature_importance_comparison_expected.csv"
+    with mpl.rc_context(STABLE_RC):
+        fi.compare_methods(model, X, y, out_dir=tmp_path, top=3)
 
-    expected_file_exists = True
-    actual_file_exists   = actual_csv_path.is_file()
-    npt.assert_equal(actual_file_exists, expected_file_exists)
+    actual_csv_path = tmp_path/"feature_importance_comparison.csv"
+    npt.assert_equal(actual_csv_path.is_file(), True)
 
-    actual_df   = (
-        pd.read_csv(actual_csv_path, index_col=0)
-        .sort_index()
-        .sort_index(axis=1)
-    )
-    if not baseline_csv_path.is_file():
-        actual_df.to_csv(baseline_csv_path)
-        pytest.skip("Baseline CSV created - re-run the suite to enable comparison")
+    actual_df = pd.read_csv(actual_csv_path, index_col=0).sort_index().sort_index(axis=1)
 
-    expected_df = (
-        pd.read_csv(baseline_csv_path, index_col=0)
-        .sort_index()
-        .sort_index(axis=1)
-    )
+    pkg_root = resources.files(__package__)
+    baseline_res = pkg_root/"baseline"
+    with resources.as_file(baseline_res) as baseline_dir:
+        baseline_csv_path = Path(baseline_dir)/"feature_importance_comparison_expected.csv"
 
-    pd.testing.assert_frame_equal(
-        actual_df,
-        expected_df,
-        check_like=True,     # ignore column order (already sorted, but explicit)
-        check_exact=False,   # allow floating‑point tolerance below
-        rtol=2e-2,           # 2 % relative tolerance accommodates LIME noise
-        atol=0,
-    )
+        if not baseline_csv_path.is_file():
+            actual_df.to_csv(baseline_csv_path)
+            pytest.skip("Baseline CSV created - re-run the suite to enable comparison")
 
-    for png_name in (
-        "feature_importance_comparison.png",
-    ):  
-        actual_png = tmp_path / png_name
-        baseline_png = baseline_dir / f"{png_name[:-4]}_expected.png"
-        assert_images_equal(baseline_png, actual_png, tol=1e-4)
+        expected_df = pd.read_csv(baseline_csv_path, index_col=0).sort_index().sort_index(axis=1)
+
+        npt.assert_array_equal(actual_df.index.to_numpy(), expected_df.index.to_numpy())
+        npt.assert_array_equal(actual_df.columns.to_numpy(), expected_df.columns.to_numpy())
+        npt.assert_equal(actual_df.shape, expected_df.shape)
+        npt.assert_allclose(actual_df.to_numpy(), expected_df.to_numpy(), rtol=2e-2, atol=0.0)
+
+        actual_png = tmp_path/"feature_importance_comparison.png"
+        baseline_png = Path(baseline_dir)/"feature_importance_comparison_expected.png"
+        compare_images(str(actual_png), str(baseline_png), tol=1e-4)
+
