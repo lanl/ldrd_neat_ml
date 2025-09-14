@@ -10,20 +10,9 @@ import numpy.typing as npt
 import pandas as pd
 from sklearn.feature_selection import SelectKBest
 
-try:
-    import shap
-except ImportError:
-    shap = None
-
-try:
-    from interpret.glassbox import ExplainableBoostingClassifier
-except ImportError:
-    ExplainableBoostingClassifier = None
-
-try:
-    from lime.lime_tabular import LimeTabularExplainer
-except ImportError:
-    LimeTabularExplainer = None
+import shap
+from interpret.glassbox import ExplainableBoostingClassifier
+from lime.lime_tabular import LimeTabularExplainer
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -67,8 +56,6 @@ def _run_shap(
         Index = feature names, values = mean absolute SHAP value (descending).
         Empty series if the optional *shap* dependency is missing.
     """
-    if shap is None:
-        return pd.Series(dtype=float)
     explainer = shap.Explainer(
         model.predict_proba, masker=X, algorithm="permutation", n_jobs=-1
     )
@@ -107,9 +94,6 @@ def _run_ebm(
     pd.Series
         Importance values (descending). Empty if interpret not installed.
     """
-    if ExplainableBoostingClassifier is None:  # pragma: no cover
-        return pd.Series(dtype=float)
-
     ebm = ExplainableBoostingClassifier(
         interactions=0,
         random_state=RANDOM_STATE,
@@ -144,7 +128,7 @@ def _run_lime(
     ----------
     model : Any
         Fitted classifier with a probability interface compatible with LIME
-        (predict_proba returning an *n_samples x 2 array for binary tasks).
+        (predict_proba returning an n_samples x 2 array for binary tasks).
     X : pandas.DataFrame
         Numeric feature matrix from which sampling is performed.
     n_samples : int, default 100
@@ -158,10 +142,7 @@ def _run_lime(
         Empty series if the optional lime dependency is missing.
 
     """
-    if LimeTabularExplainer is None:
-        return pd.Series(dtype=float)
-
-    rng = np.random.RandomState(random_state)  # o
+    rng = np.random.RandomState(random_state)
 
     expl = LimeTabularExplainer(
         X.values,
@@ -188,7 +169,7 @@ def get_k_best_scores(
     metrics: Sequence,
 ) -> list[np.ndarray]:
     """
-    Run several *SelectKBest* filters and return their raw feature scores.
+    Run several SelectKBest filters and return their raw feature scores.
 
     Parameters
     ----------
@@ -255,7 +236,6 @@ def feature_importance_consensus(
     ranked_names = np.asarray(list(votes.keys()))
     ranked_counts = np.asarray(list(votes.values()), dtype=int)
     return ranked_names, ranked_counts, num_models
-
 
 def plot_feat_import_consensus(
     ranked_names: npt.NDArray[np.str_],

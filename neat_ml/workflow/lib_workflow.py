@@ -107,8 +107,6 @@ def get_path_structure(
         infer_dir: Path = results_root / f"infer_{ds_id}"
         paths["model_dir"] = model_root
         paths["explain_dir"] = results_root / ds_id / "explain"
-        paths["roc_out"] = infer_dir / "roc_plots"
-        paths["roc_png"] = Path("roc.png")
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
 
@@ -283,10 +281,6 @@ def stage_analyze_features(dataset_config: Dict[str, Any], paths: Dict[str, Path
         "graph_param", dataset_config.get("graph_param")
     )
 
-    if not str(input_dir):
-        log.error("No analysis input_dir provided and det_dir unavailable. Skipping '%s'.",
-                  ds_id)
-        return
     if not input_dir.exists():
         log.error("Analysis input_dir '%s' does not exist for '%s'.", input_dir, ds_id)
         return
@@ -509,8 +503,6 @@ def stage_run_inference_and_plot(
             data_csv=paths["agg_csv"],
             target="Phase_Separation",
             exclude_cols=exclude_cols,
-            roc_out=paths["roc_out"],
-            roc_png=paths["roc_png"],
             pred_csv=paths["pred_csv"],
         )
 

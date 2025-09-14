@@ -57,7 +57,8 @@ You can find the relevant information from:
 
 `python run_workflow.py --help`
 
-Sample incantation: `python run_workflow.py --config <YAML file> --steps detect,analysis`
+Sample incantation:  
+`python run_workflow.py --config <YAML file> --steps detect,analysis,train,infer,explain,plot`
 
 ## Running the Main ML workflow
 
