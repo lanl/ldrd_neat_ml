@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Sequence
+from typing import Any, Dict, Optional, Sequence
 import pandas as pd
 from joblib import load as joblib_load
 
@@ -106,8 +106,6 @@ def get_path_structure(
         infer_dir: Path = results_root / f"infer_{ds_id}"
         paths["model_dir"] = model_root
         paths["explain_dir"] = results_root / ds_id / "explain"
-        paths["roc_out"] = infer_dir / "roc_plots"
-        paths["roc_png"] = Path("roc.png")
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
 
@@ -521,8 +519,6 @@ def stage_run_inference_and_plot(
             data_csv=paths["agg_csv"],
             target="Phase_Separation",
             exclude_cols=exclude_cols,
-            roc_out=paths["roc_out"],
-            roc_png=paths["roc_png"],
             pred_csv=paths["pred_csv"],
         )
 

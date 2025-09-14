@@ -6,13 +6,27 @@ import shutil
 import torch
 import pandas as pd
 from numpy.testing import assert_allclose
+import re
+from typing import Any, Dict
 
 import neat_ml.workflow.lib_workflow as wf
+
+
+def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
+    """
+    Assert a log record exists with the given level and exact message.
+    """
+    matched = any(rec.levelno == level and rec.getMessage() == expected_message for rec in caplog.records)
+    if not matched:
+        dump = "\n".join(f"[{r.levelname}] {r.getMessage()}" for r in caplog.records)
+        raise AssertionError(
+            f"Expected log at level {level} with message:\n{expected_message}\nGot:\n{dump}"
+        )
 
 @pytest.mark.parametrize(
     ("steps_str", "expected"),
     [
-        ("all", ["detect", "analysis"]),  # expands to full pipeline
+        ("all", ["detect", "analysis", "train", "infer", "explain", "plot"]),
         (" Detect ,  Analysis ", ["detect", "analysis"]),  # whitespace + case normalization
         ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
         ("", []),  # empty input -> empty list
@@ -601,3 +615,313 @@ def test_stage_analyze_features_no_graph_method_param_error(
         }
     with pytest.raises(ValueError, match=err_msg):
         wf.stage_analyze_features(ds, paths={})
+
+
+def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_path: Path) -> None:
+    """
+    When steps include train/infer/explain/plot, ensure the extra paths are built and
+    model_dir honors roots['model'] override.
+    """
+    roots = {
+        "work": str(tmp_path),
+        "results": str(tmp_path / "results"),
+        "model": str(tmp_path / "custom_model_dir"),
+    }
+    ds = {"id": "DS2", "method": "BubbleSAM", "class": "neg", "time_label": "T02", "composition_csv": "comp.csv"}
+    steps = ["analysis", "train", "infer", "explain", "plot"]
+
+    paths = wf.get_path_structure(roots, ds, steps)
+
+    results_root = tmp_path / "results"
+    assert paths["per_csv"] == results_root / "DS2" / "per_image.csv"
+    assert paths["agg_csv"] == results_root / "DS2" / "aggregate.csv"
+    assert paths["composition_csv"] == Path("comp.csv")
+    assert paths["model_dir"] == tmp_path / "custom_model_dir"
+    assert paths["explain_dir"] == results_root / "DS2" / "explain"
+    assert paths["pred_csv"] == results_root / "infer_DS2" / "pred.csv"
+    assert paths["phase_dir"] == results_root / "infer_DS2" / "phase_plots"
+
+def test_stage_train_model_requires_validation_args(tmp_path: Path) -> None:
+    train_ds = {"id": "TR1"}
+    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+
+    with pytest.raises(ValueError, match=r"requires a validation dataset config \(val_ds\)\."):
+        wf.stage_train_model(train_ds, train_paths, val_ds=None, val_paths=None)
+
+    with pytest.raises(ValueError, match=r"requires validation paths \(val_paths\)\."):
+        wf.stage_train_model(train_ds, train_paths, val_ds={"id": "VAL"}, val_paths=None)
+
+
+def test_stage_train_model_missing_train_csv_raises(tmp_path: Path) -> None:
+    train_ds = {"id": "TR2"}
+    missing = (tmp_path / "train.csv").resolve()
+    train_paths = {"agg_csv": missing, "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": tmp_path / "val.csv"}
+    val_paths["agg_csv"].write_text("Phase_Separation\n0\n1\n")
+
+    with pytest.raises(FileNotFoundError, match=re.escape(f"Train aggregate CSV not found: {missing}")):
+        wf.stage_train_model(train_ds, train_paths, val_ds={"id": "VAL"}, val_paths=val_paths)
+
+def test_stage_train_model_missing_val_csv_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    train_ds = {"id": "TR3"}
+    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+    train_paths["agg_csv"].write_text("Phase_Separation\n0\n1\n")
+
+    missing = tmp_path / "val.csv"
+    monkeypatch.setattr(
+        wf, "ml_preprocess",
+        lambda df, target, exclude: (pd.DataFrame({"f": [0, 1]}), pd.Series([0, 1], name=target))
+    )
+
+    with pytest.raises(FileNotFoundError, match=re.escape(f"Validation aggregate CSV not found: {missing}")):
+        wf.stage_train_model(train_ds, train_paths, val_ds={"id": "VAL"}, val_paths={"agg_csv": missing})
+
+
+def test_stage_train_model_no_overlapping_features_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    train_ds = {"id": "TR4"}
+    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": tmp_path / "val.csv"}
+    train_paths["agg_csv"].write_text("Phase_Separation\n0\n1\n")
+    val_paths["agg_csv"].write_text("Phase_Separation\n1\n0\n")
+
+    # First call (train) -> columns a,b ; second call (val) -> columns c,d
+    state = {"i": 0}
+
+    def fake_ml_preprocess(df: pd.DataFrame, target: str, exclude: list[str]):
+        if state["i"] == 0:
+            state["i"] += 1
+            X = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+            y = pd.Series([0, 1], name=target)
+            return X, y
+        else:
+            X = pd.DataFrame({"c": [5, 6], "d": [7, 8]})
+            y = pd.Series([1, 0], name=target)
+            return X, y
+
+    monkeypatch.setattr(wf, "ml_preprocess", fake_ml_preprocess)
+
+    with pytest.raises(ValueError, match="No overlapping feature columns between train and validation."):
+        wf.stage_train_model(train_ds, train_paths, val_ds={"id": "VAL"}, val_paths=val_paths)
+
+
+def test_stage_train_model_happy_path_saves_bundle_and_roc(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING)
+
+    train_ds = {"id": "TR5"}
+    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": tmp_path / "val.csv"}
+    train_paths["agg_csv"].write_text("Phase_Separation\n0\n1\n0\n")
+    val_paths["agg_csv"].write_text("Phase_Separation\n1\n0\n1\n")
+
+    # Train has a,b,c ; Val has b,c,d -> common b,c (mismatch warning expected)
+    call_idx = {"i": 0}
+
+    def fake_ml_preprocess(df: pd.DataFrame, target: str, exclude: list[str]):
+        if call_idx["i"] == 0:
+            call_idx["i"] += 1
+            X = pd.DataFrame({"a": [1, 2, 3], "b": [0, 1, 0], "c": [0.2, 0.3, 0.4]})
+            y = pd.Series([0, 1, 0], name=target)
+            return X, y
+        else:
+            X = pd.DataFrame({"b": [1, 0, 1], "c": [0.5, 0.6, 0.7], "d": [2, 3, 4]})
+            y = pd.Series([1, 0, 1], name=target)
+            return X, y
+
+    monkeypatch.setattr(wf, "ml_preprocess", fake_ml_preprocess)
+
+    seen: Dict[str, Any] = {"save": None, "roc": None}
+
+    def fake_train_with_validation(X_tr, y_tr, X_val, y_val):
+        # Ensure alignment to common features
+        assert list(X_tr.columns) == ["b", "c"]
+        assert list(X_val.columns) == ["b", "c"]
+        metrics = {"val_roc_auc": 0.88, "val_pr_auc": 0.77}
+        best = {"param": 1}
+        proba = [0.1, 0.9, 0.8]
+        return object(), metrics, best, proba
+
+    def fake_save_model_bundle(model, features, metrics, best_params, path: str):
+        seen["save"] = {"features": list(features), "metrics": metrics, "best_params": best_params, "path": path}
+
+    def fake_plot_roc(y_true, y_prob, out_png: str):
+        seen["roc"] = {"y_true": list(y_true), "y_prob": list(y_prob), "out_png": out_png}
+
+    monkeypatch.setattr(wf, "train_with_validation", fake_train_with_validation)
+    monkeypatch.setattr(wf, "save_model_bundle", fake_save_model_bundle)
+    monkeypatch.setattr(wf, "plot_roc", fake_plot_roc)
+
+    model_path = wf.stage_train_model(train_ds, train_paths, val_ds={"id": "VAL"}, val_paths=val_paths)
+
+    assert_logged(caplog, logging.WARNING, "Feature mismatch: using 2 common features (train=3, val=3).")
+
+    expected_model_path = train_paths["model_dir"] / "TR5_model.joblib"
+    assert model_path == expected_model_path
+    assert train_paths["model_dir"].exists()
+
+    assert seen["save"]["features"] == ["b", "c"]
+    assert seen["save"]["path"] == str(expected_model_path)
+
+    assert seen["roc"]["y_true"] == [1, 0, 1]
+    assert seen["roc"]["y_prob"] == [0.1, 0.9, 0.8]
+    assert Path(seen["roc"]["out_png"]).name == "TR5_val_roc.png"
+
+def test_stage_explain_aligns_features_and_calls_compare_methods(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    agg_csv = tmp_path / "train_agg.csv"
+    agg_csv.write_text("Phase_Separation\n0\n1\n1\n")
+
+    def fake_ml_preprocess(df: pd.DataFrame, target: str, exclude: list[str]):
+        X = pd.DataFrame({"a": [1, 2, 3], "b": [0, 1, 0], "c": [0.2, 0.3, 0.4]})
+        y = pd.Series([0, 1, 1], name=target)
+        return X, y
+
+    monkeypatch.setattr(wf, "ml_preprocess", fake_ml_preprocess)
+
+    def fake_joblib_load(path: Path):
+        return {"model": object(), "features": ["b", "c"]}
+
+    monkeypatch.setattr(wf, "joblib_load", fake_joblib_load)
+
+    captured: Dict[str, Any] = {}
+
+    def fake_compare_methods(model, X: pd.DataFrame, y: pd.Series, out_dir: Path, top: int):
+        captured["cols"] = list(X.columns)
+        captured["y"] = list(y)
+        captured["out_dir"] = out_dir
+        captured["top"] = top
+
+    monkeypatch.setattr(wf, "compare_methods", fake_compare_methods)
+
+    train_ds = {"id": "TRX", "composition_cols": ["PEG"]}
+    paths = {"agg_csv": agg_csv, "explain_dir": tmp_path / "explain_out"}
+    model_path = tmp_path / "bundle.joblib"
+
+    wf.stage_explain(train_ds, paths, model_path)
+
+    assert captured["cols"] == ["b", "c"]
+    assert captured["y"] == [0, 1, 1]
+    assert captured["out_dir"] == paths["explain_dir"]
+    assert captured["top"] == 20
+
+def test_stage_run_inference_calls_inference_and_makes_pred_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    agg_csv = tmp_path / "agg.csv"
+    agg_csv.write_text("Phase_Separation\n0\n1\n")
+
+    called: Dict[str, Any] = {}
+
+    def fake_run_inference(model_in: Path, data_csv: Path, target: str, exclude_cols: list[str], pred_csv: Path):
+        called.update(
+            {
+                "model_in": model_in,
+                "data_csv": data_csv,
+                "target": target,
+                "exclude_cols": exclude_cols,
+                "pred_csv": pred_csv,
+            }
+        )
+        pred_csv.write_text("Phase_Separation,Pred_Label\n0,0\n1,1\n")
+
+    monkeypatch.setattr(wf, "run_inference", fake_run_inference)
+
+    ds = {"id": "INFER1", "composition_cols": ["Dex", "PEG"]}
+    paths = {
+        "agg_csv": agg_csv,
+        "pred_csv": tmp_path / "infer" / "pred.csv",
+        "phase_dir": tmp_path / "infer" / "phase_plots",
+    }
+    model_path = tmp_path / "model.joblib"
+
+    wf.stage_run_inference_and_plot(ds, paths, model_path, steps=["infer"])
+
+    assert called["model_in"] == model_path
+    assert called["data_csv"] == agg_csv
+    assert called["target"] == "Phase_Separation"
+    assert called["pred_csv"] == paths["pred_csv"]
+    assert called["exclude_cols"] == ["Group", "Label", "Time", "Class", "Offset", "Dex", "PEG"]
+    assert paths["pred_csv"].parent.exists()
+
+
+def test_stage_run_inference_and_plot_skips_plot_when_wrong_num_composition_cols(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING)
+
+    pred_csv = tmp_path / "pred.csv"
+    pred_csv.write_text("Phase_Separation,Pred_Label\n0,0\n1,1\n")
+
+    ds = {"id": "INFER2", "composition_cols": ["A", "B", "C"]}  # 3 columns -> skip plot
+    paths = {
+        "agg_csv": tmp_path / "agg.csv",  # not used here
+        "pred_csv": pred_csv,
+        "phase_dir": tmp_path / "phase",
+    }
+
+    wf.stage_run_inference_and_plot(ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"])
+
+    assert_logged(caplog, logging.WARNING, "Skipping plot for INFER2: requires 2 composition columns.")
+
+
+def test_stage_run_inference_and_plot_plot_only_missing_pred_csv_raises(tmp_path: Path) -> None:
+    ds = {"id": "INFER3", "composition_cols": ["Dex", "PEG"]}
+    paths = {
+        "agg_csv": tmp_path / "agg.csv",
+        "pred_csv": tmp_path / "does_not_exist.csv",
+        "phase_dir": tmp_path / "phase",
+    }
+
+    with pytest.raises(FileNotFoundError, match=re.escape(str(paths["pred_csv"]))):
+        wf.stage_run_inference_and_plot(ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"])
+
+
+def test_stage_run_inference_and_plot_calls_construct_phase_diagram(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pred_csv = tmp_path / "pred.csv"
+    pred_csv.write_text(
+        "Dex,PEG,Phase_Separation,Pred_Label\n"
+        "10,90,1,1\n"
+        "50,50,0,0\n"
+        "70,30,1,1\n"
+    )
+
+    captured: Dict[str, Any] = {}
+
+    def fake_construct_phase_diagram(
+        df: pd.DataFrame,
+        dex_col: str,
+        peo_col: str,
+        true_phase_col: str,
+        pred_phase_col: str,
+        out_dir: Path,
+        title: str,
+        fname: str,
+    ):
+        captured.update(
+            {
+                "cols": list(df.columns),
+                "dex_col": dex_col,
+                "peo_col": peo_col,
+                "true_phase_col": true_phase_col,
+                "pred_phase_col": pred_phase_col,
+                "out_dir": out_dir,
+                "title": title,
+                "fname": fname,
+            }
+        )
+
+    monkeypatch.setattr(wf, "construct_phase_diagram", fake_construct_phase_diagram)
+
+    ds = {"id": "INFER4", "composition_cols": ["Dex", "PEG"]}
+    paths = {"pred_csv": pred_csv, "phase_dir": tmp_path / "phase", "agg_csv": tmp_path / "agg.csv"}
+
+    wf.stage_run_inference_and_plot(ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"])
+
+    assert captured["dex_col"] == "Dex"
+    assert captured["peo_col"] == "PEG"
+    assert captured["true_phase_col"] == "Phase_Separation"
+    assert captured["pred_phase_col"] == "Pred_Label"
+    assert captured["out_dir"] == paths["phase_dir"]
+    assert captured["title"] == "INFER4"
+    assert captured["fname"] == "phase_diagram"
+    assert captured["cols"] == ["Dex", "PEG", "Phase_Separation", "Pred_Label"]
