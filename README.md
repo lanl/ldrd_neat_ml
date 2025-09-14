@@ -48,7 +48,7 @@ checkpoint file. The instructions to download the checkpoint file are provided i
 detecting the bubbles are given in `bubbleSAM()` method in `neat_ml/bubblesam.py`. 
 In order to run the script faster, modify the `points_per_side` to 16.
 
-## Running the OpenCV and BubbleSAM detection
+## Running the OpenCV or BubbleSAM workflow
 
 To run the workflow, user must follow the instructions 
 give below. 
