@@ -175,12 +175,6 @@ def _save_debug_overlay(
 
     for bubble in bubble_data:
         bbox = bubble["bbox"]
-        if (
-            not isinstance(bbox, (tuple, list))
-            or len(bbox) != 4
-            or any(not np.isfinite(c) for c in bbox)
-        ):
-            continue
         x_min, y_min, x_max, y_max = map(int, bbox)
         cv2.rectangle(overlay, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
 
