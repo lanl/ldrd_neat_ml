@@ -21,11 +21,11 @@ def test_get_path_structure_builds_expected_paths(tmp_path: Path) -> None:
     assert paths["det_dir"] == base / "T01_Processed_OpenCV_With_Blob_Data"
 
 
-def test_get_path_structure_missing_work_raises_keyerror() -> None:
+def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path) -> None:
     """
     If 'work' key is missing in roots, a KeyError is raised. Use match= for message compare.
     """
-    roots = {}  # Missing 'work'
+    roots = {"result": str(tmp_path)}
     ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
 
     with pytest.raises(KeyError, match="work"):
