@@ -2,6 +2,8 @@ import argparse
 import logging
 import yaml
 
+from typing import Any
+
 from neat_ml.workflow.lib_workflow import (get_path_structure, 
                                            stage_detect)
 
@@ -26,9 +28,9 @@ def main(config_path: str, steps_str: str) -> None:
     steps = [s.strip() for s in steps_str.split(",") if s.strip()]
 
     with open(config_path, "r") as fh:
-        cfg = yaml.safe_load(fh)
+        cfg: Any = yaml.safe_load(fh)
 
-    roots = cfg["roots"]
+    roots: dict[str, Any] = cfg["roots"]
     log.info("Running steps: %s", steps)
 
     datasets = cfg.get("datasets", [])

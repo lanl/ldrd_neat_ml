@@ -1,32 +1,11 @@
 image: python:3.12.1
 
-variables:
-  GIT_STRATEGY: fetch          # ensure the repo is actually checked out
-  GIT_LFS_SKIP_SMUDGE: "1"     # faster clone; will fetch LFS explicitly
-
 before_script:
   - set -euxo pipefail
-  - echo "PWD=$PWD"
-  - echo "CI_PROJECT_DIR=$CI_PROJECT_DIR"
-  - test -d "$CI_PROJECT_DIR/.git"    # fail early if repo not present
-
-  # Get Git LFS binary WITHOUT install.sh (no hooks touched)
-  - GIT_LFS_VERSION="3.5.1"
-  - curl -sSL -o /tmp/git-lfs.tgz "https://github.com/git-lfs/git-lfs/releases/download/v${GIT_LFS_VERSION}/git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz"
-  - tar -C /tmp -xzf /tmp/git-lfs.tgz
-  - export PATH="/tmp/git-lfs-${GIT_LFS_VERSION}:$PATH"
-  - git lfs version
-
-  # Don’t modify repo hooks; just ensure filters are available globally.
-  - git lfs install --skip-repo
-
-  - git -C "$CI_PROJECT_DIR" lfs fetch --include="neat_ml/tests/**,neat_ml/data/images/**" --exclude=""
-  - git -C "$CI_PROJECT_DIR" lfs checkout --include="neat_ml/tests/**,neat_ml/data/images/**" --exclude=""
-
   - python --version
   - python -m venv venv
   - source venv/bin/activate
-  - python -m pip install -U mypy ruff pandas-stubs "numpy>=1.26.3,<=2.1.3" matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest shap interpret types-tqdm types-Pillow scikit-image lightgbm lime opencv-python-headless==4.10.0.84
+  - python -m pip install -U mypy ruff pandas-stubs "numpy>=1.26.3,<=2.1.3" matplotlib xgboost pandas scikit-learn openpyxl jinja2 python-ternary pytest shap interpret types-tqdm types-Pillow scikit-image lightgbm lime opencv-python-headless==4.10.0.84 pyyaml types-pyyaml
 
 stages:
   - lint
