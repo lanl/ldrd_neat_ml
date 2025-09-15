@@ -1,5 +1,6 @@
 from pathlib import Path
 from importlib import resources
+import re
 
 import numpy as np
 import numpy.testing as npt
@@ -14,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.testing.compare import compare_images
 
 from neat_ml.bubblesam.bubblesam import (
+    load_image,
     show_anns,
     save_masks,
     run_bubblesam,
@@ -85,6 +87,13 @@ def real_sam_model() -> SAMModel:
         checkpoint_path=str(CHECKPOINT),
         device="cpu",
     )
+
+def test_load_image_missing_file_raises(tmp_path: Path) -> None:
+    missing_path = tmp_path / "does_not_exist.png"
+    expected = re.escape(f"Image at path {missing_path} not found.")
+
+    with pytest.raises(FileNotFoundError, match=expected):
+        load_image(str(missing_path))
 
 def test_show_anns_no_error():
     """
