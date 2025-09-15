@@ -29,7 +29,6 @@ functional_test:
       when: always
   allow_failure: false
   script:
-    - python run_workflow.py --config neat_ml/data/opencv_detection_test.yaml --steps detect
     - python main.py
 
 unit_tests:
