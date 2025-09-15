@@ -1,5 +1,6 @@
 from pathlib import Path
 from importlib import resources
+import re
 
 import matplotlib
 import numpy as np
@@ -20,42 +21,42 @@ from neat_ml.opencv.detection import (
 def test_visual_regression_debug_overlay(
     tmp_path: Path
 ):
-    with resources.as_file(resources.files(__package__) / "data" / "images_Processed") as data_dir, \
-        resources.as_file(resources.files(__package__) / "baseline") as baseline_dir:
+    pkg_root = resources.files(__package__)
+    data_res = pkg_root/"data"/"images_Processed"
+    baseline_res = pkg_root/"baseline"
+
+    with (
+        resources.as_file(data_res) as data_dir,
+        resources.as_file(baseline_res) as baseline_dir,
+    ):
         img_path = collect_tiff_paths(data_dir)[0]
-        stem     = Path(img_path).stem
+        stem = Path(img_path).stem
 
         actual_dir = tmp_path / "overlay"
         df_in = build_df_from_img_paths([img_path])
         run_opencv(df=df_in, output_dir=actual_dir, debug=True)
 
-        actual_png  = actual_dir / f"{stem}_debug.png"
-        desired_png = baseline_dir  / f"{stem}_detection.png"
+        actual_png  = actual_dir/f"{stem}_debug.png"
+        desired_png = baseline_dir/f"{stem}_detection.png"
 
         compare_images(str(desired_png), str(actual_png), tol=1e-4)
 
-def test_build_df_no_paths_raises():
-    with pytest.raises(ValueError) as exc:
+def test_build_df_no_paths_raises() -> None:
+    pattern = re.escape("No image paths provided to build DataFrame.")
+    with pytest.raises(ValueError, match=pattern):
         build_df_from_img_paths([])
 
-    expected = "No image paths provided to build DataFrame."
-    assert str(exc.value) == expected
-
-def test_detect_single_image_missing_file(tmp_path: Path):
+def test_detect_single_image_missing_file(tmp_path: Path) -> None:
     bogus = tmp_path / "does_not_exist.tiff"
-    with pytest.raises(FileNotFoundError) as exc:
+    pattern = rf"Unable to read image file: {re.escape(str(bogus))}"
+    with pytest.raises(FileNotFoundError, match=pattern):
         _detect_single_image(str(bogus))
 
-    expected = f"Unable to read image file: {bogus}"
-    assert str(exc.value) == expected
-
-def test_run_opencv_missing_column(tmp_path: Path):
+def test_run_opencv_missing_column(tmp_path: Path) -> None:
     df_bad = pd.DataFrame({"wrong": ["foo.tiff"]})
-    with pytest.raises(ValueError) as exc:
+    pattern = re.escape("DataFrame must contain 'image_filepath' column.")
+    with pytest.raises(ValueError, match=pattern):
         run_opencv(df_bad, output_dir=tmp_path)
-
-    expected = "DataFrame must contain 'image_filepath' column."
-    assert str(exc.value) == expected
 
 def test_save_debug_overlay_warns(tmp_path: Path):
     bogus = tmp_path / "no_image.tiff"
