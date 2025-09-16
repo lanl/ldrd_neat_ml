@@ -564,7 +564,6 @@ def calculate_summary_statistics(
     numeric_cols: list[str] = [c for c in num_all if not _skip(c)]
 
     if not numeric_cols:
-        warnings.warn("No numeric columns selected for aggregation.")
         return df[valid_groups + carry].drop_duplicates().reset_index(drop=True)
 
     agg_spec: Dict[str, Any] = {c: ["min", "max", "median", "std"] for c in numeric_cols}
@@ -637,8 +636,6 @@ def process_directory(
             metadata["Time"] = time_label
         try:
             df_blobs = loader_fn(pkl_path)
-        except FileNotFoundError:
-            raise
         except (pickle.UnpicklingError, ValueError) as exc:
             warnings.warn(f"Failed to load or parse {pkl_path}: {exc}")
             continue
