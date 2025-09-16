@@ -194,6 +194,51 @@ def test_calculate_all_spatial_metrics():
                 "coverage_percentage", "mean_nnd", "median_nnd"):
         npt.assert_allclose(actual[key], expected[key])
 
+@pytest.mark.parametrize(
+    "df_empty",
+    [
+        pd.DataFrame(columns=["center", "area", "radius", "bbox"]),
+        pd.DataFrame(
+            {
+                "center": [(10.0, 20.0), (30.0, 40.0)],
+                "bbox": [(0, 0, 100, 100), (5, 5, 200, 150)],
+                # "area" and "radius" intentionally omitted
+            }
+        ),
+    ],
+    ids=["empty_df_with_required_cols", "missing_required_cols"],
+)
+def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
+    out = da.calculate_all_spatial_metrics(df_empty, graph_method="delaunay")
+
+    assert out["num_blobs"] == 0
+    assert out["total_blob_area"] == 0.0
+
+    for key in (
+        "mean_blob_area",
+        "median_blob_area",
+        "std_blob_area",
+        "mean_blob_radius",
+        "median_blob_radius",
+        "coverage_percentage",
+        "mean_nnd",
+        "median_nnd",
+        "graph_avg_degree",
+        "graph_degree_std",
+        "graph_num_components",
+        "graph_lcc_node_fraction",
+        "graph_avg_clustering",
+        "graph_avg_neighbor_distance",
+        "graph_avg_node_area_lcc",
+    ):
+        npt.assert_allclose(out[key], np.nan, equal_nan=True)
+
+    npt.assert_array_equal(
+        np.array([out["graph_num_nodes"], out["graph_num_edges"]]),
+        np.array([0, 0]),
+    )
+
+
 def test_load_bubblesam_df(tmp_path: Path):
     df_original = pd.DataFrame(
         {
@@ -309,6 +354,35 @@ def test_calculate_summary_statistics():
     assert "info" in actual.columns
     with pytest.raises(ValueError, match="None of the grouping columns"):
         da.calculate_summary_statistics(df, ["BadCol"], [])
+
+
+def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
+    """
+    numeric_cols exists in df but is emptied by exclude_numeric_regex.
+    The function should return the deduplicated group+carry view.
+    """
+    df = pd.DataFrame(
+        {
+            "Group": ["G1", "G1", "G2"],
+            "Label": ["A", "A", "B"],
+            "Other": ["x", "x", "y"],
+            "graph_num_nodes": [10, 10, 20],
+            "graph_num_edges": [15, 15, 30],
+        }
+    )
+
+    out = da.calculate_summary_statistics(
+        df,
+        group_cols=["Group", "Label"],
+        carry_over_cols=["Other"],
+        exclude_numeric_cols=None,
+        exclude_numeric_regex=[r"^graph_.*"],
+    )
+
+    expected = df[["Group", "Label", "Other"]].drop_duplicates().reset_index(drop=True)
+
+    assert list(out.columns) == ["Group", "Label", "Other"]
+    npt.assert_array_equal(out.to_numpy(), expected.to_numpy())
 
 def test_merge_composition_data():
     summary_df = pd.DataFrame({"UniqueID": ["id1"], "metric": [10]})
