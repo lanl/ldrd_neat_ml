@@ -1,0 +1,4 @@
+[submodule "neat_ml/sam2"]
+	path = neat_ml/sam2
+	url = https://github.com/facebookresearch/sam2.git
+
