@@ -8,3 +8,6 @@ version = "0.0.1.dev0"
 
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
+"neat_ml.tests.data.images" = ["*.tiff"]
+"neat_ml.tests.data.images_Processed" = ["*.tiff"]
+"neat_ml.tests.baseline" = ["*.png"]
