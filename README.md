@@ -10,26 +10,6 @@ by calling:
 python -m pip install -v ".[dev]" 
 ```
 
-## Installation
-
-Download the package from the following GitLab repository:  
-
-```bash
-git clone ssh://git@lisdi-git.lanl.gov:10022/ldrd_dr_neat/ldrd_neat_ml.git
-
-```
-
-To set up the environment:  
-
-```bash
-
-cd ldrd_neat_ml
-conda env create -n ldrd_neat_ml "python>=3.10"
-conda activate ldrd_neat_ml
-
-pip install -r requirements.txt
-```
-
 ## Running the OpenCV detection
 
 To run the workflow, user must follow the instructions 
