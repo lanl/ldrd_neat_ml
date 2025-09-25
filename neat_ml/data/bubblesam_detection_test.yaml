@@ -1,0 +1,12 @@
+roots:
+  work: neat_ml/tests/data/
+
+datasets:
+  - id: Test
+    method: BubbleSAM
+    class: ''
+    time_label: ''
+    
+    detection:
+      img_dir: neat_ml/tests/data/images
+      debug: True
