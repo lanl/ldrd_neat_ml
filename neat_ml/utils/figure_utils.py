@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -7,13 +7,14 @@ from skimage import measure
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import pairwise_distances_argmin_min
 
+# TODO: fix inconsistencies in docstring formatting (issue #12)
 def _axis_ranges(
     df1: pd.DataFrame,
     df2: pd.DataFrame,
     x_col: str,
     y_col: str,
     pad: int,
-) -> Tuple[list[int], list[int]]:
+) -> tuple[list[int], list[int]]:
     """
     Calculates shared axis ranges for plotting two DataFrames.
 
@@ -37,7 +38,7 @@ def _axis_ranges(
 
     Returns
     -------
-    Tuple[list[int], list[int]]
+    tuple[list[int], list[int]]
         A tuple containing two lists: the x-axis range [0, x_max] and the
         y-axis range [0, y_max].
     """
@@ -229,7 +230,7 @@ def plot_gmm_decision_regions(
     decision_alpha: float,
     plot_regions: bool,
     region_colors: Optional[list[str]],
-) -> Tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
+) -> tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
     """
     Trains a GMM and creates contour traces for phase 
     regions and boundaries.
@@ -257,7 +258,7 @@ def plot_gmm_decision_regions(
 
     Returns:
     --------
-        Tuple: Containing the GMM model, cluster labels, 
+        tuple: Containing the GMM model, cluster labels, 
                boundary points, and a list of Plotly contour
                traces.
     """

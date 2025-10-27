@@ -12,7 +12,7 @@ Sample incantation: `python main.py --random_seed 42`
 
 ## Generating figures for manuscript
 
-Execute the follownig command to generate the figures
+Execute the following command to generate the figures
 used in the manuscript. 
 
 `python -m neat_ml.plot_manuscript_figures`

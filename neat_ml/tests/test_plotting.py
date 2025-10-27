@@ -15,6 +15,7 @@ from matplotlib.testing.compare import compare_images
 from neat_ml.utils import lib_plotting as pmf
 from neat_ml.utils import figure_utils
 
+# TODO: enforce style consistency with ``black`` (issue #11)
 @pytest.fixture(scope="session")
 def synthetic_df() -> pd.DataFrame:
     """Deterministic (seeded) composition/phase dataframe."""
@@ -63,10 +64,11 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
     
-    compare_images(
+    result = compare_images(
         str(baseline_dir / "gmm_decision_regions.png"), 
         str(out_png), 
         tol=1e-4)
+    assert result is None
 
 def test_plot_gmm_composition_phase_visual_and_logic(
     tmp_path: Path,
@@ -89,10 +91,11 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
 
-    compare_images(
+    result = compare_images(
         str(baseline_dir / "gmm_composition_phase.png"), 
         str(out_png), 
         tol=1e-4)
+    assert result is None
 
 @pytest.mark.parametrize(
     "writer, fname, extra_kwargs",
@@ -138,16 +141,17 @@ def test_visual_regression_on_helpers(
         extra_kwargs["json_path"] = str(json_file_path)
 
     out_png = tmp_path / fname
-    writer(file_path=str(csv), output_path=str(out_png), **extra_kwargs)
+    writer(file_path=csv, output_path=out_png, **extra_kwargs)
 
     assert out_png.is_file()
     arr = plt.imread(out_png)
     assert np.ptp(arr[..., :3]) > 0.0
     
-    compare_images(
+    result = compare_images(
         str(baseline_dir / fname), 
         str(out_png), 
         tol=1e-4)
+    assert result is None
 
 
 def test_plot_two_scatter_visual_regression(
@@ -162,16 +166,17 @@ def test_plot_two_scatter_visual_regression(
 
     out_png = tmp_path / "plot_two_scatter.png"
     pmf.plot_two_scatter(
-        csv1_path=str(csv1),
-        csv2_path=str(csv2),
-        output_path=str(out_png),
+        csv1_path=csv1,
+        csv2_path=csv2,
+        output_path=out_png,
         xlim=[0, 4],
         ylim=[0, 4],
     )
-    compare_images(
+    result = compare_images(
         str(baseline_dir/ "plot_two_scatter.png"), 
         str(out_png), 
         tol=1e-4)
+    assert result is None
 
 def test_load_parameters_missing_keys(tmp_path: Path):
     """
@@ -183,7 +188,7 @@ def test_load_parameters_missing_keys(tmp_path: Path):
     expected_regex = f"{re.escape(str(bad_params))} is missing required keys: \\{{'MODEL_C'\\}}"
     
     with pytest.raises(KeyError, match=expected_regex):
-        pmf.load_parameters_from_json(str(bad_params))
+        pmf.load_parameters_from_json(bad_params)
 
 def test_load_parameters_wrong_value_type(tmp_path: Path):
     """
@@ -200,7 +205,7 @@ def test_load_parameters_wrong_value_type(tmp_path: Path):
 
     expected_msg = "Parameter 'MODEL_B' must be a number, but got str."
     with pytest.raises(TypeError, match=expected_msg):
-        pmf.load_parameters_from_json(str(bad_params_file))
+        pmf.load_parameters_from_json(bad_params_file)
 
 def test_make_phase_diagram_no_csv_files(tmp_path: Path):
     """
@@ -332,8 +337,9 @@ def test_wrappers_and_pipeline(
     assert pngs, "The main pipeline produced no PNGs"
 
     for png in pngs:
-        compare_images(
+        result = compare_images(
             str(baseline_dir / png.name), 
             str(png), 
             tol=1e-4)
-        
+        assert result is None
+

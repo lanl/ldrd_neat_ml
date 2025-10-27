@@ -11,7 +11,7 @@ import json
 
 from . import figure_utils
 
-def load_parameters_from_json(path: str) -> dict[str, float]:
+def load_parameters_from_json(path: Path) -> dict[str, float]:
     """
     Read and validate the model fit parameters file.
 
@@ -44,20 +44,20 @@ def load_parameters_from_json(path: str) -> dict[str, float]:
     return params
 
 def titration_diagram(
-    file_path: str,
+    file_path: Path,
     x_col: str,
     y_col: str,
     phase_col: str,
     xrange: list[int],
     yrange: list[int],
-    output_path: str,
+    output_path: Path,
 ) -> None:
     """
     Load data and plot two-phase scatter diagram.
 
     Parameters
     ----------
-    file_path : str
+    file_path : Path
         Path to the input CSV file.
     x_col : str
         Name of the column for x-axis values.
@@ -69,7 +69,7 @@ def titration_diagram(
         [min, max] range for the x-axis.
     yrange : list[int]
         [min, max] range for the y-axis.
-    output_path : str
+    output_path : Path
         Path to save the output PNG image.
 
     Returns
@@ -118,9 +118,9 @@ def titration_diagram(
     print(f"Plot saved successfully to {output_path}")
 
 def plot_two_scatter(
-    csv1_path: str,
-    csv2_path: str,
-    output_path: str,
+    csv1_path: Path,
+    csv2_path: Path,
+    output_path: Path,
     xlim: Optional[list[int]]=None,
     ylim: Optional[list[int]]=None,
 ) -> None:
@@ -129,11 +129,11 @@ def plot_two_scatter(
 
     Parameters
     ----------
-    csv1_path : str
+    csv1_path : Path
         Path to Titration.CSV file
-    csv2_path : str
+    csv2_path : Path
         Path to TECAN.CSV file
-    output_path : str
+    output_path : Path
         Path to save the output image.
     xlim : Optional[list[float]]
         [min, max] range for x-axis.
@@ -191,12 +191,12 @@ def plot_two_scatter(
     print(f"Plot saved successfully to {output_path}")
 
 def mathematical_model(
-    file_path: str,
-    json_path: str,
+    file_path: Path,
+    json_path: Path,
     x_col: str,
     y_col: str,
     phase_col: str,
-    output_path: str,
+    output_path: Path,
     xrange: list[int],
     yrange: list[int],
 ):
@@ -205,9 +205,9 @@ def mathematical_model(
 
     Parameters
     ----------
-    file_path : str
+    file_path : Path
         Path to the CSV input file.
-    json_path: str
+    json_path: Path
         Path to the .json file for model parameters
     x_col : str
         Column name for x-axis values.
@@ -219,7 +219,7 @@ def mathematical_model(
         Two-element list [min, max] for x-axis range.
     yrange : list[int]
         Two-element list [min, max] for y-axis range.
-    output_path : str
+    output_path : Path
         Path to save the output plot image.
 
     Returns
@@ -315,20 +315,20 @@ def mathematical_model(
     print(f"Plot saved successfully to {output_path}")
 
 def phase_diagram_exp(
-    file_path: str,
+    file_path: Path,
     x_col: str,
     y_col: str,
     phase_col: str,
     xrange: list[int],
     yrange: list[int],
-    output_path: str,
+    output_path: Path,
 ) -> None:
     """
     Load data, generate the phase diagram, and write the image.
 
     Parameters
     ----------
-    file_path : str
+    file_path : Path
         Path to a CSV file with the required columns.
     x_col, y_col : str
         Column names for the two composition axes.
@@ -336,7 +336,7 @@ def phase_diagram_exp(
         Column holding the phase indicator used to fit the GMM.
     xrange, yrange : list[int]
         Two-element lists specifying axis extents.
-    output_path : str
+    output_path : Path
         Destination filename (PNG, SVG, etc.) for the saved figure.
 
     Returns
@@ -447,13 +447,13 @@ def make_titration_figures(
         png_path = out_dir / f"{csv_path.stem}_Titration_Phase_Diagram.png"
 
         titration_diagram(
-            file_path=str(csv_path),
+            file_path=csv_path,
             x_col=x_title,
             y_col=y_title,
             phase_col=phase_title,
             xrange=x_rng,
             yrange=y_rng,
-            output_path=str(png_path),
+            output_path=png_path,
         )
 
 def make_binodal_comparison_figures(
@@ -486,7 +486,7 @@ def make_binodal_comparison_figures(
     """
 
     titrate: dict[str, Path] = {}
-    tecan:   dict[str, Path] = {}
+    tecan: dict[str, Path] = {}
 
     for p in csv_dir.glob("*_Titrate.csv"):
         titrate[p.stem[:-8]] = p       # strip '_Titrate'
@@ -505,9 +505,9 @@ def make_binodal_comparison_figures(
         png_path = out_dir / f"Figure_6_{ds_id}_Binodal_Comparison.png"
 
         plot_two_scatter(
-            csv1_path=str(csv_tit),
-            csv2_path=str(csv_tec),
-            output_path=str(png_path),
+            csv1_path=csv_tit,
+            csv2_path=csv_tec,
+            output_path=png_path,
             xlim=x_rng,
             ylim=y_rng,
         )
@@ -566,13 +566,13 @@ def make_phase_diagram_figures(
 
             png_path = out_dir / f"{ds_id}_Phase_Diagram_{tag}.png"
             phase_diagram_exp(
-                file_path=str(csv_path),
+                file_path=csv_path,
                 x_col=x_title,
                 y_col=y_title,
                 phase_col=phase_col,
                 xrange=x_rng,
                 yrange=y_rng,
-                output_path=str(png_path),
+                output_path=png_path,
             )
 
 def plot_figures(
@@ -633,12 +633,12 @@ def plot_figures(
     make_phase_diagram_figures(csv_phase_dir, out_dir, phase_cols)
 
     mathematical_model(
-        file_path=str(mat_model_csv),
-        json_path=str(json_path),
+        file_path=mat_model_csv,
+        json_path=json_path,
         x_col="Sodium Citrate (wt%)",
         y_col="PEO 8 kg/mol (wt%)",
         phase_col="Phase_Separation_2nd",
         xrange=xrange,
         yrange=yrange,
-        output_path=str(mat_model_png),
+        output_path=mat_model_png,
     )
