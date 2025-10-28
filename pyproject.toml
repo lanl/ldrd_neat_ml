@@ -5,6 +5,30 @@ requires = ["setuptools>=68.2.2",
 [project]
 name = "neat_ml"
 version = "0.0.1.dev0"
-
+dependencies = [
+    'numpy>=1.26.3,<=2.1.3',
+    'matplotlib',
+    'xgboost',
+    'pandas',
+    'scikit-learn',
+    'openpyxl',
+    'jinja2',
+    'python-ternary',
+    'shap',
+    'interpret',
+    'scikit-image',
+    'lightgbm',
+    'lime',
+    'opencv-python-headless==4.10.0.84'
+]
+[project.optional-dependencies]
+dev = ['mypy',
+       'ruff',
+       'pandas-stubs',
+       'pytest',
+       'pytest-xdist',
+       'pytest-cov',
+       'types-tqdm',
+       'types-Pillow']
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
