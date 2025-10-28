@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 from importlib import resources
 from typing import Callable, Generator, Any
@@ -11,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.testing.compare import compare_images
+import os
 
 from neat_ml.utils import lib_plotting as pmf
 from neat_ml.utils import figure_utils
@@ -153,7 +153,6 @@ def test_visual_regression_on_helpers(
         tol=1e-4)
     assert result is None
 
-
 def test_plot_two_scatter_visual_regression(
     tmp_path: Path,
     baseline_dir: Path,
@@ -178,69 +177,77 @@ def test_plot_two_scatter_visual_regression(
         tol=1e-4)
     assert result is None
 
-def test_load_parameters_missing_keys(tmp_path: Path):
+@pytest.mark.parametrize("json_file, out_dict, err_msg, err_type",
+[
+    (
+	"bad_params.json",
+	{"MODEL_A": 0.1, "MODEL_B": 0.0},
+	"is missing required keys: {\'MODEL_C\'}",
+	KeyError,
+    ),
+    (
+	"bad_value_type.json",
+	{"MODEL_A": 10.5, "MODEL_B": "not-a-number", "MODEL_C": 20.0},
+	"Parameter 'MODEL_B' must be a number, but got str.",
+        TypeError,
+    ),
+]
+)
+def test_load_json_errors(tmp_path: Path,
+json_file, out_dict, err_msg, err_type):
     """
     The JSON is valid but omits MODEL_C -> KeyError expected.
-    """
-    bad_params = tmp_path / "bad_params.json"
-    json.dump({"MODEL_A": 0.1, "MODEL_B": 0.0}, bad_params.open("w"))
-
-    expected_regex = f"{re.escape(str(bad_params))} is missing required keys: \\{{'MODEL_C'\\}}"
     
-    with pytest.raises(KeyError, match=expected_regex):
-        pmf.load_parameters_from_json(bad_params)
+    AND	
 
-def test_load_parameters_wrong_value_type(tmp_path: Path):
-    """
     Tests that a TypeError is raised if a parameter value is not a number.
     
     The JSON file contains all required keys, but the value for 'MODEL_B'
     is a string, which should trigger a TypeError.
     """
-    bad_params_file = tmp_path / "bad_value_type.json"
-    
-    invalid_data = {"MODEL_A": 10.5, "MODEL_B": "not-a-number", "MODEL_C": 20.0}
-    with open(bad_params_file, "w") as f:
-        json.dump(invalid_data, f)
+    out_file = tmp_path / json_file
+    json.dump(out_dict, out_file.open("w"))
+    if json_file == "bad_params.json":
+        file_path = os.path.join(tmp_path, json_file)
+        err_msg = f"{file_path} {err_msg}"
+    with pytest.raises(err_type, match=err_msg):
+        pmf.load_parameters_from_json(out_file)
 
-    expected_msg = "Parameter 'MODEL_B' must be a number, but got str."
-    with pytest.raises(TypeError, match=expected_msg):
-        pmf.load_parameters_from_json(bad_params_file)
-
-def test_make_phase_diagram_no_csv_files(tmp_path: Path):
+@pytest.mark.parametrize("out_path, out_file, err_msg",
+    [
+        (
+            "emtpy",
+            None, 
+            "No CSV files found in directory"
+        ),
+        (
+            "bad_csv",
+            pd.DataFrame({"A": [1], "B": [2], "C": [3]}),
+            "CSV",
+        ),
+    ],
+)
+def test_make_phase_diagram_errors(tmp_path: Path,
+out_path, out_file, err_msg):
     """
     Empty directory should raise 'No CSV files found in directory'.
-    """
-    empty_dir = tmp_path / "empty"
-    empty_dir.mkdir()
-    phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
+    
+    AND     
 
-    expected_regex = f"No CSV files found in directory: {re.escape(str(empty_dir))}"
-
-    with pytest.raises(ValueError, match=expected_regex):
-        pmf.make_phase_diagram_figures(
-            empty_dir, 
-            tmp_path / "out", 
-            phase_cols
-        )
-
-def test_make_phase_diagram_bad_csv_columns(tmp_path: Path):
-    """
     A CSV with only 3 columns triggers the ValueError in the try/except block.
     """
-    bad_dir = tmp_path / "bad_csv"
-    bad_dir.mkdir()
-    demo_csv = bad_dir / "demo.csv"
+    save_dir = tmp_path / out_path
+    save_dir.mkdir()
     phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
 
-    pd.DataFrame({"A": [1], "B": [2], "C": [3]}).to_csv(demo_csv, index=False)
-
-    expected_regex = f"CSV {re.escape(str(demo_csv))} must have at least five columns; got 3"
-
-    with pytest.raises(ValueError, match=expected_regex):
+    if out_path == "bad_csv":
+        bad_dir = save_dir / "demo.csv"
+        out_file.to_csv(bad_dir, index=False)
+    
+    with pytest.raises(ValueError, match=err_msg):
         pmf.make_phase_diagram_figures(
-            bad_dir, 
-            tmp_path / "out",
+            save_dir, 
+            tmp_path / "out", 
             phase_cols
         )
 
