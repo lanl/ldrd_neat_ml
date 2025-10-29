@@ -135,6 +135,9 @@ def test_plotters_visual_and_logic(
     out_png = tmp_path / fname
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
-    
-    result = compare_images(str(baseline_dir / fname), str(out_png), tol=1e-4)
+
+    # here ``compare_images`` ``tol`` was loosened from 1e-4 to
+    # 2e-2 to accommodate cross-platform testing as discussed at
+    # https://github.com/lanl/ldrd_neat_ml/pull/1#issuecomment-3463967764
+    result = compare_images(str(baseline_dir / fname), str(out_png), tol=2e-2)
     assert result is None

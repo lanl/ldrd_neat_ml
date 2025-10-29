@@ -64,10 +64,13 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     fig.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
     
+    # for ``compare_images`` tests ``tol`` was loosened from 1e-4 to
+    # 2e-2 to accommodate cross-platform testing as discussed at
+    # https://github.com/lanl/ldrd_neat_ml/pull/1#issuecomment-3463967764
     result = compare_images(
         str(baseline_dir / "gmm_decision_regions.png"), 
         str(out_png), 
-        tol=1e-4)
+        tol=2e-2)
     assert result is None
 
 def test_plot_gmm_composition_phase_visual_and_logic(
@@ -94,7 +97,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     result = compare_images(
         str(baseline_dir / "gmm_composition_phase.png"), 
         str(out_png), 
-        tol=1e-4)
+        tol=2e-2)
     assert result is None
 
 @pytest.mark.parametrize(
@@ -150,7 +153,7 @@ def test_visual_regression_on_helpers(
     result = compare_images(
         str(baseline_dir / fname), 
         str(out_png), 
-        tol=1e-4)
+        tol=2e-2)
     assert result is None
 
 def test_plot_two_scatter_visual_regression(
@@ -174,7 +177,7 @@ def test_plot_two_scatter_visual_regression(
     result = compare_images(
         str(baseline_dir/ "plot_two_scatter.png"), 
         str(out_png), 
-        tol=1e-4)
+        tol=2e-2)
     assert result is None
 
 @pytest.mark.parametrize("json_file, out_dict, err_msg, err_type",
@@ -347,6 +350,6 @@ def test_wrappers_and_pipeline(
         result = compare_images(
             str(baseline_dir / png.name), 
             str(png), 
-            tol=1e-4)
+            tol=2e-2)
         assert result is None
 
