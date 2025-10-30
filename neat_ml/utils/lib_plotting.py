@@ -99,11 +99,11 @@ def titration_diagram(
             label=cfg["label"],
         )
 
-    ax.set_xlabel(x_col, fontsize=36, fontweight="bold")
-    ax.set_ylabel(y_col, fontsize=36, fontweight="bold")
+    ax.set_xlabel(x_col, fontsize=20, fontweight="bold")
+    ax.set_ylabel(y_col, fontsize=20, fontweight="bold")
     figure_utils._set_axis_style(ax, xrange, yrange)
 
-    ax.legend(loc="upper right", framealpha=0.8, fontsize=30)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), framealpha=0.8, fontsize=20)
 
     dest_dir = os.path.dirname(output_path)
     if dest_dir and not os.path.exists(dest_dir):
@@ -155,8 +155,8 @@ def plot_two_scatter(
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
     scatter_cfg:  list[Dict[str, Any]] = [
-        {"df": df1, "color": "purple", "label": "Titration"},
-        {"df": df2, "color": "yellow", "label": "Our Method"},
+        {"df": df1, "color": "purple", "label": "Turbidimetric Titration"},
+        {"df": df2, "color": "yellow", "label": "Computational Pipeline"},
     ]
 
     for cfg in scatter_cfg:
@@ -175,8 +175,8 @@ def plot_two_scatter(
     ax.set_xlabel(x_col, fontsize=24, fontweight="bold")
     ax.set_ylabel(y_col, fontsize=24, fontweight="bold")
     figure_utils._set_axis_style(ax, xlim, ylim)
-
-    ax.legend(loc="upper right", framealpha=0.8, fontsize=14)
+    
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), framealpha=0.8, fontsize=24)
 
     dest_dir = os.path.dirname(output_path)
     if dest_dir and not os.path.exists(dest_dir):
@@ -292,10 +292,10 @@ def mathematical_model(
 
     ax.legend(
         handles=handles, 
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left", 
+        bbox_to_anchor=(0.5, -0.1),
+        loc="upper center", 
         framealpha=0.8, 
-        fontsize=11
+        fontsize=24
     )
 
     ax.set_xlabel(x_col, fontsize=24, fontweight="bold")
@@ -386,11 +386,11 @@ def phase_diagram_exp(
         Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
     ]
     ax.legend(
-        handles=handles, 
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left", 
+        handles=handles,
+        bbox_to_anchor=(0.5, -0.2),
+        loc="upper center", 
         framealpha=0.8, 
-        fontsize=11
+        fontsize=24
     )
 
     ax.set_xlabel(x_col, fontsize=24, fontweight="bold")
