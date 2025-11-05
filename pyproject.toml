@@ -25,6 +25,7 @@ dependencies = [
     # https://github.com/scipy/scipy/issues/24355
     # TODO: unpin when upstream issue is resolved
     'scipy<=1.16.3',
+    'pooch'
 ]
 [project.optional-dependencies]
 dev = ['mypy',
