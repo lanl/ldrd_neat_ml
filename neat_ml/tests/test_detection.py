@@ -9,6 +9,9 @@ import cv2
 matplotlib.use("Agg")
 import pytest
 from matplotlib.testing.compare import compare_images
+import pooch  # type: ignore[import-untyped]
+import shutil
+import os
 
 from neat_ml.opencv.detection import (
     collect_tiff_paths,
@@ -24,7 +27,24 @@ def test_visual_regression_debug_overlay(
     pkg_root = resources.files(__package__)
     data_res = pkg_root/"data"/"images_Processed"
     baseline_res = pkg_root/"baseline"
-
+    
+    # download testing image files with pooch
+    # image files stored at the following url:
+    # https://zenodo.org/records/17545141
+    image_files = pooch.create(
+        base_url = "doi:10.5281/zenodo.17545141",
+        path = pooch.os_cache("test_images")
+    )
+    image_files.load_registry_from_doi()
+    images_Processed_raw = image_files.fetch(
+         fname="images_Processed_raw.tiff",
+    )
+    detection_raw = image_files.fetch(
+	 fname="raw_detection.png",
+    )
+    shutil.copy(str(images_Processed_raw), str(data_res))
+    shutil.copy(str(detection_raw), str(baseline_res))
+     
     with (
         resources.as_file(data_res) as data_dir,
         resources.as_file(baseline_res) as baseline_dir,
@@ -37,9 +57,10 @@ def test_visual_regression_debug_overlay(
         run_opencv(df=df_in, output_dir=actual_dir, debug=True)
 
         actual_png  = actual_dir/f"{stem}_debug.png"
-        desired_png = baseline_dir/f"{stem}_detection.png"
+        desired_png = baseline_dir/os.path.basename(detection_raw)
 
-        compare_images(str(desired_png), str(actual_png), tol=1e-4)
+        result = compare_images(str(desired_png), str(actual_png), tol=1e-4)
+        assert result is None
 
 def test_build_df_no_paths_raises() -> None:
     pattern = re.escape("No image paths provided to build DataFrame.")
