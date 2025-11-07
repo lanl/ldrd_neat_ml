@@ -13,10 +13,13 @@ orchestration wrappers.
 """
 import os
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable
 import cv2
 import numpy as np
-import warnings
+import logging
+
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "process_image",
@@ -28,8 +31,8 @@ def process_image(
     img: np.ndarray,
     *,
     clip_limit: float,
-    tile_grid_size: Tuple[int, int],
-    ksize: Tuple[int, int],
+    tile_grid_size: tuple[int, int],
+    ksize: tuple[int, int],
     alpha: float,
 ) -> np.ndarray:
     """
@@ -88,7 +91,7 @@ def iter_images(root: Path) -> Iterable[Path]:
         Absolute paths of discovered images.
     """
     
-    SUPPORTED_EXTS: Tuple[str, ...] = (".tiff", ".tif")
+    SUPPORTED_EXTS: tuple[str, ...] = (".tiff", ".tif")
 
     for dirpath, _, files in os.walk(root):
         for name in files:
@@ -132,5 +135,5 @@ def process_directory(
             )
             cv2.imwrite(str(out_path), processed)
         else:
-            warnings.warn(UserWarning(f"\n[WARNING] Could not read file, skipping: {in_path}"))
-    print(f"\n[INFO] Completed: (output: {output_dir.resolve()})")
+            log.warning(f"Could not read file, skipping: {in_path}")
+    log.info(f"Completed: (output: {output_dir.resolve()})")

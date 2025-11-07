@@ -9,6 +9,29 @@ by calling:
 ```
 python -m pip install -v ".[dev]" 
 ```
+## writing a `.yaml` input file for OpenCV detection
+
+The workflow takes as input a `.yaml` configuration file with information
+on where to find the input image data for blob detection; save the
+output images.
+
+The `.yaml` file should follow the format below (an example
+can be found at `neat_ml/data/opencv_detection_test.yaml`):
+
+```
+roots:
+  work: path/to/save/output
+
+datasets:
+  - id: name_of_save_folder
+    method: subfolder_for_detection_method
+    class: subfolder_for_image_class
+    time_label: subfolder_for_timestamp
+
+    detection:
+      img_dir: path/to/image/data
+      debug: True/False for debug
+```
 
 ## Running the OpenCV detection
 
