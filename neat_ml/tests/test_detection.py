@@ -85,16 +85,16 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     """
     blank = np.zeros((100, 100), dtype=np.uint8)
     img_path = tmp_path / "blank.tiff"
-    assert cv2.imwrite(str(img_path), blank)
+    cv2.imwrite(str(img_path), blank)
 
     num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
     assert num_blobs == 0
     assert np.isnan(median_r)
     assert bubble_data.empty
    
-def test_detect_single_image_raw(tmp_path):
+def test_detect_single_image_processed(tmp_path):
     """
-    regression test for detection of keypoints in raw image data
+    regression test for detection of keypoints in processed image
     """ 
     pkg_root = resources.files(__package__)
     data_res = pkg_root/"data"/"images_Processed"

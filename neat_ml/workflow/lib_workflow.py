@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 import pandas as pd
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
@@ -11,25 +11,25 @@ __all__ = ["get_path_structure", "stage_opencv", "stage_detect"]
 log = logging.getLogger(__name__)
 
 def get_path_structure(
-    roots: Dict[str, str],
-    dataset_config: Dict[str, Any],
-) -> Dict[str, Path]:
+    roots: dict[str, str],
+    dataset_config: dict[str, Any],
+) -> dict[str, Path]:
     """
     Build only the paths needed by active steps.
 
     Parameters
     ----------
-    roots : Dict[str, str]
+    roots : dict[str, str]
         Root dirs (work).
-    dataset_config : Dict[str, Any]
+    dataset_config : dict[str, Any]
         Dataset dict (id, method, class, time_label, detection).
 
     Returns
     -------
-    Dict[str, Path]
+    dict[str, Path]
         Paths keyed by step usage (proc_dir, det_dir).
     """
-    paths: Dict[str, Path] = {}
+    paths: dict[str, Path] = {}
 
     ds_id: str = str(dataset_config.get("id", "unknown"))
     method: str = str(dataset_config.get("method", ""))
@@ -43,15 +43,15 @@ def get_path_structure(
 
     return paths
 
-def stage_opencv(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None:
+def stage_opencv(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
     """
     Run OpenCV preprocessing + detection when configured.
 
     Parameters
     ----------
-    dataset_config : Dict[str, Any]
+    dataset_config : dict[str, Any]
         Dataset config. Expects 'method' == 'OpenCV' and 'detection' block.
-    paths : Dict[str, Path]
+    paths : ict[str, Path]
         Paths from get_path_structure() (proc_dir, det_dir if built).
 
     Returns
@@ -59,7 +59,7 @@ def stage_opencv(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None
     None
         Writes preprocessed images and detection outputs if configured.
     """
-    detection_cfg: Dict[str, Any] = dict(dataset_config.get("detection", {}))
+    detection_cfg: dict[str, Any] = dict(dataset_config.get("detection", {}))
     img_dir_str: Optional[str] = detection_cfg.get("img_dir")
     debug: bool = bool(detection_cfg.get("debug", False))
 
@@ -91,15 +91,15 @@ def stage_opencv(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None
     df_imgs = pd.DataFrame({"image_filepath": img_paths})
     run_opencv(df_imgs, det_dir, debug=debug)
 
-def stage_detect(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None:
+def stage_detect(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
     """
     Route detection to OpenCV based on dataset.method.
 
     Parameters
     ----------
-    dataset_config : Dict[str, Any]
+    dataset_config : dict[str, Any]
         Dataset config with 'method'.
-    paths : Dict[str, Path]
+    paths : dict[str, Path]
         Detection paths (proc_dir, det_dir).
 
     Returns
