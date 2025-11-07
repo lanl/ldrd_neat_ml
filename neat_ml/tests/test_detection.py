@@ -16,7 +16,6 @@ import os
 from neat_ml.opencv.detection import (
     collect_tiff_paths,
     _detect_single_image,
-    build_df_from_img_paths,
     _save_debug_overlay,
     run_opencv,
 )
@@ -53,7 +52,7 @@ def test_visual_regression_debug_overlay(
         stem = Path(img_path).stem
 
         actual_dir = tmp_path / "overlay"
-        df_in = build_df_from_img_paths([img_path])
+        df_in = pd.DataFrame({"image_filepath": [img_path]})
         run_opencv(df=df_in, output_dir=actual_dir, debug=True)
 
         actual_png  = actual_dir/f"{stem}_debug.png"
@@ -62,10 +61,6 @@ def test_visual_regression_debug_overlay(
         result = compare_images(str(desired_png), str(actual_png), tol=1e-4)
         assert result is None
 
-def test_build_df_no_paths_raises() -> None:
-    pattern = re.escape("No image paths provided to build DataFrame.")
-    with pytest.raises(ValueError, match=pattern):
-        build_df_from_img_paths([])
 
 def test_detect_single_image_missing_file(tmp_path: Path) -> None:
     bogus = tmp_path / "does_not_exist.tiff"
@@ -81,8 +76,8 @@ def test_run_opencv_missing_column(tmp_path: Path) -> None:
 
 def test_save_debug_overlay_warns(tmp_path: Path):
     bogus = tmp_path / "no_image.tiff"
-    with pytest.warns(UserWarning, match="Could not read image for debug overlay"):
-        _save_debug_overlay(str(bogus), [], tmp_path)
+    with pytest.raises(FileNotFoundError, match="Could not read image for debug overlay"):
+        _save_debug_overlay(str(bogus), pd.DataFrame(), tmp_path)
 
 def test_detect_single_image_no_blobs(tmp_path: Path):
     """
@@ -95,9 +90,33 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
     assert num_blobs == 0
     assert np.isnan(median_r)
-    assert len(bubble_data) == 1
-    first = bubble_data[0]
-    assert np.isnan(first["bubble_number"])
-    assert np.isnan(first["radius"])
-    assert all(np.isnan(c) for c in first["bbox"])
+    assert bubble_data.empty
+   
+def test_detect_single_image_raw(tmp_path):
+    """
+    regression test for detection of keypoints in raw image data
+    """ 
+    pkg_root = resources.files(__package__)
+    data_res = pkg_root/"data"/"images_Processed"
     
+    # download testing image files with pooch
+    # image files stored at the following url:
+    # https://zenodo.org/records/17545141
+    image_files = pooch.create(
+        base_url = "doi:10.5281/zenodo.17545141",
+        path = pooch.os_cache("test_images")
+    )
+    image_files.load_registry_from_doi()
+    images_Processed_raw = image_files.fetch(
+         fname="images_Processed_raw.tiff",
+    )
+    shutil.copy(str(images_Processed_raw), str(data_res))
+     
+    with (
+        resources.as_file(data_res) as data_dir,
+    ):
+        img_path = collect_tiff_paths(data_dir)[0]
+        num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
+        assert num_blobs == 1735
+        assert median_r == 3.623063564300537
+        assert bubble_data.shape == (1735, 5)
