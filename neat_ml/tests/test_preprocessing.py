@@ -2,14 +2,13 @@ from pathlib import Path
 from importlib import resources
 import cv2
 import matplotlib
-import re
 import pytest
 from pytest import MonkeyPatch
 from typing import Any
 import pooch  # type: ignore[import-untyped]
 import shutil
 import os
-import warnings
+import logging
 
 from matplotlib.testing.compare import compare_images
 
@@ -60,7 +59,9 @@ def test_process_directory_single_image(
 def test_process_directory_warns_on_unreadable_file(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "input_images"
     output_dir = tmp_path / "processed_images"
     input_dir.mkdir()
@@ -76,6 +77,4 @@ def test_process_directory_warns_on_unreadable_file(
 
     monkeypatch.setattr(cv2, "imread", _fake_imread, raising=True)
     pp.process_directory(input_dir, output_dir)
-    warn_pat = rf"C\n[WARNING] Could not read file, skipping: {re.escape(str(bad_img))}"
-    with pytest.warns(UserWarning):
-        warnings.warn(warn_pat, UserWarning)
+    assert "Could not read file, skipping:" in caplog.text

@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 import pytest
 
 import neat_ml.workflow.lib_workflow as wf
@@ -99,7 +99,7 @@ def test_stage_opencv_happy_path_calls_pipeline(
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
 
-    calls: List[str] = []
+    calls: list[str] = []
 
     def fake_cv_preprocess(src: Path, dst: Path) -> None:
         assert src == img_dir and dst == proc_dir
