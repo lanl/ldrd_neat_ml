@@ -19,7 +19,8 @@ dependencies = [
     'scikit-image',
     'lightgbm',
     'lime',
-    'opencv-python-headless==4.10.0.84'
+    'opencv-python-headless==4.10.0.84',
+    'pooch'
 ]
 [project.optional-dependencies]
 dev = ['mypy',
@@ -32,3 +33,6 @@ dev = ['mypy',
        'types-Pillow']
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
+"neat_ml.tests.data.images" = ["*.tiff"]
+"neat_ml.tests.data.images_Processed" = ["*.tiff"]
+"neat_ml.tests.baseline" = ["*.png"]
