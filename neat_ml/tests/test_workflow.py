@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 from typing import Any, List
-
 import pytest
 
 import neat_ml.workflow.lib_workflow as wf
@@ -77,7 +76,6 @@ def test_stage_opencv_skips_if_output_already_exists(
 
     monkeypatch.setattr(wf, "cv_preprocess", bad)
     monkeypatch.setattr(wf, "collect_tiff_paths", bad)
-    monkeypatch.setattr(wf, "build_df_from_img_paths", bad)
     monkeypatch.setattr(wf, "run_opencv", bad)
 
     ds = {"id": "DS5", "method": "OpenCV", "detection": {"img_dir": str(tmp_path)}}
@@ -94,7 +92,7 @@ def test_stage_opencv_happy_path_calls_pipeline(
 ) -> None:
     """
     stage_opencv: happy path creates directories and calls 
-    preprocess -> collect -> build_df -> run_opencv.
+    preprocess -> collect -> run_opencv.
     """
     proc_dir = tmp_path / "proc"
     det_dir = tmp_path / "det"
@@ -112,25 +110,19 @@ def test_stage_opencv_happy_path_calls_pipeline(
         calls.append("collect")
         return [proc_dir / "a.tiff", proc_dir / "b.tiff"]
 
-    def fake_build(paths: list[Path]) -> dict[str, Any]:
-        assert len(paths) == 2
-        calls.append("build_df")
-        return {"rows": len(paths)}
-
     def fake_run(
         df: dict[str, Any], 
         output_dir: Path,
         *, 
         debug: bool = False
     ) -> None:
-        assert df == {"rows": 2}
+        assert len(df) == 2
         assert output_dir == det_dir
         assert debug is True
         calls.append("run")
 
     monkeypatch.setattr(wf, "cv_preprocess", fake_cv_preprocess)
     monkeypatch.setattr(wf, "collect_tiff_paths", fake_collect)
-    monkeypatch.setattr(wf, "build_df_from_img_paths", fake_build)
     monkeypatch.setattr(wf, "run_opencv", fake_run)
 
     ds = {
@@ -145,7 +137,7 @@ def test_stage_opencv_happy_path_calls_pipeline(
 
     wf.stage_opencv(ds, paths)
 
-    assert calls == ["preprocess", "collect", "build_df", "run"]
+    assert calls == ["preprocess", "collect", "run"]
     assert proc_dir.exists() and det_dir.exists()
 
 

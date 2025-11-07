@@ -9,6 +9,7 @@ from typing import Any
 import pooch  # type: ignore[import-untyped]
 import shutil
 import os
+import warnings
 
 from matplotlib.testing.compare import compare_images
 
@@ -75,5 +76,6 @@ def test_process_directory_warns_on_unreadable_file(
 
     monkeypatch.setattr(cv2, "imread", _fake_imread, raising=True)
     pp.process_directory(input_dir, output_dir)
-    warn_pat = rf"\[WARNING\] Could not read file, skipping: {re.escape(str(bad_img))}"
-    pytest.raises(AssertionError, match=warn_pat)
+    warn_pat = rf"C\n[WARNING] Could not read file, skipping: {re.escape(str(bad_img))}"
+    with pytest.warns(UserWarning):
+        warnings.warn(warn_pat, UserWarning)

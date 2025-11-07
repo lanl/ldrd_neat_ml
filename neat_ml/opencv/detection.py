@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, Tuple, Sequence
+from typing import Sequence
 
 import cv2
 import matplotlib.pyplot as plt
@@ -9,13 +9,9 @@ import skimage.color
 from joblib import Memory
 from tqdm.auto import tqdm
 
-import warnings
 
 __all__: Sequence[str] = [
     "collect_tiff_paths", 
-    "_detect_single_image",
-    "build_df_from_img_paths", 
-    "_save_debug_overlay",
     "run_opencv"
 ]
 
@@ -33,35 +29,15 @@ def collect_tiff_paths(
     Returns
     -------
     list[str]
-        List of absolute POSIX-style file paths for each .tiff file found.
+        List of absolute file paths for each .tiff file found.
     """
     root_path = Path(root).expanduser().resolve()
     return [str(Path(p).resolve()) for p in root_path.glob("**/*.tiff")]
 
 
-def build_df_from_img_paths(
-    img_paths: list[str]
-) -> pd.DataFrame:
-    """
-    Convert a list of image file paths into a DataFrame.
-
-    Parameters
-    ----------
-    img_paths : list[str]
-        List of absolute file paths to images.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with a single column 'image_filepath' containing the paths.
-    """
-    if not img_paths:
-        raise ValueError("No image paths provided to build DataFrame.")
-    return pd.DataFrame({"image_filepath": img_paths})
-
 def _detect_single_image(
     img_path: str
-) -> Tuple[int, float, list[Dict[str, Any]]]:
+) -> tuple[int, float, pd.DataFrame]:
     """
     Detect bubbles in a single image using OpenCV's SimpleBlobDetector.
 
@@ -72,13 +48,13 @@ def _detect_single_image(
 
     Returns
     -------
-    Tuple[int, float, List[Dict[str, Any]]]
+    tuple[int, float, pd.DataFrame]
         num_blobs : int
             Number of blobs detected in the image.
         median_radius : float
             Median radius of detected blobs (NaN if none).
-        bubble_data : list[Dict[str, Any]]
-            List of dictionaries, one per detected blob, each containing:
+        bubble_data : pd.DataFrame
+            DataFrame with one row per detected blob, each containing:
             - 'bubble_number' (int)
             - 'center' (tuple[float, float])
             - 'radius' (float)
@@ -107,55 +83,41 @@ def _detect_single_image(
     detector = cv2.SimpleBlobDetector_create(params) # type: ignore[attr-defined]
     keypoints = detector.detect(image)
 
-    bubble_data: list[Dict[str, Any]] = []
-    radii: list[float] = []
-
-    if keypoints:
-        for idx, kp in enumerate(keypoints):
-            cx, cy = kp.pt
-            r = kp.size / 2.0
-            bbox = (cx - r, cy - r, cx + r, cy + r)
-            bubble_data.append(
-                {
-                    "bubble_number": idx + 1,
-                    "center": (cx, cy),
-                    "radius": r,
-                    "area": np.pi * r**2,
-                    "bbox": bbox,
-                }
-            )
-            radii.append(r)
-    else:
-        nan_bbox = (np.nan, np.nan, np.nan, np.nan)
-        bubble_data.append(
-            {
-                "bubble_number": np.nan,
-                "center": np.nan,
-                "radius": np.nan,
-                "area": np.nan,
-                "bbox": nan_bbox,
-            }
-        )
-        radii.append(np.nan)
+    bubble_data = pd.DataFrame(index=range(len(keypoints)),
+        columns=["bubble_number", "center", "radius", "area", "bbox"]).fillna(np.nan)
+    bubble_data[['center', 'bbox']] = bubble_data[['center', 'bbox']].astype('object')
+    for idx, kp in enumerate(keypoints):
+        cx, cy = kp.pt
+        r = kp.size / 2.0
+        bbox = (cx - r, cy - r, cx + r, cy + r)
+        bubble_data_row = {
+            "bubble_number": idx + 1,
+            "center": (cx, cy),
+            "radius": r,
+            "area": np.pi * r**2,
+            "bbox": bbox,
+        }
+        bubble_data.loc[idx] = pd.Series(bubble_data_row)
 
     num_blobs = len(keypoints)
-    median_radius = float(np.nanmedian(radii))
+    median_radius = float(np.nanmedian(bubble_data["radius"]))
     return num_blobs, median_radius, bubble_data
 
 def _save_debug_overlay(
     img_path: str,
-    bubble_data: list[Dict[str, Any]],
+    bubble_data: pd.DataFrame,
     out_dir: Path,
 ) -> None:
     """
-    Create and save a side-by-side original/overlay PNG.
+    Create and save a side-by-side figure containing the original
+    image next to the image overlayed with opencv segmentation mask
 
     Parameters
     ----------
     img_path : str
         File path to the original image.
-    bubble_data : list[Dict[str, Any]]
-        List of bubble metadata as returned by _detect_single_image.
+    bubble_data : pd.DataFrame
+        DataFrame of bubble metadata as returned by _detect_single_image.
     out_dir : Path
         Directory where the debug PNG will be saved.
 
@@ -166,14 +128,14 @@ def _save_debug_overlay(
     image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
     if image_gray is None:
-        warnings.warn(f"Could not read image for debug overlay: {img_path}")
-        return
+        raise FileNotFoundError(f"Could not read image for debug overlay: {img_path}")
+    
     image_rgb = skimage.color.gray2rgb(image_gray)
 
     overlay = image_gray.copy()
     overlay = cv2.cvtColor(overlay, cv2.COLOR_GRAY2RGB)
 
-    for bubble in bubble_data:
+    for index, bubble in bubble_data.iterrows():
         bbox = bubble["bbox"]
         x_min, y_min, x_max, y_max = map(int, bbox)
         cv2.rectangle(overlay, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Iterable, Tuple
 import cv2
 import numpy as np
+import warnings
 
 __all__ = [
     "process_image",
@@ -131,5 +132,5 @@ def process_directory(
             )
             cv2.imwrite(str(out_path), processed)
         else:
-            print(f"\n[WARNING] Could not read file, skipping: {in_path}")
+            warnings.warn(UserWarning(f"\n[WARNING] Could not read file, skipping: {in_path}"))
     print(f"\n[INFO] Completed: (output: {output_dir.resolve()})")

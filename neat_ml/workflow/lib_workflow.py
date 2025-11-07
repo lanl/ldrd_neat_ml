@@ -1,10 +1,10 @@
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
+import pandas as pd
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
-from neat_ml.opencv.detection import (build_df_from_img_paths,
-                                      collect_tiff_paths, run_opencv)
+from neat_ml.opencv.detection import collect_tiff_paths, run_opencv
 
 __all__ = ["get_path_structure", "stage_opencv", "stage_detect"]
 
@@ -88,7 +88,7 @@ def stage_opencv(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None
 
     log.info("Detecting (OpenCV) for %s -> %s", ds_id, det_dir)
     img_paths = collect_tiff_paths(proc_dir)
-    df_imgs = build_df_from_img_paths(img_paths)
+    df_imgs = pd.DataFrame({"image_filepath": img_paths})
     run_opencv(df_imgs, det_dir, debug=debug)
 
 def stage_detect(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None:
