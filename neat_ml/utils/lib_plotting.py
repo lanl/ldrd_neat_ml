@@ -190,7 +190,7 @@ def plot_two_scatter(
     plt.close(fig)
     print(f"Plot saved successfully to {output_path}")
 
-def mathematical_model(
+def binodal_model(
     file_path: Path,
     json_path: Path,
     x_col: str,
@@ -263,6 +263,8 @@ def mathematical_model(
         point_cmap=["#FFFFCC", "dodgerblue"],
     )
     
+    # plot the binodal curve describing the behavior of aqueous two-phase systems
+    # as described in Silverio, et. al., equation (1), [dx.doi.org/10.1021/je2012549]
     raw_x = np.linspace(xrange[0], xrange[1], 500, dtype=float)
     frac_x = raw_x / 100.0
     model_y = A * np.exp(B * np.sqrt(frac_x) - C * frac_x**3) * 100.0
@@ -488,29 +490,30 @@ def make_binodal_comparison_figures(
     titrate: dict[str, Path] = {}
     tecan: dict[str, Path] = {}
 
-    for p in csv_dir.glob("*_Titrate.csv"):
-        titrate[p.stem[:-8]] = p       # strip '_Titrate'
-    for p in csv_dir.glob("*_TECAN.csv"):
-        tecan[p.stem[:-6]] = p         # strip '_TECAN'
+    file_suffix = ["1st", "2nd"]
+    for suff in file_suffix:
+        for p in csv_dir.glob("*_Titrate.csv"):
+            titrate[p.stem.replace("_Titrate", "")] = p  # strip '_Titrate'
+        for p in csv_dir.glob(f"*_TECAN_{suff}.csv"):
+            tecan[p.stem.replace(f"_TECAN_{suff}", "")] = p  # strip '_TECAN'
+        for ds_id in sorted(titrate):
+            csv_tit = titrate[ds_id]
+            csv_tec = tecan[ds_id]
 
-    for ds_id in sorted(titrate):
-        csv_tit = titrate[ds_id]
-        csv_tec = tecan[ds_id]
+            df_tit = pd.read_csv(csv_tit)
+            df_tec = pd.read_csv(csv_tec)
+            x_col, y_col = df_tit.columns[:2]
+            x_rng, y_rng = figure_utils._axis_ranges(df_tit, df_tec, x_col, y_col, pad=2)
 
-        df_tit = pd.read_csv(csv_tit)
-        df_tec = pd.read_csv(csv_tec)
-        x_col, y_col = df_tit.columns[:2]
-        x_rng, y_rng = figure_utils._axis_ranges(df_tit, df_tec, x_col, y_col, pad=2)
+            png_path = out_dir / f"Figure_6_{ds_id}_Binodal_Comparison_{suff}.png"
 
-        png_path = out_dir / f"Figure_6_{ds_id}_Binodal_Comparison.png"
-
-        plot_two_scatter(
-            csv1_path=csv_tit,
-            csv2_path=csv_tec,
-            output_path=png_path,
-            xlim=x_rng,
-            ylim=y_rng,
-        )
+            plot_two_scatter(
+                csv1_path=csv_tit,
+                csv2_path=csv_tec,
+                output_path=png_path,
+                xlim=x_rng,
+                ylim=y_rng,
+            )
 
 def make_phase_diagram_figures(
     csv_dir: Path, 
@@ -593,7 +596,7 @@ def plot_figures(
     The routine is a thin orchestrator: it delegates the heavy
     lifting to the specialised helper functions defined in
     this module (make_titration_figures, make_binodal_comparison_figures,
-    make_phase_diagram_figures, and mathematical_model).
+    make_phase_diagram_figures, and binodal_model).
 
     Parameters
     ----------
@@ -607,9 +610,9 @@ def plot_figures(
         Destination directory for all generated artifacts (PNGs and any
         intermediate CSV exports).
     mat_model_csv : pathlib.Path
-        Single CSV sheet that feeds the mathematical model comparison plot
+        Single CSV sheet that feeds the binodal model comparison plot
     mat_model_png : pathlib.Path
-        Output filename for the mathematical model phase diagram
+        Output filename for the binodal model phase diagram
     json_path : pathlib.Path, default JSON_PATH
         JSON file containing the calibrated model parameters
         MODEL_A, MODEL_B, and MODEL_C.
@@ -632,7 +635,7 @@ def plot_figures(
     make_binodal_comparison_figures(binodal_csv_dir, out_dir)
     make_phase_diagram_figures(csv_phase_dir, out_dir, phase_cols)
 
-    mathematical_model(
+    binodal_model(
         file_path=mat_model_csv,
         json_path=json_path,
         x_col="Sodium Citrate (wt%)",

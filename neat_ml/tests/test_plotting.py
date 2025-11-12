@@ -114,7 +114,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
             dict(x_col="X", y_col="Y", phase_col="Phase", xrange=[0, 20], yrange=[0, 20]),
         ),
         (
-            pmf.mathematical_model,
+            pmf.binodal_model,
             "mathematical_model.png",
             dict(x_col="X", y_col="Y", phase_col="Phase", xrange=[0, 20], yrange=[0, 20]),
         ),
@@ -132,7 +132,7 @@ def test_visual_regression_on_helpers(
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
 
-    if writer.__name__ == "mathematical_model":
+    if writer.__name__ == "binodal_model":
         json_file_path = tmp_path / "test_params.json"
         test_params = {
           "MODEL_A": 0.955,
@@ -272,7 +272,7 @@ def _build_binodal_dir(dir_: Path, df: pd.DataFrame) -> Path:
     tit = df[["X", "Y"]].iloc[:5]
     tec = df[["X", "Y"]].iloc[5:10]
     tit.to_csv(dir_ / "Synthetic_Titrate.csv", index=False)
-    tec.to_csv(dir_ / "Synthetic_TECAN.csv", index=False)
+    tec.to_csv(dir_ / "Synthetic_TECAN_1st.csv", index=False)
     return dir_
 
 

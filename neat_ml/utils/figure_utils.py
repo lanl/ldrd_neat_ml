@@ -201,7 +201,7 @@ def _set_axis_style(ax, xrange: list[int] | None, yrange: list[int] | None):
     """
     ax.set_xlim(xrange)
     ax.set_ylim(yrange)
-    ax.set_aspect("equal", adjustable="box")
+    ax.set_aspect("auto")
 
     for spine in ax.spines.values():
         spine.set_linewidth(2)

@@ -80,7 +80,7 @@ def test_gmmwrapper_predict_matches_gmm():
 def test_set_axis_style_equal_aspect():
     fig, ax = plt.subplots()
     figure_utils._set_axis_style(ax, [0, 10], [0, 5])
-    assert ax.get_aspect() == 1.0
+    assert ax.get_aspect() == 'auto'
     plt.close(fig)
 
 @pytest.mark.parametrize(
