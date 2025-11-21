@@ -1,4 +1,4 @@
-# LDRD_NEAT_ML
+# LDRD_NEAT_ML (LANL copyright assertion ID: O# (O4909))
 
 ## Running the Main ML workflow
 
@@ -9,3 +9,10 @@ that should speed things up (i.e., `pickle` and `joblib`
 caching).
 
 Sample incantation: `python main.py --random_seed 42`
+
+## Generating figures for manuscript
+
+Execute the following command to generate the figures
+used in the manuscript. 
+
+`python -m neat_ml.plot_manuscript_figures`
