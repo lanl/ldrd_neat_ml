@@ -23,7 +23,9 @@ def synthetic_df() -> pd.DataFrame:
     x = rng.uniform(0.0, 20.0, 30)
     y = rng.uniform(0.0, 20.0, 30)
     phase = (x + y > 20.0).astype(int)
-    return pd.DataFrame({"X": x, "Y": y, "Phase": phase})
+    return pd.DataFrame({"Sodium Citrate (wt%)": x,
+                         "PEO 8 kg/mol (wt%)": y,
+                         "Phase": phase})
 
 @pytest.fixture(scope="session")
 def baseline_dir() -> Generator[Any, Any, Any]:
@@ -42,8 +44,8 @@ def test_plot_gmm_decision_regions_visual_and_logic(
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
     gmm, labels, boundary = figure_utils.plot_gmm_decision_regions(
         df=synthetic_df,
-        x_col="X",
-        y_col="Y",
+        x_col=synthetic_df.columns[0],
+        y_col=synthetic_df.columns[1],
         phase_col="Phase",
         ax=ax,
         xrange=[0, 20],
@@ -81,8 +83,8 @@ def test_plot_gmm_composition_phase_visual_and_logic(
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
     figure_utils.plot_gmm_composition_phase(
         df=synthetic_df,
-        x_col="X",
-        y_col="Y",
+        x_col=synthetic_df.columns[0],
+        y_col=synthetic_df.columns[1],
         phase_col="Phase",
         ax=ax,
         point_cmap=["#FFFFCC", "dodgerblue"],
@@ -106,17 +108,26 @@ def test_plot_gmm_composition_phase_visual_and_logic(
         (
             pmf.titration_diagram,
             "titration_diagram.png",
-            dict(x_col="X", y_col="Y", phase_col="Phase", xrange=[0, 20], yrange=[0, 20]),
+            dict(x_col="Sodium Citrate (wt%)",
+                 y_col="PEO 8 kg/mol (wt%)",
+                 phase_col="Phase",
+                 xrange=[0, 20], yrange=[0, 20]),
         ),
         (
             pmf.phase_diagram_exp,
             "phase_diagram_exp.png",
-            dict(x_col="X", y_col="Y", phase_col="Phase", xrange=[0, 20], yrange=[0, 20]),
+            dict(x_col="Sodium Citrate (wt%)",
+                 y_col="PEO 8 kg/mol (wt%)",
+                 phase_col="Phase",
+                 xrange=[0, 20], yrange=[0, 20]),
         ),
         (
             pmf.binodal_model,
             "mathematical_model.png",
-            dict(x_col="X", y_col="Y", phase_col="Phase", xrange=[0, 20], yrange=[0, 20]),
+            dict(x_col="Sodium Citrate (wt%)",
+                 y_col="PEO 8 kg/mol (wt%)",
+                 phase_col="Phase",
+                 xrange=[0, 20], yrange=[0, 20]),
         ),
     ],
 )
@@ -143,7 +154,7 @@ def test_visual_regression_on_helpers(
             json.dump(test_params, f)
         extra_kwargs["json_path"] = str(json_file_path)
 
-    out_png = tmp_path / fname
+    out_png = tmp_path/ "out" / fname
     writer(file_path=csv, output_path=out_png, **extra_kwargs)
 
     assert out_png.is_file()
@@ -166,7 +177,7 @@ def test_plot_two_scatter_visual_regression(
     csv2 = tmp_path / "scatter_B.csv"
     pd.DataFrame({"X": [1, 2, 3], "Y": [1, 2, 3]}).to_csv(csv2, index=False)
 
-    out_png = tmp_path / "plot_two_scatter.png"
+    out_png = tmp_path/ "out" / "plot_two_scatter.png"
     pmf.plot_two_scatter(
         csv1_path=csv1,
         csv2_path=csv2,
@@ -219,15 +230,20 @@ json_file, out_dict, err_msg, err_type):
 @pytest.mark.parametrize("out_path, out_file, err_msg",
     [
         (
-            "emtpy",
+            "empty",
             None, 
-            "No CSV files found in directory"
+            "No CSV files found in directory",
         ),
         (
             "bad_csv",
             pd.DataFrame({"A": [1], "B": [2], "C": [3]}),
             "CSV",
         ),
+        (
+            "missing_phase_cols",
+            pd.DataFrame({"A": [1], "B": [2], "C": [3], "D": [4], "E": [5]}),
+            "Dataframe missing phase columns. Skipping.",
+        )
     ],
 )
 def test_make_phase_diagram_errors(tmp_path: Path,
@@ -241,26 +257,37 @@ out_path, out_file, err_msg):
     """
     save_dir = tmp_path / out_path
     save_dir.mkdir()
-    phase_cols=('Phase_Separation_1st', 'Phase_Separation_2nd')
+    phase_cols = ('Phase_Separation_1st', 'Phase_Separation_2nd')
 
-    if out_path == "bad_csv":
+    if out_path in ["bad_csv", "missing_phase_cols"]:
         bad_dir = save_dir / "demo.csv"
         out_file.to_csv(bad_dir, index=False)
-    
-    with pytest.raises(ValueError, match=err_msg):
-        pmf.make_phase_diagram_figures(
-            save_dir, 
-            tmp_path / "out", 
-            phase_cols
-        )
-
+        
+    if out_path in ["bad_csv", "empty"]:
+        with pytest.raises(ValueError, match=err_msg):
+            pmf.make_phase_diagram_figures(
+                save_dir, 
+                tmp_path / "out", 
+                phase_cols
+            )
+    elif out_path == "missing_phase_cols":
+        with pytest.warns(UserWarning) as warnings_list:
+            pmf.make_phase_diagram_figures(
+                save_dir, 
+                tmp_path / "out", 
+                phase_cols
+            )
+        wrn_msg = warnings_list[0]
+        assert err_msg in str(wrn_msg.message)    
+        assert wrn_msg.category is UserWarning     
 
 def _build_titration_dir(dir_: Path, df: pd.DataFrame) -> Path:
     """
     Directory with one titration CSV (X,Y,Phase).
     """
     dir_.mkdir()
-    df[["X", "Y", "Phase"]].to_csv(dir_ / "Synthetic.csv", index=False)
+    df[["Sodium Citrate (wt%)", "PEO 8 kg/mol (wt%)", "Phase"]].to_csv(
+        dir_ / "Synthetic.csv", index=False)
     return dir_
 
 
@@ -269,8 +296,8 @@ def _build_binodal_dir(dir_: Path, df: pd.DataFrame) -> Path:
     Directory with paired *_Titrate.csv / *_TECAN.csv files.
     """
     dir_.mkdir()
-    tit = df[["X", "Y"]].iloc[:5]
-    tec = df[["X", "Y"]].iloc[5:10]
+    tit = df[["Sodium Citrate (wt%)", "PEO 8 kg/mol (wt%)"]].iloc[:5]
+    tec = df[["Sodium Citrate (wt%)", "PEO 8 kg/mol (wt%)"]].iloc[5:10]
     tit.to_csv(dir_ / "Synthetic_Titrate.csv", index=False)
     tec.to_csv(dir_ / "Synthetic_TECAN_1st.csv", index=False)
     return dir_
@@ -286,8 +313,8 @@ def _build_phase_dir(dir_: Path, df: pd.DataFrame) -> Path:
             "Junk1": 0,
             "Junk2": 0,
             "Junk3": 0,
-            "X": df["X"],
-            "Y": df["Y"],
+            "Sodium Citrate (wt%)": df["Sodium Citrate (wt%)"],
+            "PEO 8 kg/mol (wt%)": df["PEO 8 kg/mol (wt%)"],
             "Phase_Separation_1st": df["Phase"],
             "Phase_Separation_2nd": df["Phase"],
         }
@@ -299,8 +326,8 @@ def _build_phase_dir(dir_: Path, df: pd.DataFrame) -> Path:
 def _build_model_csv(path: Path, df: pd.DataFrame) -> Path:
     out = pd.DataFrame(
         {
-            "Sodium Citrate (wt%)": df["X"],
-            "PEO 8 kg/mol (wt%)": df["Y"],
+            "Sodium Citrate (wt%)": df["Sodium Citrate (wt%)"],
+            "PEO 8 kg/mol (wt%)": df["PEO 8 kg/mol (wt%)"],
             "Phase_Separation_2nd": df["Phase"],
         }
     )

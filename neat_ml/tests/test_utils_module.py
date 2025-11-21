@@ -1,6 +1,6 @@
 from pathlib import Path
 from importlib import resources
-from typing import Callable, Generator, Any
+from typing import Callable, Generator, Any, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,7 +19,9 @@ def synthetic_df() -> pd.DataFrame:
     x = rng.uniform(0.0, 20.0, 30)
     y = rng.uniform(0.0, 20.0, 30)
     phase = (x + y > 20.0).astype(int)
-    return pd.DataFrame({"X": x, "Y": y, "Phase": phase})
+    return pd.DataFrame({"Sodium Citrate (wt%)": x,
+                         "PEO 8 kg/mol (wt%)": y,
+                         "Phase": phase})
 
 @pytest.fixture(scope="session")
 def baseline_dir() -> Generator[Any, Any, Any]:
@@ -29,20 +31,6 @@ def baseline_dir() -> Generator[Any, Any, Any]:
     ref = resources.files("neat_ml.tests") / "baseline"
     with resources.as_file(ref) as path:
         yield path
-
-def test_axis_ranges():
-    df_a = pd.DataFrame({"x": [1, 3], "y": [2, 5]})
-    df_b = pd.DataFrame({"x": [0, 7], "y": [1, 4]})
-    xr, yr = figure_utils._axis_ranges(df_a, df_b, "x", "y", pad=1)
-
-    actual_xr = np.array(xr)
-    desired_xr = np.array([0, 8])
-    npt.assert_array_equal(actual_xr,desired_xr)
-
-    actual_yr = np.array(yr)
-    desired_yr = np.array([0, 6])
-    npt.assert_array_equal(actual_yr,desired_yr)
-
 
 def test_standardise_labels_mapping():
     raw = np.array([9, 9, 1])
@@ -55,13 +43,29 @@ def test_standardise_labels_mapping():
     desired_std = np.array([0, 0, 1])
     npt.assert_array_equal(actual_std, desired_std)
 
-
-def test_extract_boundary_from_contour():
-    z = np.array([[0, 1],
-                  [1, 0]])
+@pytest.mark.parametrize("z, exp_out",
+    [
+        (
+            np.array([[0, 1],
+                      [1, 0]]),
+            np.array([[1., 0.5],
+                      [0.5, 0.0]]),
+        ),
+        (
+            np.array([[0, 0],
+                      [0, 0]]),
+            None,
+        ),
+    ]
+)
+def test_extract_boundary_from_contour(z, exp_out):
     xs = ys = np.arange(2)
     boundary = figure_utils.extract_boundary_from_contour(z, xs, ys, level=0.5)
-    assert boundary is not None and boundary.shape[1] == 2
+    
+    if exp_out is None:
+        assert boundary is exp_out
+    else:
+        npt.assert_array_equal(boundary, exp_out)
 
 
 def test_gmmwrapper_predict_matches_gmm():
@@ -84,10 +88,28 @@ def test_set_axis_style_equal_aspect():
     plt.close(fig)
 
 @pytest.mark.parametrize(
-    "plotter, fname",
+    "plotter, fname, region_colors",
     [
-        (figure_utils.plot_gmm_decision_regions, "gmm_decision_regions.png"),
-        (figure_utils.plot_gmm_composition_phase, "gmm_composition_phase.png"),
+        (
+            figure_utils.plot_gmm_decision_regions,
+            "gmm_decision_regions.png",
+            ["aquamarine", "lightsteelblue"],
+        ),
+        (
+            figure_utils.plot_gmm_decision_regions,
+            "gmm_decision_regions.png",
+            None,
+        ),
+        (
+            figure_utils.plot_gmm_composition_phase,
+            "gmm_composition_phase.png",
+            ["#FFFFCC", "dodgerblue"],
+        ),
+        (
+            figure_utils.plot_gmm_composition_phase,
+            "gmm_composition_phase.png",
+            None,
+        ),
     ],
 )
 def test_plotters_visual_and_logic(
@@ -96,14 +118,15 @@ def test_plotters_visual_and_logic(
     baseline_dir: Path,
     plotter: Callable,
     fname: str,
+    region_colors: Optional[list[str]],
 ):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
 
     if plotter is figure_utils.plot_gmm_decision_regions:
         gmm, labels, boundary = plotter(
             df=synthetic_df,
-            x_col="X",
-            y_col="Y",
+            x_col=synthetic_df.columns[0],
+            y_col=synthetic_df.columns[1],
             phase_col="Phase",
             ax=ax,
             xrange=[0, 20],
@@ -114,7 +137,7 @@ def test_plotters_visual_and_logic(
             resolution=200,
             decision_alpha=1,
             plot_regions=True,
-            region_colors=["aquamarine", "lightsteelblue"],
+            region_colors=region_colors,
         )
         assert labels.shape == (len(synthetic_df),)
         assert boundary is None or boundary.shape[1] == 2
@@ -123,11 +146,11 @@ def test_plotters_visual_and_logic(
     else: 
         plotter(
             df=synthetic_df,
-            x_col="X",
-            y_col="Y",
+            x_col=synthetic_df.columns[0],
+            y_col=synthetic_df.columns[1],
             phase_col="Phase",
             ax=ax,
-            point_cmap=["#FFFFCC", "dodgerblue"],
+            point_cmap=region_colors,
         )
         scat = [c for c in ax.collections if np.asarray(c.get_offsets()).size > 0]
         assert len(scat) == 2
@@ -141,3 +164,17 @@ def test_plotters_visual_and_logic(
     # https://github.com/lanl/ldrd_neat_ml/pull/1#issuecomment-3463967764
     result = compare_images(str(baseline_dir / fname), str(out_png), tol=2e-2)
     assert result is None
+
+
+@pytest.mark.parametrize("column_name, out_column_name",
+    [
+        ("Dextran 9 - 11 kg/mol (wt%)", "Dextran 10 kg/mol (wt%)"),
+        ("Dextran 450 - 650 kg/mol (wt%)", "Dextran 500 kg/mol (wt%)"),
+        ("Sodium citrate (wt%)", "Sodium Citrate (wt%)"),
+        ("PEO 8 kg/mol (wt%)", "PEG 8 kg/mol (wt%)"),
+    ]
+)
+def test_rename_df_columns(column_name, out_column_name):
+    df_in = pd.DataFrame(columns=[column_name])
+    df_out, x_col = figure_utils.rename_df_columns(df_in, column_name)
+    assert df_out.columns == x_col == out_column_name
