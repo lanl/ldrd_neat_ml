@@ -337,7 +337,10 @@ def plot_gmm_composition_phase(
         label="Single Phase (Experiment)",
     )
 
-def rename_df_columns(df: pd.DataFrame, in_col: str):
+def rename_df_columns(
+    df: pd.DataFrame,
+    in_col: str,
+) -> tuple[pd.DataFrame, str]:
     """
     rename dataframe columns from "raw" `.csv` files
     for plotting manuscript figures
