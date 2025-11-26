@@ -30,7 +30,7 @@ def synthetic_df() -> pd.DataFrame:
 @pytest.fixture(scope="session")
 def baseline_dir() -> Generator[Any, Any, Any]:
     """
-    Directory that stores the reference (golden) images.
+    Directory that stores the reference (expected) images.
     """
     ref = resources.files("neat_ml.tests") / "baseline"
     with resources.as_file(ref) as path:
@@ -56,7 +56,7 @@ def test_plot_gmm_decision_regions_visual_and_logic(
         resolution=200,
         decision_alpha=1,
         plot_regions=True,
-        region_colors=["aquamarine", "lightsteelblue"],
+        region_colors=["lightsteelblue", "aquamarine"],
     )
     assert labels.shape == (len(synthetic_df),)
     assert boundary is None or boundary.shape[1] == 2
@@ -87,7 +87,7 @@ def test_plot_gmm_composition_phase_visual_and_logic(
         y_col=synthetic_df.columns[1],
         phase_col="Phase",
         ax=ax,
-        point_cmap=["#FFFFCC", "dodgerblue"],
+        point_cmap=["#FF8C00", "dodgerblue"],
     )
     scatters = [c for c in ax.collections if np.asarray(c.get_offsets()).size > 0]
     assert len(scatters) == 2
@@ -154,13 +154,9 @@ def test_visual_regression_on_helpers(
             json.dump(test_params, f)
         extra_kwargs["json_path"] = str(json_file_path)
 
-    out_png = tmp_path/ "out" / fname
+    out_png = tmp_path / "out" / fname
     writer(file_path=csv, output_path=out_png, **extra_kwargs)
-
-    assert out_png.is_file()
-    arr = plt.imread(out_png)
-    assert np.ptp(arr[..., :3]) > 0.0
-    
+ 
     result = compare_images(
         str(baseline_dir / fname), 
         str(out_png), 
@@ -177,7 +173,7 @@ def test_plot_two_scatter_visual_regression(
     csv2 = tmp_path / "scatter_B.csv"
     pd.DataFrame({"X": [1, 2, 3], "Y": [1, 2, 3]}).to_csv(csv2, index=False)
 
-    out_png = tmp_path/ "out" / "plot_two_scatter.png"
+    out_png = tmp_path / "out" / "plot_two_scatter.png"
     pmf.plot_two_scatter(
         csv1_path=csv1,
         csv2_path=csv2,
@@ -192,20 +188,20 @@ def test_plot_two_scatter_visual_regression(
     assert result is None
 
 @pytest.mark.parametrize("json_file, out_dict, err_msg, err_type",
-[
-    (
-	"bad_params.json",
-	{"MODEL_A": 0.1, "MODEL_B": 0.0},
-	"is missing required keys: {\'MODEL_C\'}",
-	KeyError,
-    ),
-    (
-	"bad_value_type.json",
-	{"MODEL_A": 10.5, "MODEL_B": "not-a-number", "MODEL_C": 20.0},
-	"Parameter 'MODEL_B' must be a number, but got str.",
-        TypeError,
-    ),
-]
+    [
+        (
+            "bad_params.json",
+            {"MODEL_A": 0.1, "MODEL_B": 0.0},
+            "is missing required keys: {\'MODEL_C\'}",
+            KeyError,
+        ),
+        (
+            "bad_value_type.json",
+            {"MODEL_A": 10.5, "MODEL_B": "not-a-number", "MODEL_C": 20.0},
+            "Parameter 'MODEL_B' must be a number, but got str.",
+            TypeError,
+        ),
+    ]
 )
 def test_load_json_errors(tmp_path: Path,
 json_file, out_dict, err_msg, err_type):
@@ -254,6 +250,10 @@ out_path, out_file, err_msg):
     AND     
 
     A CSV with only 3 columns triggers the ValueError in the try/except block.
+    
+    AND
+
+    A CSV that does not contain the necessary ``Phase`` columns for plotting
     """
     save_dir = tmp_path / out_path
     save_dir.mkdir()
@@ -271,19 +271,17 @@ out_path, out_file, err_msg):
                 phase_cols
             )
     elif out_path == "missing_phase_cols":
-        with pytest.warns(UserWarning) as warnings_list:
+        with pytest.warns(UserWarning, match=err_msg):
             pmf.make_phase_diagram_figures(
                 save_dir, 
                 tmp_path / "out", 
                 phase_cols
             )
-        wrn_msg = warnings_list[0]
-        assert err_msg in str(wrn_msg.message)    
-        assert wrn_msg.category is UserWarning     
 
 def _build_titration_dir(dir_: Path, df: pd.DataFrame) -> Path:
     """
-    Directory with one titration CSV (X,Y,Phase).
+    Directory with one titration CSV having columns:
+    ("Sodium Citrate (wt%)", "PEO 8 kg/mol (wt%)", Phase).
     """
     dir_.mkdir()
     df[["Sodium Citrate (wt%)", "PEO 8 kg/mol (wt%)", "Phase"]].to_csv(
@@ -371,12 +369,11 @@ def test_wrappers_and_pipeline(
     )
 
     pngs = sorted(out_dir.glob("*.png"))
-    assert pngs, "The main pipeline produced no PNGs"
-
+    assert len(pngs) == 5
+    
     for png in pngs:
         result = compare_images(
             str(baseline_dir / png.name), 
             str(png), 
             tol=2e-2)
         assert result is None
-

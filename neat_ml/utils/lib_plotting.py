@@ -14,6 +14,8 @@ import math
 import logging
 from matplotlib import rcParams
 
+# try setting plot font to ``Arial``, if installed, 
+# otherwise default to standard matplotlib font
 rcParams['font.sans-serif'] = ["Arial"]
 rcParams['font.family'] = "sans-serif"
 
@@ -32,10 +34,15 @@ def load_parameters_from_json(path: Path) -> dict[str, float]:
     system constituents in different poly (ethylene 
     glycol)-salt phase diagrams." Journal of Chemical & 
     Engineering Data 57.4 (2012): 1203-1208.
+    
+    Parameters:
+    -----------
+    path : Path
+        path from which to load parameters
 
     Returns
     -------
-    dict[str, float]
+    params : dict[str, float]
         A dictionary containing the validated model parameters.
     """
     REQUIRED_KEYS = {"MODEL_A", "MODEL_B", "MODEL_C"}
@@ -101,7 +108,7 @@ def titration_diagram(
         },
         {
             "val": 1,
-            "color": "#FFFFCC",
+            "color": "#FF8C00",
             "marker": "^",
             "label": "Two Phase",
             "ms": 20,
@@ -228,7 +235,7 @@ def binodal_model(
     output_path: Path,
     xrange: list[int],
     yrange: list[int],
-):
+) -> None:
     """
     Generate and save a phase diagram plot from composition data.
 
@@ -280,7 +287,7 @@ def binodal_model(
         resolution=200,
         decision_alpha=1,
         plot_regions=True,
-        region_colors=["aquamarine", "lightsteelblue"],
+        region_colors=["lightsteelblue", "aquamarine"],
     )
 
     figure_utils.plot_gmm_composition_phase(
@@ -289,7 +296,7 @@ def binodal_model(
         y_col,
         phase_col,
         ax=ax,
-        point_cmap=["#FFFFCC", "dodgerblue"],
+        point_cmap=["#FF8C00", "dodgerblue"],
     )
     _, x_col = figure_utils.rename_df_columns(df, x_col) 
     # plot the binodal curve describing the behavior of aqueous two-phase systems
@@ -307,18 +314,18 @@ def binodal_model(
     )
 
     handles = [
-        Patch(facecolor="aquamarine", edgecolor="black",
-              label="Two-Phase (Experiment)"),
         Patch(facecolor="lightsteelblue", edgecolor="black",
+              label="Two-Phase (Experiment)"),
+        Patch(facecolor="aquamarine", edgecolor="black",
               label="Single-Phase (Experiment)"),
         Line2D([0], [0], marker="^", color="w",
-               markerfacecolor="#FFFFCC", markeredgecolor="black",
+               markerfacecolor="#FF8C00", markeredgecolor="black",
                markersize=20, label="Two-Phase (Experiment)"),
         Line2D([0], [0], marker="s", color="w",
                markerfacecolor="dodgerblue", markeredgecolor="black",
                markersize=20, label="Single-Phase (Experiment)"),
         Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
-        Line2D([0], [0], color="black", lw=2.5, label="Model fit"),
+        Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio, et. al.)"),
     ]
 
     ax.legend(
@@ -326,7 +333,7 @@ def binodal_model(
         bbox_to_anchor=(0.5, -0.2),
         loc="upper center", 
         framealpha=0.8, 
-        fontsize=24,
+        fontsize=32,
         ncol=3,
     )
 
@@ -397,7 +404,7 @@ def phase_diagram_exp(
         resolution=200,
         decision_alpha=1,
         plot_regions=True,
-        region_colors=["aquamarine", "lightsteelblue"],
+        region_colors=["lightsteelblue", "aquamarine"],
     )
     figure_utils.plot_gmm_composition_phase(
         df,
@@ -405,16 +412,16 @@ def phase_diagram_exp(
         y_col,
         phase_col,
         ax,
-        point_cmap=["#FFFFCC", "dodgerblue"],
+        point_cmap=["#FF8C00", "dodgerblue"],
     )
     
     handles = [
-        Patch(facecolor="aquamarine", edgecolor="black",
-              label="Two-Phase (Experiment)"),
         Patch(facecolor="lightsteelblue", edgecolor="black",
+              label="Two-Phase (Experiment)"),
+        Patch(facecolor="aquamarine", edgecolor="black",
               label="Single-Phase (Experiment)"),
         Line2D([0], [0], marker="^", color="w",
-               markerfacecolor="#FFFFCC", markeredgecolor="black",
+               markerfacecolor="#FF8C00", markeredgecolor="black",
                markersize=20, label="Two-Phase (Experiment)"),
         Line2D([0], [0], marker="s", color="w",
                markerfacecolor="dodgerblue", markeredgecolor="black",
@@ -426,7 +433,7 @@ def phase_diagram_exp(
         bbox_to_anchor=(0.5, -0.2),
         loc="upper center", 
         framealpha=0.8, 
-        fontsize=24,
+        fontsize=32,
         ncol=3,
     )
 

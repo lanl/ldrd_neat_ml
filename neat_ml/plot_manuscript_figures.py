@@ -11,8 +11,8 @@ if __name__ == "__main__":
     """
     with as_file(files("neat_ml.data")) as base_path:
         PHASE_COLS = ("Phase_Separation_1st", "Phase_Separation_2nd")
-        FIG_3_CSV = base_path / "figure_data" / "Titration_Figures"
-        FIG_6_CSV = base_path / "figure_data" / "Binodal_Comparison_Figures"
+        TITRATION_CSV = base_path / "figure_data" / "Titration_Figures"
+        BINODAL_CSV = base_path / "figure_data" / "Binodal_Comparison_Figures"
         CSV_PHASE_DIR = base_path / "Binary_Mixture_Phase_Information"
         OUT_DIR = Path("neat_ml/data/Figures_for_Manuscript")
         OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,8 +23,8 @@ if __name__ == "__main__":
         )
 
     lib_plotting.plot_figures(
-        titration_csv_dir=FIG_3_CSV,
-        binodal_csv_dir=FIG_6_CSV,
+        titration_csv_dir=TITRATION_CSV,
+        binodal_csv_dir=BINODAL_CSV,
         csv_phase_dir=CSV_PHASE_DIR,
         out_dir=OUT_DIR,
         mat_model_csv=MAT_MODEL_CSV,

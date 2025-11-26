@@ -26,7 +26,7 @@ def synthetic_df() -> pd.DataFrame:
 @pytest.fixture(scope="session")
 def baseline_dir() -> Generator[Any, Any, Any]:
     """
-    Directory that stores the reference (golden) images.
+    Directory that stores the reference (expected) images.
     """
     ref = resources.files("neat_ml.tests") / "baseline"
     with resources.as_file(ref) as path:
@@ -93,7 +93,7 @@ def test_set_axis_style_equal_aspect():
         (
             figure_utils.plot_gmm_decision_regions,
             "gmm_decision_regions.png",
-            ["aquamarine", "lightsteelblue"],
+            ["lightsteelblue", "aquamarine"],
         ),
         (
             figure_utils.plot_gmm_decision_regions,
@@ -103,7 +103,7 @@ def test_set_axis_style_equal_aspect():
         (
             figure_utils.plot_gmm_composition_phase,
             "gmm_composition_phase.png",
-            ["#FFFFCC", "dodgerblue"],
+            ["#FF8C00", "dodgerblue"],
         ),
         (
             figure_utils.plot_gmm_composition_phase,

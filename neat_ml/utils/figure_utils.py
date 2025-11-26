@@ -7,6 +7,7 @@ from skimage import measure
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import pairwise_distances_argmin_min
 from matplotlib.ticker import MaxNLocator
+from matplotlib.axes import Axes
 
 # TODO: fix inconsistencies in docstring formatting (issue #12)
 class GMMWrapper:
@@ -63,7 +64,7 @@ class GMMWrapper:
 
         Returns:
         -------
-            np.ndarray: The predicted GMM cluster labels 
+            labels (np.ndarray): The predicted GMM cluster labels 
                         for the input points.
         """
         closest_indices, _ = pairwise_distances_argmin_min(
@@ -96,9 +97,9 @@ def extract_boundary_from_contour(
 
     Returns:
     --------
-        Optional[np.ndarray]: An array of (x, y) coordinates
-                              for the boundary, or None if 
-                              no contour is found.
+        boundary_points (Optional[np.ndarray]): 
+            An array of (x, y) coordinates for the boundary,
+            or None if no contour is found.
     """
     contours = measure.find_contours(z, level)
     if not contours:
@@ -122,8 +123,8 @@ def _standardise_labels(
     *Standard convention used downstream*
 
     ---------  ----------------------------
-    label=0    Two Phase   (triangle-up, turquoise)
-    label=1    Single Phase (square, light-steel-blue)
+    label=0    Two Phase   (orange triangle, light-steel-blue background)
+    label=1    Single Phase (blue square, turquoise background)
     ---------  ----------------------------
 
     Parameters
@@ -186,7 +187,7 @@ def plot_gmm_decision_regions(
     x_col: str,
     y_col: str,
     phase_col: str,
-    ax,
+    ax: Axes,
     xrange: Sequence[float],
     yrange: Sequence[float],
     n_components: int,
@@ -211,6 +212,7 @@ def plot_gmm_decision_regions(
                      component.
         phase_col (str): Name of the column containing 
                          phase information.
+        ax (Axes): matplotlib axis for plotting
         xrange (list[int]): X-axis composition range.
         yrange (list[int]): Y-axis composition range. 
         n_components (int): Number of GMM components.
@@ -224,7 +226,8 @@ def plot_gmm_decision_regions(
 
     Returns:
     --------
-        tuple: Containing the GMM model, cluster labels, 
+        gmm, std_labels, boundary_points (tuple): 
+               Output tuple containing the GMM model, cluster labels, 
                boundary points, and a list of Plotly contour
                traces.
     """
@@ -245,7 +248,7 @@ def plot_gmm_decision_regions(
     z = np.vectorize(label_map.get)(z_raw).reshape(xx.shape)
 
     if region_colors is None:
-        region_colors = ["aquamarine", "lightsteelblue"]
+        region_colors = ["lightsteelblue", "aquamarine"]
 
     if plot_regions:
         ax.contourf(
@@ -282,7 +285,7 @@ def plot_gmm_composition_phase(
     x_col: str,
     y_col: str,
     phase_col: str,
-    ax,
+    ax: Axes,
     point_cmap: Optional[list[str]] = None,
 ) -> None:
     """
@@ -301,14 +304,7 @@ def plot_gmm_composition_phase(
                      component.
         phase_col (str): Name of the column containing 
                          phase information.
-        xrange (list[int]): X-axis composition range.
-        yrange (list[int]): Y-axis composition range. 
-        n_components (int): Number of GMM components.
-        random_state (int): Seed for reproducibility.
-        region_colors (Optional[list[str]]): Colors for the 
-                                             phase regions.
-        resolution (int): Grid resolution for any contour plots.
-        plot_regions (bool): Whether to plot the filled regions.
+        ax (Axes): matplotlib axis for plotting
         point_cmap (Optional[list[str]]): Colormap for the
                                           scatter points.
 
@@ -324,12 +320,12 @@ def plot_gmm_composition_phase(
     x_comp = df[[x_col, y_col]].to_numpy()
     std_labels, _ = _standardise_labels(raw_labels, x_comp)
     if point_cmap is None:
-        point_cmap = ["#FFFFCC", "dodgerblue"]
+        point_cmap = ["#FF8C00", "dodgerblue"]
     mask_two = std_labels == 0
     ax.scatter(
         x_comp[mask_two, 0], x_comp[mask_two, 1],
         marker="^", c=point_cmap[0],
-        s=120, edgecolors="black", linewidths=1,
+        s=250, edgecolors="black", linewidths=1,
         label="Two Phase (Experiment)",                       
     )
 
@@ -337,8 +333,8 @@ def plot_gmm_composition_phase(
     ax.scatter(
         x_comp[mask_single, 0], x_comp[mask_single, 1],
         marker="s", c=point_cmap[1],
-        s=120, edgecolors="black", linewidths=1,
-        label="Single Phase (Single Phase)",
+        s=250, edgecolors="black", linewidths=1,
+        label="Single Phase (Experiment)",
     )
 
 def rename_df_columns(df: pd.DataFrame, in_col: str):
