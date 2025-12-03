@@ -88,11 +88,6 @@ def titration_diagram(
         [min, max] range for the y-axis.
     output_path : Path
         Path to save the output PNG image.
-    
-    Returns
-    -------
-    None
-        Plots and writes image to output_path.
     """
     df = pd.read_csv(file_path)
 
@@ -171,18 +166,13 @@ def plot_two_scatter(
         [min, max] range for x-axis.
     ylim : Optional[list[float]]
         [min, max] range for y-axis.
-
-    Returns
-    -------
-    None
-        Plots and writes image to output_path.
     """
 
     df1 = pd.read_csv(csv1_path)
     df2 = pd.read_csv(csv2_path)
 
-    x_col = list(df2.columns)[0]
-    y_col = list(df2.columns)[1]
+    x_col = df2.columns[0]
+    y_col = df2.columns[1]
 
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
@@ -226,15 +216,16 @@ def plot_two_scatter(
     plt.close(fig)
     logger.info(f"Plot saved successfully to {output_path}")
 
-def binodal_model(
+def plot_phase_diagram(
     file_path: Path,
-    json_path: Path,
     x_col: str,
     y_col: str,
     phase_col: str,
     output_path: Path,
     xrange: list[int],
     yrange: list[int],
+    json_path: Optional[Path]=None,
+    binodal_curve: bool=False,
 ) -> None:
     """
     Generate and save a phase diagram plot from composition data.
@@ -243,7 +234,7 @@ def binodal_model(
     ----------
     file_path : Path
         Path to the CSV input file.
-    json_path: Path
+    json_path: Optional[Path]
         Path to the .json file for model parameters
     x_col : str
         Column name for x-axis values.
@@ -257,19 +248,12 @@ def binodal_model(
         Two-element list [min, max] for y-axis range.
     output_path : Path
         Path to save the output plot image.
-
-    Returns
-    -------
-    None
-        Plots and writes the image to output_path.
+    binodal_curve: bool
+        Option to plot the binodal curve of fit for
+        describing two-phase aqueous sytems as taken
+        from Silverio, et al.
     """
     df = pd.read_csv(file_path)
-
-    model_vars = load_parameters_from_json(json_path)
-
-    model_a: float = model_vars["MODEL_A"]
-    model_b: float = model_vars["MODEL_B"]
-    model_c: float = model_vars["MODEL_C"]
 
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
@@ -287,7 +271,7 @@ def binodal_model(
         resolution=200,
         decision_alpha=1,
         plot_regions=True,
-        region_colors=["lightsteelblue", "aquamarine"],
+        region_colors=("lightsteelblue", "aquamarine"),
     )
 
     figure_utils.plot_gmm_composition_phase(
@@ -296,22 +280,9 @@ def binodal_model(
         y_col,
         phase_col,
         ax=ax,
-        point_cmap=["#FF8C00", "dodgerblue"],
+        point_cmap=("#FF8C00", "dodgerblue"),
     )
-    _, x_col = figure_utils.rename_df_columns(df, x_col) 
-    # plot the binodal curve describing the behavior of aqueous two-phase systems
-    # as described in Silverio, et. al., equation (1), [dx.doi.org/10.1021/je2012549]
-    raw_x = np.linspace(xrange[0], xrange[1], 500, dtype=float)
-    frac_x = raw_x / 100.0
-    model_y = model_a * np.exp(model_b * np.sqrt(frac_x) - model_c * frac_x**3) * 100.0
-
-    ax.plot(
-        raw_x,
-        model_y,
-        color="black",
-        linewidth=2.5,
-        label=f"Model fit: a={model_a:.3f}, b={model_b:.2f}, c={model_c:.0f}",
-    )
+    _, x_col = figure_utils.rename_df_columns(df, x_col)
 
     handles = [
         Patch(facecolor="lightsteelblue", edgecolor="black",
@@ -325,8 +296,33 @@ def binodal_model(
                markerfacecolor="dodgerblue", markeredgecolor="black",
                markersize=20, label="Single-Phase (Experiment)"),
         Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
-        Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio, et. al.)"),
     ]
+    
+    # plot the binodal curve describing the behavior of aqueous two-phase systems
+    # as described in Silverio, et al., equation (1), [dx.doi.org/10.1021/je2012549] 
+    if binodal_curve:
+        # require ``json_path`` when ``binodal_curve == True``
+        if json_path is None:
+            raise ValueError("Must provide ``json_path`` when plotting ``binodal_curve``.")
+        model_vars = load_parameters_from_json(json_path)
+
+        model_a: float = model_vars["MODEL_A"]
+        model_b: float = model_vars["MODEL_B"]
+        model_c: float = model_vars["MODEL_C"]
+        raw_x = np.linspace(xrange[0], xrange[1], 500, dtype=float)
+        frac_x = raw_x / 100.0
+        model_y = model_a * np.exp(model_b * np.sqrt(frac_x) - model_c * frac_x**3) * 100.0
+
+        ax.plot(
+            raw_x,
+            model_y,
+            color="black",
+            linewidth=2.5,
+            label=f"Model fit: a={model_a:.3f}, b={model_b:.2f}, c={model_c:.0f}",
+        )
+        handles.append(
+            Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio, et al.)")
+        )
 
     ax.legend(
         handles=handles, 
@@ -356,105 +352,6 @@ def binodal_model(
     plt.close(fig)
     logger.info(f"Plot saved successfully to {output_path}")
 
-def phase_diagram_exp(
-    file_path: Path,
-    x_col: str,
-    y_col: str,
-    phase_col: str,
-    xrange: list[int],
-    yrange: list[int],
-    output_path: Path,
-) -> None:
-    """
-    Load data, generate the phase diagram, and write the image.
-
-    Parameters
-    ----------
-    file_path : Path
-        Path to a CSV file with the required columns.
-    x_col, y_col : str
-        Column names for the two composition axes.
-    phase_col : str
-        Column holding the phase indicator used to fit the GMM.
-    xrange, yrange : list[int]
-        Two-element lists specifying axis extents.
-    output_path : Path
-        Destination filename (PNG, SVG, etc.) for the saved figure.
-
-    Returns
-    -------
-        None
-    """
-
-    df = pd.read_csv(file_path)
-    fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
-    df, x_col = figure_utils.rename_df_columns(df, x_col)
-
-    figure_utils.plot_gmm_decision_regions(
-        df,
-        x_col,
-        y_col,
-        phase_col,
-        ax,
-        xrange=xrange,
-        yrange=yrange,
-        n_components=2,
-        random_state=42,
-        boundary_color="red",
-        resolution=200,
-        decision_alpha=1,
-        plot_regions=True,
-        region_colors=["lightsteelblue", "aquamarine"],
-    )
-    figure_utils.plot_gmm_composition_phase(
-        df,
-        x_col,
-        y_col,
-        phase_col,
-        ax,
-        point_cmap=["#FF8C00", "dodgerblue"],
-    )
-    
-    handles = [
-        Patch(facecolor="lightsteelblue", edgecolor="black",
-              label="Two-Phase (Experiment)"),
-        Patch(facecolor="aquamarine", edgecolor="black",
-              label="Single-Phase (Experiment)"),
-        Line2D([0], [0], marker="^", color="w",
-               markerfacecolor="#FF8C00", markeredgecolor="black",
-               markersize=20, label="Two-Phase (Experiment)"),
-        Line2D([0], [0], marker="s", color="w",
-               markerfacecolor="dodgerblue", markeredgecolor="black",
-               markersize=20, label="Single-Phase (Experiment)"),
-        Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
-    ]
-    ax.legend(
-        handles=handles,
-        bbox_to_anchor=(0.5, -0.2),
-        loc="upper center", 
-        framealpha=0.8, 
-        fontsize=32,
-        ncol=3,
-    )
-
-    # Mihee requests changing ``PEO`` to ``PEG`` in axis labels
-    # perform programmatically here vs. modifying all input files
-    _, y_col = figure_utils.rename_df_columns(df, y_col) 
-    ax.set_xlabel(x_col, fontsize=46, fontweight="bold", labelpad=20)
-    ax.set_ylabel(y_col, fontsize=46, fontweight="bold", labelpad=20)
-    figure_utils._set_axis_style(ax, xrange, yrange)
-
-    dest_dir = os.path.dirname(output_path)
-    if dest_dir and not os.path.exists(dest_dir):
-        os.makedirs(dest_dir, exist_ok=True)
-
-    fig.savefig(
-        output_path, 
-        bbox_inches="tight",
-        pad_inches=1.0
-    )
-    plt.close(fig)
-    logger.info(f"Plot saved to '{output_path}'.")
 
 def make_titration_figures(
     csv_dir: Path,
@@ -477,12 +374,6 @@ def make_titration_figures(
     out_dir : Path
         The path to the directory where the output CSV files and PNG
         images will be saved.
-
-    Returns
-    -------
-    None
-        This function does not return any value; its purpose is to create
-        and save files to the disk.
     """
 
     for csv_path in sorted(csv_dir.glob("*.csv")):
@@ -527,11 +418,6 @@ def make_binodal_comparison_figures(
     out_dir : Path
         The path to the directory where the output CSV files and PNG
         images will be saved.
-
-    Returns
-    -------
-    None
-        This function does not return a value; it saves files to disk.
     """
 
     titrate: dict[str, Path] = {}
@@ -596,11 +482,6 @@ def make_phase_diagram_figures(
         The path to the directory where the output PNG images will be saved.
     phase_cols : tuple[str, str]
         The tuple of phase separation column names used for phase diagram
-
-    Returns
-    -------
-    None
-        This function does not return a value; it saves files to disk.
     """
     csv_files = sorted(p for p in csv_dir.iterdir() if p.suffix.lower() == ".csv")
     if not csv_files:
@@ -628,7 +509,7 @@ def make_phase_diagram_figures(
                 )
                 continue
             png_path = out_dir / f"{ds_id}_Phase_Diagram_{tag}.png"
-            phase_diagram_exp(
+            plot_phase_diagram(
                 file_path=csv_path,
                 x_col=x_title,
                 y_col=y_title,
@@ -682,12 +563,6 @@ def plot_figures(
         X-axis range for the plot
     yrange: list[int]
         Y-axis range for the plot
-
-    Returns
-    -------
-    None
-        The function is executed for its side-effects: it writes a collection
-        of PNG files to out_dir.  No value is returned.
     """
 
 
@@ -695,7 +570,7 @@ def plot_figures(
     make_binodal_comparison_figures(binodal_csv_dir, out_dir)
     make_phase_diagram_figures(csv_phase_dir, out_dir, phase_cols)
 
-    binodal_model(
+    plot_phase_diagram(
         file_path=mat_model_csv,
         json_path=json_path,
         x_col="Sodium citrate (wt%)",
@@ -704,4 +579,5 @@ def plot_figures(
         xrange=xrange,
         yrange=yrange,
         output_path=mat_model_png,
+        binodal_curve=True,
     )

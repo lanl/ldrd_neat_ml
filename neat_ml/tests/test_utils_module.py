@@ -1,6 +1,5 @@
 from pathlib import Path
-from importlib import resources
-from typing import Callable, Generator, Any, Optional
+from typing import Callable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,25 +11,6 @@ from sklearn.mixture import GaussianMixture
 
 from neat_ml.utils import figure_utils
 
-@pytest.fixture(scope="session")
-def synthetic_df() -> pd.DataFrame:
-    """Deterministic (seeded) composition/phase dataframe."""
-    rng = np.random.default_rng(7)
-    x = rng.uniform(0.0, 20.0, 30)
-    y = rng.uniform(0.0, 20.0, 30)
-    phase = (x + y > 20.0).astype(int)
-    return pd.DataFrame({"Sodium Citrate (wt%)": x,
-                         "PEO 8 kg/mol (wt%)": y,
-                         "Phase": phase})
-
-@pytest.fixture(scope="session")
-def baseline_dir() -> Generator[Any, Any, Any]:
-    """
-    Directory that stores the reference (expected) images.
-    """
-    ref = resources.files("neat_ml.tests") / "baseline"
-    with resources.as_file(ref) as path:
-        yield path
 
 def test_standardise_labels_mapping():
     raw = np.array([9, 9, 1])
@@ -65,7 +45,7 @@ def test_extract_boundary_from_contour(z, exp_out):
     if exp_out is None:
         assert boundary is exp_out
     else:
-        npt.assert_array_equal(boundary, exp_out)
+        npt.assert_allclose(boundary, exp_out)
 
 
 def test_gmmwrapper_predict_matches_gmm():
@@ -93,22 +73,12 @@ def test_set_axis_style_equal_aspect():
         (
             figure_utils.plot_gmm_decision_regions,
             "gmm_decision_regions.png",
-            ["lightsteelblue", "aquamarine"],
-        ),
-        (
-            figure_utils.plot_gmm_decision_regions,
-            "gmm_decision_regions.png",
-            None,
+            ("lightsteelblue", "aquamarine"),
         ),
         (
             figure_utils.plot_gmm_composition_phase,
             "gmm_composition_phase.png",
-            ["#FF8C00", "dodgerblue"],
-        ),
-        (
-            figure_utils.plot_gmm_composition_phase,
-            "gmm_composition_phase.png",
-            None,
+            ("#FF8C00", "dodgerblue"),
         ),
     ],
 )
@@ -118,7 +88,7 @@ def test_plotters_visual_and_logic(
     baseline_dir: Path,
     plotter: Callable,
     fname: str,
-    region_colors: Optional[list[str]],
+    region_colors: Optional[tuple[str]],
 ):
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
 

@@ -1,5 +1,15 @@
 # LDRD_NEAT_ML (LANL copyright assertion ID: O# (O4909))
 
+## Installing the project
+
+To install the project, clone the repository and install
+the package, core dependencies, and optional dependencies
+by calling:
+
+```
+python -m pip install -v ".[dev]" 
+```
+
 ## Running the Main ML workflow
 
 Note that the first incantation of the main ML
@@ -12,13 +22,14 @@ Sample incantation: `python main.py --random_seed 42`
 
 ## Generating figures for manuscript
 
-### Downloading Arial Typeface (Linux Users)
+### Downloading Arial Typeface (Debian based Linux Users)
 
 Plots use Arial typeface, which is available on Windows
 and Mac systems by default, but needs to be downloaded
-and installed for Linux/Unix based systems. Plot generation
+and installed for Linux based systems. Plot generation
 will run without the font, but the test-suite will not pass.
-To download this font run the following commands:
+To download this font (for Debian based linux systems)
+run the following commands:
 
 ```
 echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections

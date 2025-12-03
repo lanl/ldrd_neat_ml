@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -142,14 +142,13 @@ def _standardise_labels(
         Dict mapping raw → standard labels; apply to any
         future predictions (`z` grids, etc.).
     """
-    centroids = {
-        lbl: x_comp[cluster_labels == lbl].mean(axis=0)
+    distances = {
+        lbl: np.linalg.norm(x_comp[cluster_labels == lbl].mean(axis=0))
         for lbl in np.unique(cluster_labels)
     }
-    distances = {lbl: np.linalg.norm(c) for lbl, c in centroids.items()}
-
-    near_lbl = min(distances, key=lambda lbl: float(distances[lbl]))
-    far_lbl  = max(distances, key=lambda lbl: float(distances[lbl]))
+    
+    near_lbl = min(distances, key=distances.get)  # type: ignore[arg-type]
+    far_lbl = max(distances, key=distances.get)  # type: ignore[arg-type]
 
     label_map = {far_lbl: 0, near_lbl: 1}
     std_labels = np.vectorize(label_map.get)(cluster_labels)
@@ -188,15 +187,15 @@ def plot_gmm_decision_regions(
     y_col: str,
     phase_col: str,
     ax: Axes,
-    xrange: Sequence[float],
-    yrange: Sequence[float],
+    xrange: list[int],
+    yrange: list[int],
     n_components: int,
     random_state: int,
     boundary_color: str,
     resolution: int,
     decision_alpha: float,
     plot_regions: bool,
-    region_colors: Optional[list[str]],
+    region_colors: tuple[str, str] = ("lightsteelblue", "aquamarine"),
 ) -> tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
     """
     Trains a GMM and creates contour traces for phase 
@@ -217,7 +216,7 @@ def plot_gmm_decision_regions(
         yrange (list[int]): Y-axis composition range. 
         n_components (int): Number of GMM components.
         random_state (int): Seed for reproducibility.
-        region_colors (Optional[list[str]]): Colors for the 
+        region_colors (tuple[str, str]): Colors for the 
                                              phase regions.
         boundary_color (str): Color for the boundary line.
         resolution (int): Grid resolution for the contour plot.
@@ -228,8 +227,7 @@ def plot_gmm_decision_regions(
     --------
         gmm, std_labels, boundary_points (tuple): 
                Output tuple containing the GMM model, cluster labels, 
-               boundary points, and a list of Plotly contour
-               traces.
+               and boundary points
     """
     df_local, x_col = rename_df_columns(df, x_col)
     x_features = df_local[phase_col].to_numpy().reshape(-1, 1)
@@ -239,16 +237,11 @@ def plot_gmm_decision_regions(
     x_comp = df_local[[x_col, y_col]].to_numpy()
     std_labels, label_map = _standardise_labels(raw_labels, x_comp)
     wrapper = GMMWrapper(gmm, x_comp, x_features)
-    x_start, x_stop = map(float, xrange)
-    y_start, y_stop = map(float, yrange)
-    xs = np.linspace(x_start, x_stop, resolution)
-    ys = np.linspace(y_start, y_stop, resolution)
+    xs = np.linspace(*xrange, resolution, dtype=float)  # type: ignore[call-overload]
+    ys = np.linspace(*yrange, resolution, dtype=float)  # type: ignore[call-overload]
     xx, yy = np.meshgrid(xs, ys)
     z_raw = wrapper.predict(np.c_[xx.ravel(), yy.ravel()])
     z = np.vectorize(label_map.get)(z_raw).reshape(xx.shape)
-
-    if region_colors is None:
-        region_colors = ["lightsteelblue", "aquamarine"]
 
     if plot_regions:
         ax.contourf(
@@ -286,13 +279,10 @@ def plot_gmm_composition_phase(
     y_col: str,
     phase_col: str,
     ax: Axes,
-    point_cmap: Optional[list[str]] = None,
+    point_cmap: tuple[str, str] = ("#FF8C00", "dodgerblue"),
 ) -> None:
     """
     Trains a GMM and creates a scatter trace for data points.
-
-    Optionally creates region traces as well, mimicking the 
-    original script's logic.
 
     Parameters:
     -----------
@@ -305,12 +295,8 @@ def plot_gmm_composition_phase(
         phase_col (str): Name of the column containing 
                          phase information.
         ax (Axes): matplotlib axis for plotting
-        point_cmap (Optional[list[str]]): Colormap for the
+        point_cmap (tuple[str, str]): Colormap for the
                                           scatter points.
-
-    Returns:
-    -------
-        None
     """
     x_features = df[phase_col].to_numpy().reshape(-1, 1)
     gmm = GaussianMixture(n_components=2, random_state=42)
@@ -319,8 +305,6 @@ def plot_gmm_composition_phase(
     
     x_comp = df[[x_col, y_col]].to_numpy()
     std_labels, _ = _standardise_labels(raw_labels, x_comp)
-    if point_cmap is None:
-        point_cmap = ["#FF8C00", "dodgerblue"]
     mask_two = std_labels == 0
     ax.scatter(
         x_comp[mask_two, 0], x_comp[mask_two, 1],

@@ -1,133 +1,34 @@
 import json
 from pathlib import Path
-from importlib import resources
-from typing import Callable, Generator, Any
+from typing import Callable
 import matplotlib
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.testing.compare import compare_images
 import os
 
-from neat_ml.utils import lib_plotting as pmf
-from neat_ml.utils import figure_utils
+from neat_ml.utils import lib_plotting as lp
 
 # TODO: enforce style consistency with ``black`` (issue #11)
-@pytest.fixture(scope="session")
-def synthetic_df() -> pd.DataFrame:
-    """Deterministic (seeded) composition/phase dataframe."""
-    rng = np.random.default_rng(7)
-    x = rng.uniform(0.0, 20.0, 30)
-    y = rng.uniform(0.0, 20.0, 30)
-    phase = (x + y > 20.0).astype(int)
-    return pd.DataFrame({"Sodium Citrate (wt%)": x,
-                         "PEO 8 kg/mol (wt%)": y,
-                         "Phase": phase})
-
-@pytest.fixture(scope="session")
-def baseline_dir() -> Generator[Any, Any, Any]:
-    """
-    Directory that stores the reference (expected) images.
-    """
-    ref = resources.files("neat_ml.tests") / "baseline"
-    with resources.as_file(ref) as path:
-        yield path
-
-def test_plot_gmm_decision_regions_visual_and_logic(
-    tmp_path: Path,
-    baseline_dir: Path,
-    synthetic_df: pd.DataFrame,
-):
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
-    gmm, labels, boundary = figure_utils.plot_gmm_decision_regions(
-        df=synthetic_df,
-        x_col=synthetic_df.columns[0],
-        y_col=synthetic_df.columns[1],
-        phase_col="Phase",
-        ax=ax,
-        xrange=[0, 20],
-        yrange=[0, 20],
-        n_components=2,
-        random_state=42,
-        boundary_color="red",
-        resolution=200,
-        decision_alpha=1,
-        plot_regions=True,
-        region_colors=["lightsteelblue", "aquamarine"],
-    )
-    assert labels.shape == (len(synthetic_df),)
-    assert boundary is None or boundary.shape[1] == 2
-    assert hasattr(gmm, "predict")
-
-    out_png = tmp_path / "gmm_decision_regions.png"
-    fig.savefig(out_png, bbox_inches="tight")
-    plt.close(fig)
-    
-    # for ``compare_images`` tests ``tol`` was loosened from 1e-4 to
-    # 2e-2 to accommodate cross-platform testing as discussed at
-    # https://github.com/lanl/ldrd_neat_ml/pull/1#issuecomment-3463967764
-    result = compare_images(
-        str(baseline_dir / "gmm_decision_regions.png"), 
-        str(out_png), 
-        tol=2e-2)
-    assert result is None
-
-def test_plot_gmm_composition_phase_visual_and_logic(
-    tmp_path: Path,
-    baseline_dir: Path,    
-    synthetic_df: pd.DataFrame,
-):
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
-    figure_utils.plot_gmm_composition_phase(
-        df=synthetic_df,
-        x_col=synthetic_df.columns[0],
-        y_col=synthetic_df.columns[1],
-        phase_col="Phase",
-        ax=ax,
-        point_cmap=["#FF8C00", "dodgerblue"],
-    )
-    scatters = [c for c in ax.collections if np.asarray(c.get_offsets()).size > 0]
-    assert len(scatters) == 2
-
-    out_png = tmp_path / "gmm_composition_phase.png"
-    fig.savefig(out_png, bbox_inches="tight")
-    plt.close(fig)
-
-    result = compare_images(
-        str(baseline_dir / "gmm_composition_phase.png"), 
-        str(out_png), 
-        tol=2e-2)
-    assert result is None
-
 @pytest.mark.parametrize(
-    "writer, fname, extra_kwargs",
+    "writer, fname, binodal_curve",
     [
         (
-            pmf.titration_diagram,
+            lp.titration_diagram,
             "titration_diagram.png",
-            dict(x_col="Sodium Citrate (wt%)",
-                 y_col="PEO 8 kg/mol (wt%)",
-                 phase_col="Phase",
-                 xrange=[0, 20], yrange=[0, 20]),
+            False,
         ),
         (
-            pmf.phase_diagram_exp,
+            lp.plot_phase_diagram,
             "phase_diagram_exp.png",
-            dict(x_col="Sodium Citrate (wt%)",
-                 y_col="PEO 8 kg/mol (wt%)",
-                 phase_col="Phase",
-                 xrange=[0, 20], yrange=[0, 20]),
+            False,
         ),
         (
-            pmf.binodal_model,
+            lp.plot_phase_diagram,
             "mathematical_model.png",
-            dict(x_col="Sodium Citrate (wt%)",
-                 y_col="PEO 8 kg/mol (wt%)",
-                 phase_col="Phase",
-                 xrange=[0, 20], yrange=[0, 20]),
+            True,
         ),
     ],
 )
@@ -137,13 +38,17 @@ def test_visual_regression_on_helpers(
     synthetic_df: pd.DataFrame,
     writer: Callable,
     fname: str,
-    extra_kwargs: dict,
+    binodal_curve: bool,
 ):
+    extra_kwargs = dict(x_col="Sodium Citrate (wt%)",
+        y_col="PEO 8 kg/mol (wt%)",
+        phase_col="Phase",
+        xrange=[0, 20], yrange=[0, 20])
     
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
 
-    if writer.__name__ == "binodal_model":
+    if binodal_curve:
         json_file_path = tmp_path / "test_params.json"
         test_params = {
           "MODEL_A": 0.955,
@@ -153,6 +58,7 @@ def test_visual_regression_on_helpers(
         with open(json_file_path, 'w') as f:
             json.dump(test_params, f)
         extra_kwargs["json_path"] = str(json_file_path)
+        extra_kwargs["binodal_curve"] = True  # type: ignore[assignment]
 
     out_png = tmp_path / "out" / fname
     writer(file_path=csv, output_path=out_png, **extra_kwargs)
@@ -174,7 +80,7 @@ def test_plot_two_scatter_visual_regression(
     pd.DataFrame({"X": [1, 2, 3], "Y": [1, 2, 3]}).to_csv(csv2, index=False)
 
     out_png = tmp_path / "out" / "plot_two_scatter.png"
-    pmf.plot_two_scatter(
+    lp.plot_two_scatter(
         csv1_path=csv1,
         csv2_path=csv2,
         output_path=out_png,
@@ -216,25 +122,29 @@ json_file, out_dict, err_msg, err_type):
     is a string, which should trigger a TypeError.
     """
     out_file = tmp_path / json_file
-    json.dump(out_dict, out_file.open("w"))
+    with open(out_file, 'w') as f:
+        json.dump(out_dict, f)
     if json_file == "bad_params.json":
         file_path = os.path.join(tmp_path, json_file)
         err_msg = f"{file_path} {err_msg}"
     with pytest.raises(err_type, match=err_msg):
-        pmf.load_parameters_from_json(out_file)
+        lp.load_parameters_from_json(out_file)
 
-@pytest.mark.parametrize("out_path, out_file, err_msg",
+@pytest.mark.parametrize("out_path, data_frame, err_msg",
     [
+        # Empty directory should raise 'No CSV files found in directory'.
         (
             "empty",
             None, 
             "No CSV files found in directory",
         ),
+        # A CSV with only 3 columns triggers the ValueError in the try/except block.
         (
             "bad_csv",
             pd.DataFrame({"A": [1], "B": [2], "C": [3]}),
             "CSV",
         ),
+        # A CSV that does not contain the necessary ``Phase`` columns for plotting
         (
             "missing_phase_cols",
             pd.DataFrame({"A": [1], "B": [2], "C": [3], "D": [4], "E": [5]}),
@@ -243,17 +153,10 @@ json_file, out_dict, err_msg, err_type):
     ],
 )
 def test_make_phase_diagram_errors(tmp_path: Path,
-out_path, out_file, err_msg):
+out_path, data_frame, err_msg):
     """
-    Empty directory should raise 'No CSV files found in directory'.
-    
-    AND     
-
-    A CSV with only 3 columns triggers the ValueError in the try/except block.
-    
-    AND
-
-    A CSV that does not contain the necessary ``Phase`` columns for plotting
+    test that appropriate errors/warnings are raised in function
+    ``make_phase_diagram_figures``
     """
     save_dir = tmp_path / out_path
     save_dir.mkdir()
@@ -261,18 +164,18 @@ out_path, out_file, err_msg):
 
     if out_path in ["bad_csv", "missing_phase_cols"]:
         bad_dir = save_dir / "demo.csv"
-        out_file.to_csv(bad_dir, index=False)
+        data_frame.to_csv(bad_dir, index=False)
         
     if out_path in ["bad_csv", "empty"]:
         with pytest.raises(ValueError, match=err_msg):
-            pmf.make_phase_diagram_figures(
+            lp.make_phase_diagram_figures(
                 save_dir, 
                 tmp_path / "out", 
                 phase_cols
             )
     elif out_path == "missing_phase_cols":
         with pytest.warns(UserWarning, match=err_msg):
-            pmf.make_phase_diagram_figures(
+            lp.make_phase_diagram_figures(
                 save_dir, 
                 tmp_path / "out", 
                 phase_cols
@@ -350,12 +253,12 @@ def test_wrappers_and_pipeline(
     model_png = work / 'model.png'
 
     params = work / "params.json"
-    json.dump(
-        {"MODEL_A": 0.955, "MODEL_B": -5.73, "MODEL_C": 581},
-        params.open("w"),
-    )
+    with open(params, 'w') as f:
+        json.dump(
+            {"MODEL_A": 0.955, "MODEL_B": -5.73, "MODEL_C": 581}, f
+        )
 
-    pmf.plot_figures(
+    lp.plot_figures(
         titration_csv_dir=tit_dir,
         binodal_csv_dir=bin_dir,
         csv_phase_dir=phase_dir,
@@ -377,3 +280,24 @@ def test_wrappers_and_pipeline(
             str(png), 
             tol=2e-2)
         assert result is None
+
+
+def test_plot_phase_diagram_error(
+    tmp_path: Path,
+    baseline_dir: Path,
+    synthetic_df: pd.DataFrame,
+):
+    csv = tmp_path / "input.csv"
+    synthetic_df.to_csv(csv, index=False)
+    out_png = tmp_path / "out" / "out.png"
+
+    with pytest.raises(ValueError, match="Must provide ``json_path``"): 
+        lp.plot_phase_diagram(
+            file_path=csv,
+            output_path=out_png,
+            x_col="Sodium Citrate (wt%)",
+            y_col="PEO 8 kg/mol (wt%)",
+            phase_col="Phase",
+            xrange=[0, 20], yrange=[0, 20],
+            binodal_curve = True
+        )
