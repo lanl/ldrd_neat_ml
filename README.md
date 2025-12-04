@@ -2,13 +2,19 @@
 
 ## Installing the project
 
+Download the package from the following GitHub repository:  
+
+```bash
+git clone git@github.com:lanl/ldrd_neat_ml.git
+```
+
 To install the project, clone the repository and install
 the package, core dependencies, and optional dependencies
 by calling:
 
 ```
 python -m pip install -v ".[dev]" 
-```
+
 ## writing a `.yaml` input file for OpenCV detection
 
 The workflow takes as input a `.yaml` configuration file with information
@@ -24,7 +30,7 @@ roots:
 
 datasets:
   - id: name_of_save_folder
-    method: subfolder_for_detection_method
+    method: opencv
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
 

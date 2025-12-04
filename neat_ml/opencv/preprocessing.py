@@ -53,8 +53,8 @@ def process_image(
 
     Returns
     -------
-    np.ndarray
-        Image with identical shape and dtype as img.
+    sharpened : np.ndarray
+        Sharpened image with identical shape and dtype as img.
     """
     clahe = cv2.createCLAHE(
         clipLimit=clip_limit, 
@@ -76,9 +76,10 @@ def process_image(
     return sharpened
 
 
-def iter_images(root: Path) -> Iterable[Path]:
+def iter_images(img_dir: Path) -> Iterable[Path]:
     """
-    Recursively yield all files under  root  whose extension is TIFF or tiff.
+    Recursively yield all files under ``img_dir`` with the
+    extensions ``.TIFF`` or ``.tiff``.
 
     Parameters
     ----------
@@ -93,7 +94,7 @@ def iter_images(root: Path) -> Iterable[Path]:
     
     SUPPORTED_EXTS: tuple[str, ...] = (".tiff", ".tif")
 
-    for dirpath, _, files in os.walk(root):
+    for dirpath, _, files in os.walk(img_dir):
         for name in files:
             if name.lower().endswith(SUPPORTED_EXTS):
                 yield Path(dirpath) / name
@@ -115,10 +116,6 @@ def process_directory(
         Folder tree that contains raw .tiff / .tif files.
     output_dir : Path
         Destination folder; will be created if missing.
-
-    Returns
-    -------
-    None
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 

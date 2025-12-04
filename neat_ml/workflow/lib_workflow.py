@@ -26,7 +26,7 @@ def get_path_structure(
 
     Returns
     -------
-    dict[str, Path]
+    paths : dict[str, Path]
         Paths keyed by step usage (proc_dir, det_dir).
     """
     paths: dict[str, Path] = {}
@@ -51,13 +51,8 @@ def stage_opencv(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None
     ----------
     dataset_config : dict[str, Any]
         Dataset config. Expects 'method' == 'OpenCV' and 'detection' block.
-    paths : ict[str, Path]
+    paths : dict[str, Path]
         Paths from get_path_structure() (proc_dir, det_dir if built).
-
-    Returns
-    -------
-    None
-        Writes preprocessed images and detection outputs if configured.
     """
     detection_cfg: dict[str, Any] = dict(dataset_config.get("detection", {}))
     img_dir_str: Optional[str] = detection_cfg.get("img_dir")
@@ -101,11 +96,6 @@ def stage_detect(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None
         Dataset config with 'method'.
     paths : dict[str, Path]
         Detection paths (proc_dir, det_dir).
-
-    Returns
-    -------
-    None
-        Runs the appropriate detection stage or logs a warning.
     """
     method: str = str(dataset_config.get("method", "")).lower()
     if method == "opencv":
