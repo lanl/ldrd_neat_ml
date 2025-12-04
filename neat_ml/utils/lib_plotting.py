@@ -134,7 +134,7 @@ def titration_diagram(
     
     dest_dir = os.path.dirname(output_path)
     if dest_dir and not os.path.exists(dest_dir):
-        os.makedirs(dest_dir, exist_ok=True)
+        os.makedirs(dest_dir)
 
     fig.savefig(
         output_path, 
@@ -206,7 +206,7 @@ def plot_two_scatter(
 
     dest_dir = os.path.dirname(output_path)
     if dest_dir and not os.path.exists(dest_dir):
-        os.makedirs(dest_dir, exist_ok=True)
+        os.makedirs(dest_dir)
     
     fig.savefig(
         output_path, 
@@ -251,7 +251,7 @@ def plot_phase_diagram(
     binodal_curve: bool
         Option to plot the binodal curve of fit for
         describing two-phase aqueous sytems as taken
-        from Silverio, et al.
+        from Silverio et al.
     """
     df = pd.read_csv(file_path)
 
@@ -299,7 +299,7 @@ def plot_phase_diagram(
     ]
     
     # plot the binodal curve describing the behavior of aqueous two-phase systems
-    # as described in Silverio, et al., equation (1), [dx.doi.org/10.1021/je2012549] 
+    # as described in Silverio et al., equation (1), [dx.doi.org/10.1021/je2012549] 
     if binodal_curve:
         # require ``json_path`` when ``binodal_curve == True``
         if json_path is None:
@@ -321,7 +321,7 @@ def plot_phase_diagram(
             label=f"Model fit: a={model_a:.3f}, b={model_b:.2f}, c={model_c:.0f}",
         )
         handles.append(
-            Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio, et al.)")
+            Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio et al.)")
         )
 
     ax.legend(
@@ -342,7 +342,7 @@ def plot_phase_diagram(
 
     dest_dir = os.path.dirname(output_path)
     if dest_dir and not os.path.exists(dest_dir):
-        os.makedirs(dest_dir, exist_ok=True)
+        os.makedirs(dest_dir)
 
     fig.savefig(
         output_path, 
