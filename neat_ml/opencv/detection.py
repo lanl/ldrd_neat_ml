@@ -16,14 +16,14 @@ __all__: Sequence[str] = [
 ]
 
 def collect_tiff_paths(
-    root: str | Path
+    img_dir: str | Path
 ) -> list[str]:
     """
     Recursively locate every TIFF image beneath a given directory.
 
     Parameters
     ----------
-    root : str or Path
+    img_dir : str or Path
         Root directory to search for files.
 
     Returns
@@ -31,8 +31,8 @@ def collect_tiff_paths(
     list[str]
         List of absolute file paths for each .tiff file found.
     """
-    root_path = Path(root).expanduser().resolve()
-    return [str(Path(p).resolve()) for p in root_path.glob("**/*.tiff")]
+    img_path = Path(img_dir).expanduser().resolve()
+    return [str(Path(p).resolve()) for p in img_path.glob("**/*.tiff")]
 
 
 def _detect_single_image(
@@ -65,6 +65,9 @@ def _detect_single_image(
     if image is None:
         raise FileNotFoundError(f"Unable to read image file: {img_path}")
 
+    # the parameters for ``SimpleBlobDetector`` were determined manually
+    # by hand-tuning via visual inspection NOT by using a standardized
+    # hyperparameter optimization method (see: issue #13)
     params = cv2.SimpleBlobDetector_Params() # type: ignore[attr-defined]
     params.minThreshold = 10
     params.maxThreshold = 200
@@ -110,7 +113,7 @@ def _save_debug_overlay(
 ) -> None:
     """
     Create and save a side-by-side figure containing the original
-    image next to the image overlayed with opencv segmentation mask
+    image next to the image overlaid with opencv segmentation mask
 
     Parameters
     ----------
@@ -120,10 +123,6 @@ def _save_debug_overlay(
         DataFrame of bubble metadata as returned by _detect_single_image.
     out_dir : Path
         Directory where the debug PNG will be saved.
-
-    Returns
-    -------
-    None
     """
     image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
@@ -158,8 +157,8 @@ def run_opencv(
     debug: bool = False,
 ) -> pd.DataFrame:
     """
-    Detect bubbles in every image referenced by df and 
-    persist per image data.
+    Detect bubbles in every image referenced by df using the
+    OpenCV ``SimpleBlobDetector``.
 
     Parameters
     ----------
@@ -172,7 +171,7 @@ def run_opencv(
 
     Returns
     -------
-    pandas.DataFrame
+    df_out : pandas.DataFrame
         Copy of df enriched with: 
             num_blobs_opencv number of blobs detected
             median_radii_opencv median droplet radius

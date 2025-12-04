@@ -19,11 +19,6 @@ def main(config_path: str, steps_str: str) -> None:
         Path to config YAML.
     steps_str : str
         Comma separated list of steps. (Currently, only detect)
-
-    Returns
-    -------
-    None
-        Executes chosen stages in order.
     """
     steps = [s.strip() for s in steps_str.split(",") if s.strip()]
 

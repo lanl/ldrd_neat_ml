@@ -1,5 +1,4 @@
 from pathlib import Path
-from importlib import resources
 import re
 
 import matplotlib
@@ -10,8 +9,6 @@ matplotlib.use("Agg")
 import pytest
 from matplotlib.testing.compare import compare_images
 import pooch  # type: ignore[import-untyped]
-import shutil
-import os
 
 from neat_ml.opencv.detection import (
     collect_tiff_paths,
@@ -21,45 +18,21 @@ from neat_ml.opencv.detection import (
 )
 
 def test_visual_regression_debug_overlay(
-    tmp_path: Path
+    tmp_path: Path,
+    reference_images: list,
 ):
-    pkg_root = resources.files(__package__)
-    data_res = pkg_root/"data"/"images_Processed"
-    baseline_res = pkg_root/"baseline"
-    
-    # download testing image files with pooch
-    # image files stored at the following url:
-    # https://zenodo.org/records/17545141
-    image_files = pooch.create(
-        base_url = "doi:10.5281/zenodo.17545141",
-        path = pooch.os_cache("test_images")
-    )
-    image_files.load_registry_from_doi()
-    images_Processed_raw = image_files.fetch(
-         fname="images_Processed_raw.tiff",
-    )
-    detection_raw = image_files.fetch(
-	 fname="raw_detection.png",
-    )
-    shutil.copy(str(images_Processed_raw), str(data_res))
-    shutil.copy(str(detection_raw), str(baseline_res))
-     
-    with (
-        resources.as_file(data_res) as data_dir,
-        resources.as_file(baseline_res) as baseline_dir,
-    ):
-        img_path = collect_tiff_paths(data_dir)[0]
-        stem = Path(img_path).stem
+    img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
+    stem = Path(img_path).stem
 
-        actual_dir = tmp_path / "overlay"
-        df_in = pd.DataFrame({"image_filepath": [img_path]})
-        run_opencv(df=df_in, output_dir=actual_dir, debug=True)
+    actual_dir = tmp_path / "overlay"
+    df_in = pd.DataFrame({"image_filepath": [img_path]})
+    run_opencv(df=df_in, output_dir=actual_dir, debug=True)
 
-        actual_png  = actual_dir/f"{stem}_debug.png"
-        desired_png = baseline_dir/os.path.basename(detection_raw)
+    actual_png  = actual_dir/f"{stem}_debug.png"
+    desired_png = reference_images[1]
 
-        result = compare_images(str(desired_png), str(actual_png), tol=1e-4)
-        assert result is None
+    result = compare_images(str(desired_png), str(actual_png), tol=1e-4)
+    assert result is None
 
 
 def test_detect_single_image_missing_file(tmp_path: Path) -> None:
@@ -92,31 +65,12 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     assert np.isnan(median_r)
     assert bubble_data.empty
    
-def test_detect_single_image_processed(tmp_path):
+def test_detect_single_image_processed(tmp_path, reference_images):
     """
     regression test for detection of keypoints in processed image
     """ 
-    pkg_root = resources.files(__package__)
-    data_res = pkg_root/"data"/"images_Processed"
-    
-    # download testing image files with pooch
-    # image files stored at the following url:
-    # https://zenodo.org/records/17545141
-    image_files = pooch.create(
-        base_url = "doi:10.5281/zenodo.17545141",
-        path = pooch.os_cache("test_images")
-    )
-    image_files.load_registry_from_doi()
-    images_Processed_raw = image_files.fetch(
-         fname="images_Processed_raw.tiff",
-    )
-    shutil.copy(str(images_Processed_raw), str(data_res))
-     
-    with (
-        resources.as_file(data_res) as data_dir,
-    ):
-        img_path = collect_tiff_paths(data_dir)[0]
-        num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
-        assert num_blobs == 1735
-        assert median_r == 3.623063564300537
-        assert bubble_data.shape == (1735, 5)
+    img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
+    num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
+    assert num_blobs == 1735
+    assert median_r == 3.623063564300537
+    assert bubble_data.shape == (1735, 5)
