@@ -79,7 +79,7 @@ def process_image(
 def iter_images(img_dir: Path) -> Iterable[Path]:
     """
     Recursively yield all files under ``img_dir`` with the
-    extensions ``.TIFF`` or ``.tiff``.
+    extensions ``.tif`` or ``.tiff``.
 
     Parameters
     ----------
