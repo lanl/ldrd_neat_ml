@@ -65,7 +65,7 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     assert np.isnan(median_r)
     assert bubble_data.empty
    
-def test_detect_single_image_processed(tmp_path, reference_images):
+def test_detect_single_image_processed(tmp_path: Path, reference_images: list):
     """
     regression test for detection of keypoints in processed image
     """ 

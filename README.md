@@ -8,14 +8,13 @@ Download the package from the following GitHub repository:
 git clone git@github.com:lanl/ldrd_neat_ml.git
 ```
 
-To install the project, clone the repository and install
-the package, core dependencies, and optional dependencies
-by calling:
+Install the project, core dependencies,
+and optional dependencies by calling:
 
 ```
 python -m pip install -v ".[dev]" 
 
-## writing a `.yaml` input file for OpenCV detection
+## Writing a `.yaml` input file for OpenCV detection
 
 The workflow takes as input a `.yaml` configuration file with information
 on where to find the input image data for blob detection; save the
@@ -36,19 +35,19 @@ datasets:
 
     detection:
       img_dir: path/to/image/data
-      debug: True/False for debug
+      debug: True/False for debug (`True` will save side-by-side figure
+             of raw image next to bounding box overlay.)
 ```
 
 ## Running the OpenCV detection
 
-To run the workflow, user must follow the instructions 
-give below. 
+To run the workflow with a given `.yaml` file: 
 
-You can find the relevant information from:  
+`python run_workflow.py --config <YAML file> --steps detect`
+
+For information relevant to running workflow:  
 
 `python run_workflow.py --help`
-
-Sample incantation: `python run_workflow.py --config <YAML file> --steps detect`
 
 ## Running the Main ML workflow
 
