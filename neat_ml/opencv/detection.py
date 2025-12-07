@@ -163,7 +163,7 @@ def run_opencv(
     Parameters
     ----------
     df : pd.DataFrane
-        Must contain a column image_filepath with absolute paths.
+        dataframe containing absolute image filepaths.
     output_dir : str | Path
         Path to save the outputs.
     debug : bool
@@ -186,9 +186,8 @@ def run_opencv(
     cached_detect = memory.cache(_detect_single_image)
 
     df_out = df.copy()
-    num_blobs_arr = np.empty(df_out.shape[0], dtype=np.int64)
-    median_r_arr = np.empty(df_out.shape[0], dtype=np.float64)
-
+    df_out[["num_blobs_opencv", "median_radii_opencv"]] = np.nan
+   
     for idx, row in tqdm(
         df_out.iterrows(),
         total=df_out.shape[0],
@@ -205,9 +204,7 @@ def run_opencv(
         if debug:
             _save_debug_overlay(img_path, bubble_data, out_dir)
 
-        num_blobs_arr[idx] = num_blobs
-        median_r_arr[idx] = median_r
+        df_out["num_blobs_opencv"].loc[idx] = num_blobs  # type: ignore[call-overload]
+        df_out["median_radii_opencv"].loc[idx] = median_r  # type:ignore[call-overload]
 
-    df_out["num_blobs_opencv"] = num_blobs_arr
-    df_out["median_radii_opencv"] = median_r_arr
     return df_out
