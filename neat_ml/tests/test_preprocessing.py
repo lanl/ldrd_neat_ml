@@ -41,12 +41,9 @@ def test_process_directory_warns_on_unreadable_file(
     bad_img = input_dir / "bad.tif"
     bad_img.write_bytes(b"not-a-real-image")
 
-    original_imread = cv2.imread
-
     def _fake_imread(path: Any, flags: int) -> Any:
         if str(Path(path)) == str(bad_img):
             return None
-        return original_imread(path, flags)
 
     monkeypatch.setattr(cv2, "imread", _fake_imread, raising=True)
     pp.process_directory(input_dir, output_dir)

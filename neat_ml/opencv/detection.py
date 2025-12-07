@@ -204,7 +204,7 @@ def run_opencv(
         if debug:
             _save_debug_overlay(img_path, bubble_data, out_dir)
 
-        df_out["num_blobs_opencv"].loc[idx] = num_blobs  # type: ignore[call-overload]
-        df_out["median_radii_opencv"].loc[idx] = median_r  # type:ignore[call-overload]
+        df_out.loc[idx, "num_blobs_opencv"] = num_blobs  # type: ignore[index]
+        df_out.loc[idx, "median_radii_opencv"] = median_r  # type:ignore[index]
 
     return df_out
