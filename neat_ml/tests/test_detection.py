@@ -79,4 +79,4 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     assert np.isnan(first["bubble_number"])
     assert np.isnan(first["radius"])
     assert all(np.isnan(c) for c in first["bbox"])
-    
+ 

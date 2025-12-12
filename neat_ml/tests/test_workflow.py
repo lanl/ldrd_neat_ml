@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, List, Sequence
+from typing import Any, Sequence
 
 import pytest
 
@@ -39,46 +39,93 @@ def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path) -> None
     with pytest.raises(KeyError, match="work"):
         wf.get_path_structure(roots, ds)
 
-def test_stage_opencv_warns_when_paths_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    """
-    stage_opencv: if 'det_dir' (or 'proc_dir') missing -> warning and return.
-    """
-    caplog.set_level(logging.WARNING)
-    ds = {"id": "DS3", "method": "OpenCV", "detection": {"img_dir": str(tmp_path)}}
-    paths = {"proc_dir": tmp_path / "p"}  # det_dir missing
 
-    wf.stage_opencv(ds, paths)
+@pytest.mark.parametrize("ds",
+    [
+        {"id": "DS3", "method": "OpenCV", "detection": {}},
+        {"id": "BS1", "method": "BubbleSAM", "detection": {}},
+    ]
+)
+def test_run_detection_warns_when_paths_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    ds: dict,
+) -> None:
+    """
+    run_detection: if 'det_dir' (or 'proc_dir') missing -> warning and return.
+    """ 
+    caplog.set_level(logging.WARNING) 
+    ds["detection"] = {"img_dir": str(tmp_path)}
+    paths = {"proc_dir": tmp_path / "p"}
+
+    wf.run_detection(ds, paths)
 
     assert "Detection paths not built (step not selected or misconfig). Skipping." in caplog.text
 
 
-def test_stage_opencv_warns_when_img_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    """
-    stage_opencv: if detection.img_dir missing -> warning and return.
-    """
-    caplog.set_level(logging.WARNING)
-    ds = {"id": "DS4", "method": "OpenCV", "detection": {}}
-    paths = {"proc_dir": tmp_path / "p", "det_dir": tmp_path / "d"}
-
-    wf.stage_opencv(ds, paths)
-
-    assert "No 'detection.img_dir' set for dataset 'DS4'. Skipping detection." in caplog.text
-
-
-def test_stage_opencv_skips_if_output_already_exists(
-    caplog: pytest.LogCaptureFixture, 
-    tmp_path: Path, 
-    monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("ds, paths",
+    [
+        (
+            {"id": "DS4", "method": "OpenCV", "detection": {}},
+            {"proc_dir": "p", "det_dir": "d"},
+        ),
+        (    
+            {"id": "BS2", "method": "BubbleSAM", "detection": {}},
+            {"det_dir": "d"},
+        )
+    ]
+)
+def test_run_detection_warns_when_img_dir_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    ds: dict,
+    paths: dict,
 ) -> None:
     """
-    stage_opencv: if *_bubble_data.pkl exists -> skip and DO NOT call pipeline steps.
+    run_detection: if detection.img_dir missing -> warning and return.
+    """
+    paths = {key: tmp_path / value for (key, value) in paths.items()}
+    caplog.set_level(logging.WARNING)
+
+    wf.run_detection(ds, paths)
+
+    assert "No 'detection.img_dir' set for dataset" in caplog.text
+
+
+@pytest.mark.parametrize("ds, paths, suff, method",
+    [
+        (
+            {"id": "DS5", "method": "OpenCV", "detection": {}},
+            {"proc_dir": "proc", "det_dir": "det"},
+            "bubble_data",
+            "opencv",
+        ),
+        (        
+            {"id": "BS3", "method": "BubbleSAM", "detection": {}},
+            {"det_dir": "det"},
+            "masks_filtered",
+            "bubblesam",
+        )
+    ]
+)
+def test_run_detection_skips_if_output_already_exists(
+    caplog: pytest.LogCaptureFixture, 
+    tmp_path: Path, 
+    monkeypatch: pytest.MonkeyPatch,
+    ds: dict,
+    paths: dict,
+    suff: str,
+    method: str,
+) -> None:
+    """
+    run_detection: if *_bubble_data.pkl exists -> skip and DO NOT call pipeline steps.
     """
     caplog.set_level(logging.INFO)
 
     proc_dir = tmp_path / "proc"
     det_dir = tmp_path / "det"
     det_dir.mkdir(parents=True)
-    (det_dir / "anything_bubble_data.pkl").write_text("done")
+    (det_dir / f"anything_{suff}.pkl").write_text("done")
 
     def bad(*_: Any, **__: Any) -> None:  # pragma: no cover
         raise AssertionError("Pipeline function should not be called when outputs exist")
@@ -86,37 +133,53 @@ def test_stage_opencv_skips_if_output_already_exists(
     monkeypatch.setattr(wf, "cv_preprocess", bad)
     monkeypatch.setattr(wf, "collect_tiff_paths", bad)
     monkeypatch.setattr(wf, "build_df_from_img_paths", bad)
-    monkeypatch.setattr(wf, "run_opencv", bad)
+    monkeypatch.setattr(wf, f"run_{method}", bad)
+    
+    ds["detection"] = {"img_dir": str(tmp_path)}
+    paths = {key: tmp_path / value for (key, value) in paths.items()}
+    wf.run_detection(ds, paths)
 
-    ds = {"id": "DS5", "method": "OpenCV", "detection": {"img_dir": str(tmp_path)}}
-    paths = {"proc_dir": proc_dir, "det_dir": det_dir}
-
-    wf.stage_opencv(ds, paths)
-
-    assert "Detection already exists for DS5. Skipping." in caplog.text
+    assert "Detection already exists" in caplog.text
 
 
-def test_stage_opencv_happy_path_calls_pipeline(
+@pytest.mark.parametrize("ds, paths, fn_calls",
+    [
+        (
+            {"id": "BS4", "method": "bubblesam", "detection": {}},
+            {"det_dir": "det"},
+            ["collect", "build_df", "run"]
+        ),
+        (
+            {"id": "DS6", "method": "OpenCV", "detection": {"debug": True}},
+            {"proc_dir": "proc", "det_dir": "det"},
+            ["preprocess", "collect", "build_df", "run"]
+        ),
+    ]
+)
+def test_run_detection_happy_path_calls_pipeline(
     tmp_path: Path, 
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
+    ds: dict,
+    paths: dict,
+    fn_calls: list,
 ) -> None:
     """
-    stage_opencv: happy path creates directories and calls 
-    preprocess -> collect -> build_df -> run_opencv.
+    run_detection: happy path creates directories and calls 
+    (preprocess: with ``opencv``) -> collect -> build_df -> run_opencv.
     """
     proc_dir = tmp_path / "proc"
     det_dir = tmp_path / "det"
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
 
-    calls: List[str] = []
-
+    calls: list[str] = []
+    method = ds["method"].lower()
     def fake_cv_preprocess(src: Path, dst: Path) -> None:
         assert src == img_dir and dst == proc_dir
         calls.append("preprocess")
 
     def fake_collect(p: Path) -> list[Path]:
-        assert p == proc_dir
+        assert p == proc_dir if method == "opencv" else p == img_dir
         calls.append("collect")
         return [proc_dir / "a.tiff", proc_dir / "b.tiff"]
 
@@ -133,50 +196,57 @@ def test_stage_opencv_happy_path_calls_pipeline(
     ) -> None:
         assert df == {"rows": 2}
         assert output_dir == det_dir
-        assert debug is True
+        if method == "opencv":
+            assert debug is True
         calls.append("run")
 
     monkeypatch.setattr(wf, "cv_preprocess", fake_cv_preprocess)
     monkeypatch.setattr(wf, "collect_tiff_paths", fake_collect)
     monkeypatch.setattr(wf, "build_df_from_img_paths", fake_build)
-    monkeypatch.setattr(wf, "run_opencv", fake_run)
+    monkeypatch.setattr(wf, f"run_{method}", fake_run)
+    
+    ds["detection"].update({"img_dir": str(img_dir)})
+    paths = {key: tmp_path / value for (key, value) in paths.items()}
+    wf.run_detection(ds, paths)
 
-    ds = {
-        "id": "DS6", 
-        "method": "OpenCV", 
-        "detection": {
-            "img_dir": str(img_dir), 
-            "debug": True
-        }
-    }
-    paths = {"proc_dir": proc_dir, "det_dir": det_dir}
-
-    wf.stage_opencv(ds, paths)
-
-    assert calls == ["preprocess", "collect", "build_df", "run"]
-    assert proc_dir.exists() and det_dir.exists()
+    assert calls == fn_calls 
+    assert det_dir.exists()
+    if method == "opencv":
+        assert proc_dir.exists()
 
 
-def test_stage_detect_routes_to_opencv(
+@pytest.mark.parametrize("ds, paths",
+    [
+        (
+            {"id": "DS7", "method": "OpenCV"},
+            {"proc_dir": "p", "det_dir": "d"}
+        ),
+        (
+            {"id": "BS2", "method": "BubbleSAM"},
+            {"det_dir": "d"},
+        )
+    ]
+)
+def test_stage_detect_routes_to_detection_method(
     monkeypatch: pytest.MonkeyPatch, 
-    tmp_path: Path
+    tmp_path: Path,
+    ds: dict,
+    paths: dict,
 ) -> None:
     """
-    stage_detect: method 'OpenCV' routes to stage_opencv.
+    stage_detect: method 'OpenCV' routes to appropriate detection method.
     """
     seen: list[str] = []
 
-    def fake_stage_opencv(ds: dict[str, Any], p: dict[str, Path]) -> None:
+    def fake_run_detection(ds: dict[str, Any], p: dict[str, Path]) -> None:
         seen.append(ds["id"])
 
-    monkeypatch.setattr(wf, "stage_opencv", fake_stage_opencv)
+    monkeypatch.setattr(wf, "run_detection", fake_run_detection)
 
-    ds = {"id": "DS7", "method": "OpenCV"}
-    paths = {"proc_dir": tmp_path / "p", "det_dir": tmp_path / "d"}
-
+    paths = {key: tmp_path / value for (key, value) in paths.items()}
     wf.stage_detect(ds, paths)
-
-    assert seen == ["DS7"]
+    id_exp = ds.get("id")
+    assert seen == [id_exp]
 
 
 def test_stage_detect_unknown_method_warns(
@@ -195,102 +265,9 @@ def test_stage_detect_unknown_method_warns(
     assert "Unknown detection method 'somethingelse' for dataset 'DS8'." in caplog.text
 
 
-def test_stage_bubblesam_warns_when_det_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    """
-    stage_bubblesam: requires det_dir; if missing -> warning and return.
-    """
-    caplog.set_level(logging.WARNING)
-    ds = {"id": "BS1", "method": "BubbleSAM", "detection": {"img_dir": str(tmp_path)}}
-    paths = {"proc_dir": tmp_path / "p"}
-
-    wf.stage_bubblesam(ds, paths)
-
-    assert_logged(caplog, logging.WARNING, "Missing detection paths (not selected or misconfigured). Skipping.")
-
-
-def test_stage_bubblesam_warns_when_img_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    """
-    stage_bubblesam: if neither detection.img_dir nor dataset.img_dir provided -> warning and return.
-    """
-    caplog.set_level(logging.WARNING)
-    ds = {"id": "BS2", "method": "BubbleSAM", "detection": {}}
-    paths = {"det_dir": tmp_path / "d"}
-
-    wf.stage_bubblesam(ds, paths)
-
-    assert_logged(caplog, logging.WARNING, "No detection.img_dir set for dataset 'BS2'. Skipping.")
-
-
-def test_stage_bubblesam_skips_if_output_exists(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """
-    stage_bubblesam: if *_masks_filtered.pkl exists -> skip and DO NOT call pipeline.
-    """
-    caplog.set_level(logging.INFO)
-
-    det_dir = tmp_path / "det"
-    det_dir.mkdir(parents=True)
-    (det_dir / "foo_masks_filtered.pkl").write_text("done")
-
-    def bad(*_: Any, **__: Any) -> None:  # pragma: no cover
-        raise AssertionError("BubbleSAM pipeline should not be called when outputs exist")
-
-    monkeypatch.setattr(wf, "collect_tiff_paths", bad)
-    monkeypatch.setattr(wf, "build_df_from_img_paths", bad)
-    monkeypatch.setattr(wf, "run_bubblesam", bad)
-
-    ds = {"id": "BS3", "method": "BubbleSAM", "detection": {"img_dir": str(tmp_path)}}
-    paths = {"det_dir": det_dir}
-
-    wf.stage_bubblesam(ds, paths)
-
-    assert_logged(caplog, logging.INFO, "BubbleSAM outputs exist for BS3. Skipping.")
-
-
-def test_stage_bubblesam_happy_path_calls_pipeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """
-    stage_bubblesam: happy path calls collect -> build_df -> run_bubblesam using detection.img_dir.
-    """
-    det_dir = tmp_path / "det"
-    img_dir = tmp_path / "imgs"
-    img_dir.mkdir()
-
-    calls: list[str] = []
-
-    def fake_collect(p: Path) -> Sequence[Path]:
-        assert p == img_dir
-        calls.append("collect")
-        return [img_dir / "img1.tiff", img_dir / "img2.tiff"]
-
-    def fake_build(paths: Sequence[Path]) -> dict[str, Any]:
-        assert len(paths) == 2
-        calls.append("build_df")
-        return {"rows": len(paths)}
-
-    def fake_run(df: dict[str, Any], out_dir: Path) -> None:
-        assert df == {"rows": 2}
-        assert out_dir == det_dir
-        calls.append("run_bubblesam")
-
-    monkeypatch.setattr(wf, "collect_tiff_paths", fake_collect)
-    monkeypatch.setattr(wf, "build_df_from_img_paths", fake_build)
-    monkeypatch.setattr(wf, "run_bubblesam", fake_run)
-
-    ds = {"id": "BS4", "method": "bubblesam", "detection": {"img_dir": str(img_dir)}}
-    paths = {"det_dir": det_dir}
-
-    wf.stage_bubblesam(ds, paths)
-
-    assert calls == ["collect", "build_df", "run_bubblesam"]
-    assert det_dir.exists()
-
-
 def test_stage_bubblesam_uses_dataset_level_img_dir_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
-    stage_bubblesam: uses dataset.img_dir when detection.img_dir is not provided.
+    run_detection: with ``bubblesam`` uses dataset.img_dir when detection.img_dir is not provided.
     """
     det_dir = tmp_path / "det"
     img_dir = tmp_path / "imgs_fallback"
@@ -315,7 +292,7 @@ def test_stage_bubblesam_uses_dataset_level_img_dir_fallback(tmp_path: Path, mon
     ds = {"id": "BS5", "method": "bubblesam", "img_dir": str(img_dir)}
     paths = {"det_dir": det_dir}
 
-    wf.stage_bubblesam(ds, paths)
+    wf.run_detection(ds, paths)
 
     assert used["img_dir"] == img_dir
     assert used["out_dir"] == det_dir

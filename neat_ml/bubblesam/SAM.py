@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,10 +32,6 @@ class SAMModel:
                 Path to *.pt checkpoint with learned weights.
         device : str
                 Torch device ('cuda' | 'cpu' | 'cuda:0', …).
-
-        Returns
-        -------
-        None
         """
         self.model_config: str = model_config
         self.checkpoint: str = checkpoint_path
@@ -46,11 +42,6 @@ class SAMModel:
         Description
         -----------
         Enable bfloat16 and TF32 on Ampere GPUs for speed.
-
-        Parameters;
-                none
-        Returns
-                None
         """
         if torch.cuda.is_available():
             torch.autocast(
@@ -67,7 +58,6 @@ class SAMModel:
         -----------
         Internal helper to build the SAM-2 network.
 
-        Parameters: none
         Returns
         -------
         torch.nn.Module
@@ -84,8 +74,8 @@ class SAMModel:
         self,
         output_dir: str | Path,
         image: np.ndarray,
-        mask_settings: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        mask_settings: Optional[dict[str, Any]] = None,
+    ) -> list[dict[str, Any]]:
         """
         Description
         -----------
@@ -102,7 +92,7 @@ class SAMModel:
 
         Returns
         -------
-        List[Dict[str, Any]]
+        masks_sorted : list[dict[str, Any]]
                 Masks sorted by descending area.
         """
         out_path: Path = Path(output_dir)
@@ -110,9 +100,9 @@ class SAMModel:
 
         model = self._build_model()
         gen = SAM2AutomaticMaskGenerator(model=model, **(mask_settings or {}))
-        masks: List[Dict[str, Any]] = gen.generate(image)
+        masks: list[dict[str, Any]] = gen.generate(image)
 
-        masks_sorted: List[Dict[str, Any]] = sorted(
+        masks_sorted: list[dict[str, Any]] = sorted(
             masks, 
             key=lambda m: m["area"], 
             reverse=True
@@ -121,7 +111,7 @@ class SAMModel:
 
     def mask_summary(
         self, 
-        masks: List[Dict[str, Any]]
+        masks: list[dict[str, Any]]
         ) -> pd.DataFrame:
         """
         Description
@@ -130,15 +120,15 @@ class SAMModel:
 
         Parameters
         ----------
-        masks : List[Dict[str, Any]]
+        masks : list[dict[str, Any]]
                 Output of generate_masks().
 
         Returns
         -------
-        pd.DataFrame
+        rows : pd.DataFrame
                 One row per mask, all original keys.
         """
         exclude: set[str] = set()
-        rows: List[Dict[str, Any]] = [{k: v for k, v in m.items() if k not in exclude} for m in masks]
+        rows: list[dict[str, Any]] = [{k: v for k, v in m.items() if k not in exclude} for m in masks]
         return pd.DataFrame(rows)
     

@@ -4,11 +4,12 @@ import torch
 import pandas as pd
 import matplotlib.pyplot as plt
 import cv2
-from typing import List, Dict, Any, Optional, Union
+from typing import Any, Optional, Union
 from pathlib import Path
 import pickle
 from tqdm import tqdm
 import joblib
+import logging
 
 from skimage.measure import label, regionprops, find_contours
 from matplotlib.patches import Rectangle
@@ -17,7 +18,20 @@ from .SAM import SAMModel
 
 memory = joblib.Memory("joblib_cache", verbose=0)
 
-DEFAULT_MASK_SETTINGS: Dict[str, Any] = {
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# these settings are used to parametrize 
+# ``SAM2AutomaticMaskGenerator`` and were hand-tuned
+# via visual inspection to increase the number of bubbles
+# detected and with consideration of computational
+# cost. As noted in the `README.md`, increased speed
+# and lower GPU memory can be achieved by reducing
+# ``points_per_side`` from 32 to 16.
+#
+# NOTE: these parameters were not determined via 
+# systematic hyperparameter optimization (issue #13)
+DEFAULT_MASK_SETTINGS: dict[str, Any] = {
     "points_per_side": 32,
     "points_per_batch": 128,
     "pred_iou_thresh": 0.80,
@@ -30,7 +44,7 @@ DEFAULT_MASK_SETTINGS: Dict[str, Any] = {
     "use_m2m": True,
 }
 
-DEFAULT_MODEL_CFG: Dict[str, Any] = {
+DEFAULT_MODEL_CFG: dict[str, Any] = {
     "model_config": "sam2_hiera_l.yaml",
     "checkpoint_path": "./neat_ml/sam2/checkpoints/sam2_hiera_large.pt",
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -47,7 +61,7 @@ def load_image(image_path: str) -> np.ndarray:
     
     Returns
     -------
-    np.ndarray
+    image : np.ndarray
         The loaded and converted image.
     """
     image = cv2.imread(image_path)
@@ -57,13 +71,13 @@ def load_image(image_path: str) -> np.ndarray:
     return image
 
 
-def save_masks(masks: List[Dict[str, Any]], output_path: str) -> None:
+def save_masks(masks: list[dict[str, Any]], output_path: str) -> None:
     """
     Saves the generated masks to the specified output path.
     
     Parameters
     ----------
-    masks : List[Dict[str, Any]]
+    masks : list[dict[str, Any]]
             The generated masks.
     output_path : str
                   The path to save the masks.
@@ -73,13 +87,13 @@ def save_masks(masks: List[Dict[str, Any]], output_path: str) -> None:
         cv2.imwrite(os.path.join(output_path, f'mask_{i}.png'), mask_image)
 
 
-def show_anns(anns: List[Dict[str, Any]]) -> None:
+def show_anns(anns: list[dict[str, Any]]) -> None:
     """
     Shows the mask annotations over an image.
     
     Parameters
     ----------
-    anns : List[Dict[str, Any]]
+    anns : list[dict[str, Any]]
            The generated masks.
     """
     if len(anns) == 0:
@@ -103,7 +117,7 @@ def show_anns(anns: List[Dict[str, Any]]) -> None:
 def analyze_and_filter_masks(
     masks_summary_df: pd.DataFrame,
     area_threshold: float = 25,
-    circularity_threshold: float = 0.8
+    circularity_threshold: float = 0.9
 ) -> pd.DataFrame:
     """
     Analyzes each mask (row) in masks_summary_df, measuring shape properties 
@@ -114,13 +128,18 @@ def analyze_and_filter_masks(
     masks_summary_df : pd.DataFrame
         DataFrame containing at least a column 'segmentation' with boolean masks.
     area_threshold : float
-        Minimum area for the mask to be retained.
+        Minimum area for the mask to be retained. Value of minimum area was determined
+        by hand-tuning based on visual observation to exclude objects that were
+        too small to be considered bubbles in the microscopy images 
     circularity_threshold : float
         Circularity threshold to consider for the mask to be "circular."
-
+        Value for threshold was determined by hand-tuning based on visual inspection
+        to exclude "debris" particles while accounting for non-perfectly circular
+        shape of bubbles in microscopy images
+        
     Returns
     -------
-    pd.DataFrame
+    df_filtered : pd.DataFrame
         A filtered DataFrame with new columns (contour, bbox, major_axis, minor_axis, 
         area, radius, circ, euler_number) but excluding 'segmentation'.
     """
@@ -163,7 +182,7 @@ def plot_filtered_masks(
     original_image: np.ndarray,
     masks_summary_df: pd.DataFrame,
     output_path: str
-):
+) -> None:
     """
     Plots the filtered masks (contours + bounding boxes) on the original image 
     and saves the resulting figure.
@@ -204,7 +223,7 @@ def process_image(
     image_path: str,
     output_dir: str,
     sam_model: SAMModel,
-    mask_settings: Dict[str, Any],
+    mask_settings: dict[str, Any],
     debug: bool = False
 ) -> pd.DataFrame:
     """
@@ -219,14 +238,14 @@ def process_image(
                  The directory to save the masks.
     sam_model : SAMModel
                 The initialized SAM model.
-    mask_settings : Dict[str, Any]
+    mask_settings : dict[str, Any]
                     Settings for mask generation.
     debug : bool
             If True, diagnostic images (overlay and filtered contours) will be saved.
 
     Returns
     -------
-    pd.DataFrame
+    filtered_df : pd.DataFrame
         A DataFrame containing properties of the masks (e.g., bubbles), 
         including contour, bounding box, axes lengths, etc.
     """
@@ -278,8 +297,8 @@ def run_bubblesam(
     df_imgs: pd.DataFrame,
     output_dir: Union[str, Path],
     *,
-    model_cfg: Optional[Dict[str, Any]] = None,
-    mask_settings: Optional[Dict[str, Any]] = None,
+    model_cfg: dict[str, Any] = DEFAULT_MODEL_CFG,
+    mask_settings: dict[str, Any] = DEFAULT_MASK_SETTINGS,
     debug: bool = False,
 ) -> pd.DataFrame:
     """
@@ -288,27 +307,27 @@ def run_bubblesam(
     Parameters
     ----------
     df_imgs : pd.DataFrame
+        Dataframe containing absolute image filepaths.
         Requires 'image_filepath'.
     output_dir : str | Path
         Target directory for _masks_filtered.pkl + summary CSV.
-    model_cfg : Dict[str, Any] | None
-        Overrides for DEFAULT_MODEL_CFG.
-    mask_settings : Dict[str, Any] | None
-        Overrides for DEFAULT_MASK_SETTINGS.
+    model_cfg : dict[str, Any] | None
+        Dict of settings for ``SAM2`` model. default is ``DEFAULT_MODEL_CFG``.
+    mask_settings : dict[str, Any] | None
+        Dict of settings for ``SAM2AutomaticMaskGenerator``.
+        default is ``DEFAULT_MASK_SETTINGS``
     debug : bool
         Save graphical overlays.
 
     Returns
     -------
-    pd.DataFrame
+    summary : pd.DataFrame
         One row per image with detection statistics.
     """
-    cfg_m = {**DEFAULT_MODEL_CFG, **(model_cfg or {})}
-    cfg_s = {**DEFAULT_MASK_SETTINGS, **(mask_settings or {})}
     out_dir = Path(output_dir).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    sam_model = SAMModel(**cfg_m)
+    sam_model = SAMModel(**model_cfg)
 
     radii = np.zeros(len(df_imgs), dtype=np.float64)
     counts = np.zeros(len(df_imgs), dtype=np.int64)
@@ -316,7 +335,7 @@ def run_bubblesam(
     for i, img_fp in tqdm(
         enumerate(df_imgs["image_filepath"]), total=len(df_imgs), desc="[BubbleSAM]"
     ):
-        stats_df = process_image(str(img_fp), str(out_dir), sam_model, cfg_s, debug)
+        stats_df = process_image(str(img_fp), str(out_dir), sam_model, mask_settings, debug)
         counts[i] = len(stats_df)
         radii[i] = np.sqrt(np.median(stats_df["area"]) / np.pi) if len(stats_df) else 0.0
 
@@ -326,5 +345,5 @@ def run_bubblesam(
     summary.fillna(0, inplace=True)
 
     (out_dir / "bubblesam_summary.csv").write_text(summary.to_csv(index=False))
-    print(f"[BubbleSAM] processed {len(df_imgs)} images -> {out_dir}")
+    logger.info(f"BubbleSAM processed {len(df_imgs)} images -> {out_dir}")
     return summary

@@ -20,19 +20,20 @@ from neat_ml.bubblesam.bubblesam import (
     save_masks,
     run_bubblesam,
     process_image,
+    analyze_and_filter_masks,
 )
 from neat_ml.bubblesam.SAM import SAMModel
 
 CHECKPOINT: Path = Path("./neat_ml/sam2/checkpoints/sam2_hiera_large.pt")
 
-def _skip_unless_available() -> None:
+def _skip_unless_available(model_chkpt: Path = CHECKPOINT) -> None:
     """
     Abort the whole module if we cannot load sam2 or the checkpoint.
     """
     pytest.importorskip("sam2", reason="sam2 package is required for SAM-2 tests")
     if not CHECKPOINT.exists():
         pytest.skip(
-            f"SAM-2 checkpoint not found at {CHECKPOINT}. "
+            f"SAM-2 checkpoint not found at {model_chkpt}. "
             "Install it to run integration tests.",
             allow_module_level=True,
         )
@@ -74,17 +75,17 @@ def test_setup_cuda_on_real_gpu():
     )
     model.setup_cuda()
     if torch.cuda.get_device_properties(0).major >= 8:
-        npt.assert_(torch.backends.cuda.matmul.allow_tf32, "TF32 matmul not enabled")
-        npt.assert_(torch.backends.cudnn.allow_tf32, "TF32 cuDNN not enabled")
+        assert torch.backends.cuda.matmul.allow_tf32
+        assert torch.backends.cudnn.allow_tf32
 
 @pytest.fixture(scope="module")
-def real_sam_model() -> SAMModel:
+def real_sam_model(model_chkpt: Path = CHECKPOINT) -> SAMModel:
     """
     Actual SAM-2 network on CPU
     """
     return SAMModel(
         model_config="sam2_hiera_l.yaml",
-        checkpoint_path=str(CHECKPOINT),
+        checkpoint_path=str(model_chkpt),
         device="cpu",
     )
 
@@ -95,17 +96,28 @@ def test_load_image_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=expected):
         load_image(str(missing_path))
 
-def test_show_anns_no_error():
+
+@pytest.mark.parametrize("slice_idx, fn_call",
+    [
+        (slice(0, 0), "empty_anns"),
+        (slice(None), "imshow"),   
+    ],
+)
+def test_show_anns(mocker, slice_idx, fn_call):
     """
     Smoke-test that show_anns draws without raising.
     """
+    mock_fig = mocker.MagicMock()
+    mock_ax = mocker.MagicMock()
+    mocker.patch("matplotlib.pyplot.gca", return_value=mock_ax)
     seg = np.ones((20, 20), bool)
     masks = [{"segmentation": seg, "area": int(seg.sum())}]
-    np.random.seed(0)
-    fig, ax = plt.subplots()
-    plt.sca(ax)
-    show_anns(masks)
-    plt.close(fig)
+    show_anns(masks[slice_idx])
+    if fn_call == "imshow":
+        mock_ax.imshow.assert_called_once()
+    if fn_call == "empty_anns":
+        mock_ax.imshow.assert_not_called()
+
 
 def test_save_masks_creates_pngs(tmp_path: Path):
     """
@@ -116,9 +128,9 @@ def test_save_masks_creates_pngs(tmp_path: Path):
     masks = [{"segmentation": seg, "area": int(seg.sum())}]
     save_masks(masks, str(tmp_path))
     out_file = tmp_path / "mask_0.png"
-    npt.assert_(out_file.exists(), f"Expected file not found: {out_file}")
 
     actual = cv2.imread(str(out_file), cv2.IMREAD_GRAYSCALE)
+    assert actual is not None
     expected = seg.astype(np.uint8) * 255
     npt.assert_array_equal(actual, expected)
 
@@ -154,7 +166,7 @@ def test_process_image_generates_pngs_cpu(
         mask_settings={},
         debug=True,
     )
-    npt.assert_(not df.empty, "process_image returned empty dataframe")
+    assert not df.empty
 
     actual_overlay  = out_dir / f"{stem}_with_mask.png"
     actual_contours = out_dir / f"{stem}_filtered_contours.png"
@@ -163,8 +175,9 @@ def test_process_image_generates_pngs_cpu(
         desired_overlay  = baseline_dir / actual_overlay.name
         desired_contours = baseline_dir / actual_contours.name
 
-        compare_images(str(desired_overlay),  str(actual_overlay),  tol=1e-4)
-        compare_images(str(desired_contours), str(actual_contours), tol=1e-4)
+        result1 = compare_images(str(desired_overlay),  str(actual_overlay),  tol=1e-4)
+        result2 = compare_images(str(desired_contours), str(actual_contours), tol=1e-4)
+        assert result1 is None and result2 is None
 
 def test_sam_internal_api(real_sam_model: SAMModel):
     """
@@ -172,19 +185,19 @@ def test_sam_internal_api(real_sam_model: SAMModel):
     execute and return plausible results on CPU.
     """
     torch_model = real_sam_model._build_model()
-    npt.assert_(isinstance(torch_model, torch.nn.Module), "Not a torch module")
+    assert isinstance(torch_model, torch.nn.Module)
 
     dummy_rgb = np.full((100, 100, 3), 200, np.uint8)
     masks = real_sam_model.generate_masks(
         output_dir=".", image=dummy_rgb, mask_settings={}
     )
-    npt.assert_(len(masks) > 0, "No masks generated")
+    assert len(masks) > 0
 
     seg = masks[0]["segmentation"]
-    npt.assert_(isinstance(seg, np.ndarray), "Segmentation is not an ndarray")
-    npt.assert_equal(seg.dtype, np.dtype("bool"))
-    npt.assert_("area" in masks[0], "Missing 'area' key in mask")
-    npt.assert_equal(masks[0]["area"], seg.sum())
+    assert isinstance(seg, np.ndarray)
+    assert seg.dtype is np.dtype("bool")
+    assert "area" in masks[0]
+    assert masks[0]["area"] ==  seg.sum()
 
 def test_run_bubblesam_cpu(tmp_path: Path, image_with_circles_fixture: Path):
     """
@@ -203,18 +216,41 @@ def test_run_bubblesam_cpu(tmp_path: Path, image_with_circles_fixture: Path):
         "min_mask_region_area": 5,
         "use_m2m": True,
     }
+    model_cfg = {
+        "model_config": "sam2_hiera_l.yaml",
+        "checkpoint_path": "./neat_ml/sam2/checkpoints/sam2_hiera_large.pt",
+        "device": "cpu",
+    }
     df_in = pd.DataFrame({"image_filepath": [str(image_with_circles_fixture)]})
     out_dir = tmp_path / "summary_run"
 
     summary = run_bubblesam(
         df_in,
         out_dir,
-        model_cfg={"device": "cpu"},
+        model_cfg=model_cfg,
         mask_settings=mask_settings,
         debug=False,
     )
 
     expected_cols = {"image_filepath", "median_radii_SAM", "num_blobs_SAM"}
-    npt.assert_(expected_cols.issubset(set(summary.columns)), "Missing expected columns")
-    arr: NDArray[np.int64] = np.asarray(summary["num_blobs_SAM"], dtype=np.int64)
-    npt.assert_array_less(0, arr)
+    assert expected_cols.issubset(set(summary.columns))
+    assert summary["num_blobs_SAM"].item() == 2
+    assert summary["median_radii_SAM"].item() == 12.778613837669742
+    assert "circles.png" in summary["image_filepath"].item()
+
+
+@pytest.mark.parametrize("center_pixel",
+    [   
+        0, 1            
+    ]
+)
+def test_analyze_and_filter_masks_no_props(center_pixel):
+    """
+    test that the function returns an empty dataframe when either
+    the mask has no ROI's or the detected area has zero perimeter
+    """
+    image = np.zeros([3, 3])
+    image[1, 1] = center_pixel
+    mask_df = pd.DataFrame({"segmentation": [image.astype(bool)]}) 
+    out_df = analyze_and_filter_masks(mask_df)    
+    assert out_df.empty
