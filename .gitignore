@@ -30,7 +30,6 @@ __pycache__/
 !neat_ml/tests/baseline/*.png
 
 neat_ml/data/Figures_for_Manuscript/
-
 *.p
 *.html
 *.npy

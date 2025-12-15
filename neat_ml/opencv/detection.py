@@ -103,7 +103,7 @@ def _detect_single_image(
         bubble_data.loc[idx] = pd.Series(bubble_data_row)
 
     num_blobs = len(keypoints)
-    median_radius = float(np.nanmedian(bubble_data["radius"]))
+    median_radius = np.nanmedian(bubble_data["radius"])
     return num_blobs, median_radius, bubble_data
 
 def _save_debug_overlay(
@@ -193,13 +193,15 @@ def run_opencv(
         total=df_out.shape[0],
         desc="OpenCV SimpleBlobDetector",
     ):
-        img_path = str(row.image_filepath)
+        img_path = row.image_filepath
         image_basename = Path(img_path).stem
 
         num_blobs, median_r, bubble_data = cached_detect(img_path)
 
         df_bubbles = pd.DataFrame(bubble_data)
-        df_bubbles.to_pickle(out_dir / f"{image_basename}_bubble_data.pkl")
+        df_bubbles.to_parquet(
+            out_dir / f"{image_basename}_bubble_data.parquet.gzip",
+            compression="gzip")
 
         if debug:
             _save_debug_overlay(img_path, bubble_data, out_dir)

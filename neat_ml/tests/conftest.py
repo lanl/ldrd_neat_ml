@@ -4,6 +4,12 @@ import pandas as pd
 from importlib import resources
 from typing import Generator, Any
 import pooch  # type: ignore[import-untyped]
+from matplotlib import rcParams
+
+# try setting plot font to ``Arial``, if installed, 
+# otherwise default to standard matplotlib font
+rcParams['font.sans-serif'] = ["Arial"]
+rcParams['font.family'] = "sans-serif"
 
 
 @pytest.fixture(scope="session")

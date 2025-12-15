@@ -1,2 +1,2 @@
 [lint]
-extend-select = ["B006", "B008"]
+extend-select = ["B006", "B008", "UP032"]

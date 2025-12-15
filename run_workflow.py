@@ -1,8 +1,8 @@
 import argparse
 import logging
 import yaml
-
-from typing import Any
+from pathlib import Path
+import warnings
 
 from neat_ml.workflow.lib_workflow import (get_path_structure, 
                                            stage_detect)
@@ -23,18 +23,31 @@ def main(config_path: str, steps_str: str) -> None:
     steps = [s.strip() for s in steps_str.split(",") if s.strip()]
 
     with open(config_path, "r") as fh:
-        cfg: Any = yaml.safe_load(fh)
+        cfg = yaml.safe_load(fh)
 
-    roots: dict[str, Any] = cfg["roots"]
-    log.info("Running steps: %s", steps)
-
+    roots = cfg["roots"]
+    log.info(f"Running steps: {steps}")
+    
     datasets = cfg.get("datasets", [])
-
     if "detect" in steps:
         log.info("\n--- STAGE: DETECT ---")
         for ds in datasets:
+            # gather `.yaml` file save path subfolders
+            base_path = Path(roots.get("work"))
+            dataset_id = ds.get("id")
+            method = ds.get("method")
+            img_class = ds.get("class")
+            timestamp = ds.get("time_label")
             paths = get_path_structure(roots, ds)
-            stage_detect(ds, paths)
+            # run detection and return output dataframe
+            df_out = stage_detect(ds, paths)
+            out_path = base_path / dataset_id  / method / img_class / timestamp
+            if df_out is not None:
+                df_out.to_csv(
+                    out_path / "bubble_data_summary.csv"
+                )
+            else:
+                warnings.warn("Output dataframe empty.")
 
     log.info("\nWorkflow finished.")
 

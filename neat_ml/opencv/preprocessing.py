@@ -76,15 +76,19 @@ def process_image(
     return sharpened
 
 
-def iter_images(img_dir: Path) -> Iterable[Path]:
+def iter_images(img_path: Path) -> Iterable[Path]:
     """
-    Recursively yield all files under ``img_dir`` with the
+    Recursively yield all files under ``img_path`` with the
     extensions ``.tif`` or ``.tiff``.
+
+    ``img_path`` can be a directory of images or a path to
+    a single image.
 
     Parameters
     ----------
-    root : Path
-        Directory that is walked depth-first.
+    img_path : Path
+        Directory that is walked depth-first OR image
+        file path 
 
     Returns
     -------
@@ -92,21 +96,23 @@ def iter_images(img_dir: Path) -> Iterable[Path]:
         Absolute paths of discovered images.
     """
     
-    SUPPORTED_EXTS: tuple[str, ...] = (".tiff", ".tif")
-
-    for dirpath, _, files in os.walk(img_dir):
-        for name in files:
-            if name.lower().endswith(SUPPORTED_EXTS):
-                yield Path(dirpath) / name
+    SUPPORTED_EXTS = (".tiff", ".tif")
+    if os.path.isfile(img_path):
+        yield img_path
+    elif os.path.isdir(img_path):
+        for dirpath, _, files in os.walk(img_path):
+            for name in files:
+                if name.lower().endswith(SUPPORTED_EXTS):
+                    yield Path(dirpath) / name
 
 def process_directory(
     input_dir: Path, 
     output_dir: Path
 ) -> None:
     """
-    Run CLAHE + un-sharp masking on every TIFF found in  input_dir .
+    Run CLAHE + un-sharp masking on every TIFF found in input_dir.
 
-    The processed images are written to  output_dir
+    The processed images are written to output_dir
     sub-directory structure is not preserved, so identical
     filenames will be overwritten.
 

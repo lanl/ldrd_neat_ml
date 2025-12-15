@@ -45,6 +45,22 @@ To run the workflow with a given `.yaml` file:
 
 `python run_workflow.py --config <YAML file> --steps detect`
 
+To run the workflow using ``opencv_detection_test.yaml``:
+
+1. download and install the project
+2. run the test-suite to download the test images from `pooch`
+3. run the following command to get the path where the images are stored
+
+```
+python -c "import pooch; print(pooch.os_cache('test_images'))"
+```
+
+4. replace ``datatsets:detection:img_dir`` `path/to/pooch/images` in the `.yaml` with the local filepath
+5. call the `run_workflow` command with `--config neat_ml/data/opencv_detection_test.yaml`
+
+This should process and detect bubbles from the image file `images_raw.tiff` and 
+place the outputs under ``roots:work`` filepath from the `.yaml` file
+
 For information relevant to running workflow:  
 
 `python run_workflow.py --help`

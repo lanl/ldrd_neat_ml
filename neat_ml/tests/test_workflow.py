@@ -1,12 +1,12 @@
 import logging
 from pathlib import Path
-from typing import Any
 import pytest
+import os
 
 import neat_ml.workflow.lib_workflow as wf
 
 
-def test_get_path_structure_builds_expected_paths(tmp_path: Path) -> None:
+def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """
     get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
     """
@@ -20,9 +20,9 @@ def test_get_path_structure_builds_expected_paths(tmp_path: Path) -> None:
     assert paths["det_dir"] == base / "T01_Processed_OpenCV_With_Blob_Data"
 
 
-def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path) -> None:
+def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
-    If 'work' key is missing in roots, a KeyError is raised. Use match= for message compare.
+    If 'work' key is missing in roots, a KeyError is raised.
     """
     roots = {"result": str(tmp_path)}
     ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
@@ -30,7 +30,7 @@ def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path) -> None
     with pytest.raises(KeyError, match="work"):
         wf.get_path_structure(roots, ds)
 
-def test_stage_opencv_warns_when_paths_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+def test_stage_opencv_warns_when_paths_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path):
     """
     stage_opencv: if 'det_dir' (or 'proc_dir') missing -> warning and return.
     """
@@ -43,7 +43,7 @@ def test_stage_opencv_warns_when_paths_missing(caplog: pytest.LogCaptureFixture,
     assert "Detection paths not built (step not selected or misconfig). Skipping." in caplog.text
 
 
-def test_stage_opencv_warns_when_img_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+def test_stage_opencv_warns_when_img_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path):
     """
     stage_opencv: if detection.img_dir missing -> warning and return.
     """
@@ -59,24 +59,16 @@ def test_stage_opencv_warns_when_img_dir_missing(caplog: pytest.LogCaptureFixtur
 def test_stage_opencv_skips_if_output_already_exists(
     caplog: pytest.LogCaptureFixture, 
     tmp_path: Path, 
-    monkeypatch: pytest.MonkeyPatch
-) -> None:
+):
     """
-    stage_opencv: if *_bubble_data.pkl exists -> skip and DO NOT call pipeline steps.
+    stage_opencv: if *_bubble_data.parquet.gzip exists -> skip and DO NOT call pipeline steps.
     """
     caplog.set_level(logging.INFO)
 
     proc_dir = tmp_path / "proc"
     det_dir = tmp_path / "det"
     det_dir.mkdir(parents=True)
-    (det_dir / "anything_bubble_data.pkl").write_text("done")
-
-    def bad(*_: Any, **__: Any) -> None:  # pragma: no cover
-        raise AssertionError("Pipeline function should not be called when outputs exist")
-
-    monkeypatch.setattr(wf, "cv_preprocess", bad)
-    monkeypatch.setattr(wf, "collect_tiff_paths", bad)
-    monkeypatch.setattr(wf, "run_opencv", bad)
+    (det_dir / "anything_bubble_data.parquet.gzip").write_text("done")
 
     ds = {"id": "DS5", "method": "OpenCV", "detection": {"img_dir": str(tmp_path)}}
     paths = {"proc_dir": proc_dir, "det_dir": det_dir}
@@ -86,44 +78,20 @@ def test_stage_opencv_skips_if_output_already_exists(
     assert "Detection already exists for DS5. Skipping." in caplog.text
 
 
-def test_stage_opencv_happy_path_calls_pipeline(
+def test_stage_opencv_pipeline_runs(
     tmp_path: Path, 
-    monkeypatch: pytest.MonkeyPatch
-) -> None:
+    caplog: pytest.LogCaptureFixture, 
+):
     """
-    stage_opencv: happy path creates directories and calls 
-    preprocess -> collect -> run_opencv.
+    stage_opencv: test that ``stage_opencv``
+    runs successfully when provided the appropriate
+    directories.
     """
+    caplog.set_level(logging.INFO)
     proc_dir = tmp_path / "proc"
     det_dir = tmp_path / "det"
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
-
-    calls: list[str] = []
-
-    def fake_cv_preprocess(src: Path, dst: Path) -> None:
-        assert src == img_dir and dst == proc_dir
-        calls.append("preprocess")
-
-    def fake_collect(p: Path) -> list[Path]:
-        assert p == proc_dir
-        calls.append("collect")
-        return [proc_dir / "a.tiff", proc_dir / "b.tiff"]
-
-    def fake_run(
-        df: dict[str, Any], 
-        output_dir: Path,
-        *, 
-        debug: bool = False
-    ) -> None:
-        assert len(df) == 2
-        assert output_dir == det_dir
-        assert debug is True
-        calls.append("run")
-
-    monkeypatch.setattr(wf, "cv_preprocess", fake_cv_preprocess)
-    monkeypatch.setattr(wf, "collect_tiff_paths", fake_collect)
-    monkeypatch.setattr(wf, "run_opencv", fake_run)
 
     ds = {
         "id": "DS6", 
@@ -136,44 +104,56 @@ def test_stage_opencv_happy_path_calls_pipeline(
     paths = {"proc_dir": proc_dir, "det_dir": det_dir}
 
     wf.stage_opencv(ds, paths)
-
-    assert calls == ["preprocess", "collect", "run"]
-    assert proc_dir.exists() and det_dir.exists()
+    
+    # assert that all the correct ``logging`` outputs were generated,
+    # signifying that the corresponding processes were run, and assert
+    # that the appropriate directories were generated
+    assert "Preprocessing (OpenCV) for" in caplog.text
+    assert "Detecting (OpenCV) for" in caplog.text
+    assert "OpenCV Detection Ran Successfully." in caplog.text 
+    assert proc_dir.exists() and not os.listdir(proc_dir)
+    assert det_dir.exists() and (os.listdir(det_dir) == 
+        ['.joblib_cache'])
 
 
 def test_stage_detect_routes_to_opencv(
-    monkeypatch: pytest.MonkeyPatch, 
     tmp_path: Path
-) -> None:
+):
     """
     stage_detect: method 'OpenCV' routes to stage_opencv.
     """
-    seen: list[str] = []
+    ds = {
+        "id": "DS7",
+        "method": "OpenCV",
+        "detection": {
+            "img_dir": tmp_path / "i"
+        }
+    }
+    paths = {
+        "proc_dir": tmp_path / "p",
+        "det_dir": tmp_path / "d",
+    }
+    exp_columns = {
+        "image_filepath",
+        "num_blobs_opencv",
+        "median_radii_opencv"
+    }
+    df_out = wf.stage_detect(ds, paths)
+    # assert that an empty dataframe was generated by 
+    # calling the ``stage_opencv`` function
+    assert df_out is not None
+    assert df_out.empty
+    assert exp_columns.issubset(df_out.columns)
 
-    def fake_stage_opencv(ds: dict[str, Any], p: dict[str, Path]) -> None:
-        seen.append(ds["id"])
 
-    monkeypatch.setattr(wf, "stage_opencv", fake_stage_opencv)
-
-    ds = {"id": "DS7", "method": "OpenCV"}
-    paths = {"proc_dir": tmp_path / "p", "det_dir": tmp_path / "d"}
-
-    wf.stage_detect(ds, paths)
-
-    assert seen == ["DS7"]
-
-
-def test_stage_detect_unknown_method_warns(
-    caplog: pytest.LogCaptureFixture, 
+def test_stage_detect_unknown_method_error(
     tmp_path: Path
-) -> None:
+):
     """
-    stage_detect: unknown method -> warning.
+    stage_detect: unknown method -> ValueError.
     """
-    caplog.set_level(logging.WARNING)
     ds = {"id": "DS8", "method": "SomethingElse"}
     paths = {"proc_dir": tmp_path / "p", "det_dir": tmp_path / "d"}
-
-    wf.stage_detect(ds, paths)
-
-    assert "Unknown detection method 'somethingelse' for dataset 'DS8'." in caplog.text
+    
+    with pytest.raises(ValueError, match="Unknown detection method"):
+        wf.stage_detect(ds, paths)

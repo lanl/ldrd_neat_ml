@@ -30,12 +30,11 @@ def get_path_structure(
         Paths keyed by step usage (proc_dir, det_dir).
     """
     paths: dict[str, Path] = {}
-
-    ds_id: str = str(dataset_config.get("id", "unknown"))
-    method: str = str(dataset_config.get("method", ""))
-    class_label: str = str(dataset_config.get("class", ""))
-    time_label: str = str(dataset_config.get("time_label", ""))
-    work_root: Path = Path(roots["work"])
+    ds_id = dataset_config.get("id", "unknown")
+    method = dataset_config.get("method", "")
+    class_label = dataset_config.get("class", "")
+    time_label = dataset_config.get("time_label", "")
+    work_root = Path(roots["work"])
 
     base_proc: Path = work_root / ds_id / method / class_label / time_label
     paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
@@ -43,7 +42,10 @@ def get_path_structure(
 
     return paths
 
-def stage_opencv(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
+def stage_opencv(
+    dataset_config: dict[str, Any],
+    paths: dict[str, Path]
+) -> Optional[pd.DataFrame]:
     """
     Run OpenCV preprocessing + detection when configured.
 
@@ -53,40 +55,51 @@ def stage_opencv(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None
         Dataset config. Expects 'method' == 'OpenCV' and 'detection' block.
     paths : dict[str, Path]
         Paths from get_path_structure() (proc_dir, det_dir if built).
+    
+    Returns:
+    --------
+    df_out: Optional[pd.DataFrame]
+        dataframe containing summary of opencv bubble detection
+        information 
     """
-    detection_cfg: dict[str, Any] = dict(dataset_config.get("detection", {}))
-    img_dir_str: Optional[str] = detection_cfg.get("img_dir")
-    debug: bool = bool(detection_cfg.get("debug", False))
-
+    detection_cfg = dataset_config.get("detection", {})
+    img_dir_str = detection_cfg.get("img_dir")
+    debug = detection_cfg.get("debug", False)
+    ds_id = dataset_config.get("id", "unknown")
     if "proc_dir" not in paths or "det_dir" not in paths:
         log.warning("Detection paths not built (step not selected or misconfig). Skipping.")
-        return
+        return None
     if not img_dir_str:
-        log.warning("No 'detection.img_dir' set for dataset '%s'. Skipping detection.",
-                    dataset_config.get("id"))
-        return
+        log.warning(f"No 'detection.img_dir' set for dataset '{ds_id}'. Skipping detection.")
+        return None
+    
+    proc_dir = paths["proc_dir"]
+    det_dir = paths["det_dir"]
+    img_dir = Path(img_dir_str)
 
-    proc_dir: Path = paths["proc_dir"]
-    det_dir: Path = paths["det_dir"]
-    img_dir: Path = Path(img_dir_str)
-
-    ds_id: str = str(dataset_config.get("id", "unknown"))
-    if list(det_dir.glob("*_bubble_data.pkl")):
-        log.info("Detection already exists for %s. Skipping.", ds_id)
-        return
-
+    if list(det_dir.glob("*_bubble_data.parquet.gzip")):
+        log.info(f"Detection already exists for {ds_id}. Skipping.")
+        return None
+    
     proc_dir.mkdir(parents=True, exist_ok=True)
     det_dir.mkdir(parents=True, exist_ok=True)
 
-    log.info("Preprocessing (OpenCV) for %s -> %s", ds_id, proc_dir)
+    log.info(f"Preprocessing (OpenCV) for {ds_id} -> {proc_dir}")
     cv_preprocess(img_dir, proc_dir)
-
-    log.info("Detecting (OpenCV) for %s -> %s", ds_id, det_dir)
+    
+    log.info(f"Detecting (OpenCV) for {ds_id} -> {det_dir}")
     img_paths = collect_tiff_paths(proc_dir)
     df_imgs = pd.DataFrame({"image_filepath": img_paths})
-    run_opencv(df_imgs, det_dir, debug=debug)
+    df_out = run_opencv(df_imgs, det_dir, debug=debug)
+    log.info("OpenCV Detection Ran Successfully.")
 
-def stage_detect(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
+    return df_out
+
+
+def stage_detect(
+    dataset_config: dict[str, Any],
+    paths: dict[str, Path]
+) -> Optional[pd.DataFrame]:
     """
     Route detection to OpenCV based on dataset.method.
 
@@ -96,10 +109,17 @@ def stage_detect(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None
         Dataset config with 'method'.
     paths : dict[str, Path]
         Detection paths (proc_dir, det_dir).
+
+    Returns:
+    --------
+    df_out: Optional[pd.DataFrame]
+        dataframe containing summary of opencv bubble detection
+        information 
     """
-    method: str = str(dataset_config.get("method", "")).lower()
+    method = dataset_config.get("method", "").lower()
+    ds_id = dataset_config.get("id")
     if method == "opencv":
-        stage_opencv(dataset_config, paths)
+        df_out = stage_opencv(dataset_config, paths)
+        return df_out 
     else:
-        log.warning("Unknown detection method '%s' for dataset '%s'.",
-                    method, dataset_config.get("id"))
+        raise ValueError(f"Unknown detection method '{method}' for dataset '{ds_id}'.")

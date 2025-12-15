@@ -9,6 +9,7 @@ matplotlib.use("Agg")
 import pytest
 from matplotlib.testing.compare import compare_images
 import pooch  # type: ignore[import-untyped]
+from numpy.testing import assert_allclose
 
 from neat_ml.opencv.detection import (
     collect_tiff_paths,
@@ -19,7 +20,7 @@ from neat_ml.opencv.detection import (
 
 def test_visual_regression_debug_overlay(
     tmp_path: Path,
-    reference_images: list,
+    reference_images: tuple,
 ):
     img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
     stem = Path(img_path).stem
@@ -31,7 +32,10 @@ def test_visual_regression_debug_overlay(
     actual_png  = actual_dir/f"{stem}_debug.png"
     desired_png = reference_images[1]
 
-    result = compare_images(str(desired_png), str(actual_png), tol=1e-4)
+    result = compare_images(
+        desired_png,
+        actual_png,
+        tol=1e-4)  # type: ignore[call-overload]
     assert result is None
 
 
@@ -47,7 +51,7 @@ def test_run_opencv_missing_column(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=pattern):
         run_opencv(df_bad, output_dir=tmp_path)
 
-def test_save_debug_overlay_warns(tmp_path: Path):
+def test_save_debug_overlay_error(tmp_path: Path):
     bogus = tmp_path / "no_image.tiff"
     with pytest.raises(FileNotFoundError, match="Could not read image for debug overlay"):
         _save_debug_overlay(str(bogus), pd.DataFrame(), tmp_path)
@@ -65,12 +69,12 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     assert np.isnan(median_r)
     assert bubble_data.empty
    
-def test_detect_single_image_processed(tmp_path: Path, reference_images: list):
+def test_detect_single_image_processed(tmp_path: Path, reference_images: tuple):
     """
     regression test for detection of keypoints in processed image
     """ 
     img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
     num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
     assert num_blobs == 1735
-    assert median_r == 3.623063564300537
+    assert_allclose(median_r, 3.623063564300537)
     assert bubble_data.shape == (1735, 5)

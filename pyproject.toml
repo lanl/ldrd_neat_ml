@@ -26,7 +26,8 @@ dependencies = [
     # TODO: unpin when upstream issue is resolved
     'scipy<=1.16.3',
     'pyyaml',
-    'pooch'
+    'pooch',
+    'pyarrow',
 ]
 [project.optional-dependencies]
 dev = ['mypy',
@@ -41,6 +42,3 @@ dev = ['mypy',
 ]
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
-"neat_ml.tests.data.images" = ["*.tiff"]
-"neat_ml.tests.data.images_Processed" = ["*.tiff"]
-"neat_ml.tests.baseline" = ["*.png"]

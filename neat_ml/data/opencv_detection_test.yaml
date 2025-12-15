@@ -8,5 +8,5 @@ datasets:
     time_label: ''
     
     detection:
-      img_dir: neat_ml/tests/data/images
+      img_dir: 'path/to/pooch/images/images_raw.tiff'
       debug: True
