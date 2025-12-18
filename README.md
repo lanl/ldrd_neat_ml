@@ -13,6 +13,7 @@ and optional dependencies by calling:
 
 ```
 python -m pip install -v ".[dev]" 
+```
 
 ## Writing a `.yaml` input file for OpenCV detection
 
@@ -23,18 +24,18 @@ output images.
 The `.yaml` file should follow the format below (an example
 can be found at `neat_ml/data/opencv_detection_test.yaml`):
 
-```
+```yaml
 roots:
   work: path/to/save/output
 
 datasets:
   - id: name_of_save_folder
-    method: opencv
+    method: Currently only supports ``OpenCV`` (or ``opencv``) as input
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
 
     detection:
-      img_dir: path/to/image/data
+      img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
       debug: True/False for debug (`True` will save side-by-side figure
              of raw image next to bounding box overlay.)
 ```
@@ -61,7 +62,7 @@ python -c "import pooch; print(pooch.os_cache('test_images'))"
 This should process and detect bubbles from the image file `images_raw.tiff` and 
 place the outputs under ``roots:work`` filepath from the `.yaml` file
 
-For information relevant to running workflow:  
+For information relevant to running the workflow:  
 
 `python run_workflow.py --help`
 

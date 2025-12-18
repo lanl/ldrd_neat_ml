@@ -131,8 +131,7 @@ def _save_debug_overlay(
     
     image_rgb = skimage.color.gray2rgb(image_gray)
 
-    overlay = image_gray.copy()
-    overlay = cv2.cvtColor(overlay, cv2.COLOR_GRAY2RGB)
+    overlay = image_rgb.copy()
 
     for index, bubble in bubble_data.iterrows():
         bbox = bubble["bbox"]

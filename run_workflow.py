@@ -30,7 +30,7 @@ def main(config_path: str, steps_str: str) -> None:
     
     datasets = cfg.get("datasets", [])
     if "detect" in steps:
-        log.info("\n--- STAGE: DETECT ---")
+        log.info("--- STAGE: DETECT ---")
         for ds in datasets:
             # gather `.yaml` file save path subfolders
             base_path = Path(roots.get("work"))
@@ -49,7 +49,7 @@ def main(config_path: str, steps_str: str) -> None:
             else:
                 warnings.warn("Output dataframe empty.")
 
-    log.info("\nWorkflow finished.")
+    log.info("Workflow finished.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -74,4 +74,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO)
     main(args.config, args.steps)

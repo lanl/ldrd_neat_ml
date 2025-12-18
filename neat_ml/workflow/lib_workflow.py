@@ -29,7 +29,7 @@ def get_path_structure(
     paths : dict[str, Path]
         Paths keyed by step usage (proc_dir, det_dir).
     """
-    paths: dict[str, Path] = {}
+    paths = {}
     ds_id = dataset_config.get("id", "unknown")
     method = dataset_config.get("method", "")
     class_label = dataset_config.get("class", "")
@@ -101,7 +101,7 @@ def stage_detect(
     paths: dict[str, Path]
 ) -> Optional[pd.DataFrame]:
     """
-    Route detection to OpenCV based on dataset.method.
+    Route detection to OpenCV based on ``dataset_config`` method
 
     Parameters
     ----------

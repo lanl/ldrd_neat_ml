@@ -3,10 +3,12 @@ Pre-processing utilities for TIFF images.
 
 The module offers three public functions:
 
-    process_image   - CLAHE contrast enhancement followed by un-sharp masking.
-    iter_images     - lazy generator that yields every TIFF under a root path.
-    process_directory   - end-to-end batch processor that writes enhanced
-  images to a target folder.
+    - ``process_image``: CLAHE contrast enhancement followed by un-sharp masking.
+
+    - ``iter_images``: lazy generator that yields every TIFF under a root path.
+
+    - ``process_directory``: end-to-end batch processor that writes enhanced
+                             images to a target folder.
 
 All heavy lifting happens in process_image; the other helpers are mere
 orchestration wrappers.
