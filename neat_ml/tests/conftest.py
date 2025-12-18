@@ -39,22 +39,43 @@ image_files = pooch.create(
     base_url = "doi:10.5281/zenodo.17545141",
     path = pooch.os_cache("test_images")
 )
+# backup storage of image files in case of
+# error due to too many parallel requests to zenodo
+image_files_backup = pooch.create(
+    base_url = "doi:10.6084/m9.figshare.30546491", 
+    path = pooch.os_cache("test_images")
+)
 
 @pytest.fixture(scope="session")
 def reference_images():
-    image_files.load_registry_from_doi()
-    images_Processed_raw = image_files.fetch(
-         fname="images_Processed_raw.tiff",
-    )
-    detection_raw = image_files.fetch(
-     fname="raw_detection.png",
-    ) 
-    detection_processed = image_files.fetch(
-         fname = "raw_processed.png",
-    )
-    images_raw = image_files.fetch(
-         fname="images_raw.tiff", 
-    )
+    try:
+        image_files.load_registry_from_doi()
+        images_Processed_raw = image_files.fetch(
+             fname="images_Processed_raw.tiff",
+        )
+        detection_raw = image_files.fetch(
+         fname="raw_detection.png",
+        ) 
+        detection_processed = image_files.fetch(
+             fname = "raw_processed.png",
+        )
+        images_raw = image_files.fetch(
+             fname="images_raw.tiff", 
+        )
+    except ValueError:
+        image_files_backup.load_registry_from_doi()
+        images_Processed_raw = image_files_backup.fetch(
+             fname="images_Processed_raw.tiff",
+        )
+        detection_raw = image_files_backup.fetch(
+         fname="raw_detection.png",
+        ) 
+        detection_processed = image_files_backup.fetch(
+             fname = "raw_processed.png",
+        )
+        images_raw = image_files_backup.fetch(
+             fname="images_raw.tiff", 
+        )
     return (images_Processed_raw,
             detection_raw,
             detection_processed,
