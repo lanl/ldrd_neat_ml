@@ -33,8 +33,6 @@ def baseline_dir() -> Generator[Any, Any, Any]:
         yield path
 
 # download testing image files with pooch
-# image files stored at the following url:
-# https://zenodo.org/records/17545141
 image_files = pooch.create(
     base_url = "https://github.com/lanl/ldrd_neat_ml_images/raw/main/test_images",
     path = pooch.os_cache("test_images"),
