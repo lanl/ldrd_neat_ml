@@ -36,7 +36,7 @@ def baseline_dir() -> Generator[Any, Any, Any]:
 # image files stored at the following url:
 # https://zenodo.org/records/17545141
 image_files = pooch.create(
-    base_url = "https://github.com/adamwitmer/ldrd_neat_ml_images/raw/main/test_images",
+    base_url = "https://github.com/lanl/ldrd_neat_ml_images/raw/main/test_images",
     path = pooch.os_cache("test_images"),
     registry = {
         "images_Processed_raw.tiff": "sha256:cc145dde89791119f59c3aaa75d12e1f23c2da6d87f02eabde50b2ab7ea648cb",
