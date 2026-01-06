@@ -40,7 +40,7 @@ datasets:
              of raw image next to bounding box overlay.)
 ```
 
-## Running the OpenCV detection
+## Running OpenCV detection
 
 To run the workflow with a given `.yaml` file: 
 

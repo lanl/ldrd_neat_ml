@@ -47,16 +47,16 @@ image_files = pooch.create(
 @pytest.fixture(scope="session")
 def reference_images():
     images_Processed_raw = image_files.fetch(
-         fname="images_Processed_raw.tiff",
+        fname="images_Processed_raw.tiff",
     )
     detection_raw = image_files.fetch(
-     fname="raw_detection.png",
+        fname="raw_detection.png",
     ) 
     detection_processed = image_files.fetch(
-         fname = "raw_processed.png",
+        fname="raw_processed.png",
     )
     images_raw = image_files.fetch(
-         fname="images_raw.tiff", 
+        fname="images_raw.tiff", 
     )
     
     return (images_Processed_raw,
