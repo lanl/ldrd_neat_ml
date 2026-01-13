@@ -20,7 +20,7 @@ dependencies = [
     'lightgbm',
     'lime',
     'opencv-python-headless==4.10.0.84',
-    # TODO: bump scipy version to ``1.17.0``
+    # TODO: bump scipy version to ``==1.17.0``
     # once legacy code has been purged from 
     # repo as described in issue #18. Currently
     # some tests related to `lime` feature importance
