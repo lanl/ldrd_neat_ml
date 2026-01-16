@@ -19,7 +19,12 @@ dependencies = [
     'scikit-image',
     'lightgbm',
     'lime',
-    'opencv-python-headless==4.10.0.84'
+    'opencv-python-headless==4.10.0.84',
+    # pinned due to bug in `scipy==1.17.0` causing
+    # NaN propagation through LIME explainer. See:
+    # https://github.com/scipy/scipy/issues/24355
+    # TODO: unpin when upstream issue is resolved
+    'scipy<=1.16.3',
 ]
 [project.optional-dependencies]
 dev = ['mypy',
