@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 import matplotlib
 import numpy as np
@@ -41,13 +40,13 @@ def test_visual_regression_debug_overlay(
 
 def test_detect_single_image_missing_file(tmp_path: Path) -> None:
     bogus = tmp_path / "does_not_exist.tiff"
-    pattern = rf"Unable to read image file: {re.escape(str(bogus))}"
+    pattern = f"Unable to read image file: {bogus}"
     with pytest.raises(FileNotFoundError, match=pattern):
         _detect_single_image(str(bogus))
 
 def test_run_opencv_missing_column(tmp_path: Path) -> None:
     df_bad = pd.DataFrame({"wrong": ["foo.tiff"]})
-    pattern = re.escape("DataFrame must contain 'image_filepath' column.")
+    pattern = "DataFrame must contain 'image_filepath' column."
     with pytest.raises(ValueError, match=pattern):
         run_opencv(df_bad, output_dir=tmp_path)
 
@@ -62,7 +61,7 @@ def test_detect_single_image_no_blobs(tmp_path: Path):
     """
     blank = np.zeros((100, 100), dtype=np.uint8)
     img_path = tmp_path / "blank.tiff"
-    cv2.imwrite(str(img_path), blank)
+    cv2.imwrite(img_path, blank)  # type: ignore[call-overload]
 
     num_blobs, median_r, bubble_data = _detect_single_image(str(img_path))
     assert num_blobs == 0

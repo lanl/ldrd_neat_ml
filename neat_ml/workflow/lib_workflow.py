@@ -36,7 +36,7 @@ def get_path_structure(
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
 
-    base_proc: Path = work_root / ds_id / method / class_label / time_label
+    base_proc = work_root / ds_id / method / class_label / time_label
     paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 

@@ -181,7 +181,7 @@ def run_opencv(
     out_dir = Path(output_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    memory = Memory(location=str(out_dir / ".joblib_cache"), verbose=0)
+    memory = Memory(location=out_dir / ".joblib_cache", verbose=0)
     cached_detect = memory.cache(_detect_single_image)
 
     df_out = df.copy()

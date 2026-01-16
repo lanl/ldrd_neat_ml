@@ -19,9 +19,9 @@ def test_process_directory_single_image(
     raw_input = reference_images[3] 
     pp.process_directory(pooch.os_cache("test_images"), tmp_path)
     processed_tiff = tmp_path / os.path.basename(raw_input)
-    img = cv2.imread(str(processed_tiff), cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(processed_tiff, cv2.IMREAD_GRAYSCALE)
     actual_png = tmp_path / "raw_processed.png"
-    cv2.imwrite(str(actual_png), img)  # type: ignore[arg-type]
+    cv2.imwrite(actual_png, img)  # type: ignore[call-overload]
     
     result = compare_images(
         reference_images[2],

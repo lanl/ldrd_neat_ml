@@ -129,7 +129,7 @@ def process_directory(
 
     for in_path in iter_images(input_dir):
         out_path = output_dir / in_path.name
-        img = cv2.imread(str(in_path), cv2.IMREAD_GRAYSCALE)
+        img = cv2.imread(in_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
         if img is not None:
             processed = process_image(
                 img,
@@ -138,7 +138,7 @@ def process_directory(
                 ksize=(5,5),
                 alpha=1.5
             )
-            cv2.imwrite(str(out_path), processed)
+            cv2.imwrite(out_path, processed)  # type: ignore[call-overload]
         else:
             log.warning(f"Could not read file, skipping: {in_path}")
     log.info(f"Completed: (output: {output_dir.resolve()})")
