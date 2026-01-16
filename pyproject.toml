@@ -20,11 +20,10 @@ dependencies = [
     'lightgbm',
     'lime',
     'opencv-python-headless==4.10.0.84',
-    # TODO: bump scipy version to ``==1.17.0``
-    # once legacy code has been purged from 
-    # repo as described in issue #18. Currently
-    # some tests related to `lime` feature importance
-    # are failing because of dependency issue.
+    # pinned due to bug in `scipy==1.17.0` causing
+    # NaN propagation through LIME explainer. See:
+    # https://github.com/scipy/scipy/issues/24355
+    # TODO: unpin when upstream issue is resolved
     'scipy<=1.16.3',
 ]
 [project.optional-dependencies]
