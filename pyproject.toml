@@ -25,6 +25,9 @@ dependencies = [
     # https://github.com/scipy/scipy/issues/24355
     # TODO: unpin when upstream issue is resolved
     'scipy<=1.16.3',
+    'pyyaml',
+    'pooch',
+    'pyarrow',
 ]
 [project.optional-dependencies]
 dev = ['mypy',
@@ -34,7 +37,8 @@ dev = ['mypy',
        'pytest-xdist',
        'pytest-cov',
        'types-tqdm',
-       'types-Pillow']
+       'types-Pillow',
+       'types-pyyaml'
+]
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
-"neat_ml"      = ["tests/baseline/*.png"]
