@@ -16,34 +16,37 @@ __all__: Sequence[str] = [
 ]
 
 def collect_tiff_paths(
-    img_dir: str | Path
-) -> list[str]:
+    img_dir: Path
+) -> list[Path]:
     """
     Recursively locate every TIFF image beneath a given directory.
 
     Parameters
     ----------
-    img_dir : str or Path
+    img_dir : Path
         Root directory to search for files.
 
     Returns
     -------
-    list[str]
+    list[path]
         List of absolute file paths for each .tiff file found.
     """
-    img_path = Path(img_dir).expanduser().resolve()
-    return [str(Path(p).resolve()) for p in img_path.glob("**/*.tiff")]
+    if not img_dir.is_absolute():
+        raise ValueError(
+            f"Absolute file path required, got {img_dir}"
+        )
+    return list(img_dir.glob("**/*.tiff"))
 
 
 def _detect_single_image(
-    img_path: str
+    img_path: Path
 ) -> tuple[int, float, pd.DataFrame]:
     """
     Detect bubbles in a single image using OpenCV's SimpleBlobDetector.
 
     Parameters
     ----------
-    img_path : str
+    img_path : Path
         Absolute file path to the image to process.
 
     Returns
@@ -61,7 +64,7 @@ def _detect_single_image(
             - 'area' (float)
             - 'bbox' (tuple[int, int, int, int])
     """
-    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
     if image is None:
         raise FileNotFoundError(f"Unable to read image file: {img_path}")
 
@@ -107,7 +110,7 @@ def _detect_single_image(
     return num_blobs, median_radius, bubble_data
 
 def _save_debug_overlay(
-    img_path: str,
+    img_path: Path,
     bubble_data: pd.DataFrame,
     out_dir: Path,
 ) -> None:
@@ -117,14 +120,14 @@ def _save_debug_overlay(
 
     Parameters
     ----------
-    img_path : str
+    img_path : Path
         File path to the original image.
     bubble_data : pd.DataFrame
         DataFrame of bubble metadata as returned by _detect_single_image.
     out_dir : Path
         Directory where the debug PNG will be saved.
     """
-    image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
 
     if image_gray is None:
         raise FileNotFoundError(f"Could not read image for debug overlay: {img_path}")
@@ -146,13 +149,13 @@ def _save_debug_overlay(
     ax[1].set_title("Detected blobs")
     ax[1].axis("off")
 
-    png_name = f"{Path(img_path).stem}_debug.png"
+    png_name = f"{img_path.stem}_debug.png"
     fig.savefig(out_dir / png_name, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 def run_opencv(
     df: pd.DataFrame,
-    output_dir: str | Path,
+    out_dir: Path,
     debug: bool = False,
 ) -> pd.DataFrame:
     """
@@ -161,9 +164,9 @@ def run_opencv(
 
     Parameters
     ----------
-    df : pd.DataFrane
+    df : pd.DataFrame
         dataframe containing absolute image filepaths.
-    output_dir : str | Path
+    out_dir : Path
         Path to save the outputs.
     debug : bool
         If True save side by side diagnostic images.
@@ -178,7 +181,11 @@ def run_opencv(
     if 'image_filepath' not in df.columns:
         raise ValueError("DataFrame must contain 'image_filepath' column.")
     
-    out_dir = Path(output_dir).expanduser().resolve()
+    if not out_dir.is_absolute():
+        raise ValueError(
+            f"Absolute file path required, got {out_dir}"
+        )
+    
     out_dir.mkdir(parents=True, exist_ok=True)
 
     memory = Memory(location=out_dir / ".joblib_cache", verbose=0)
@@ -193,13 +200,12 @@ def run_opencv(
         desc="OpenCV SimpleBlobDetector",
     ):
         img_path = row.image_filepath
-        image_basename = Path(img_path).stem
 
         num_blobs, median_r, bubble_data = cached_detect(img_path)
 
         df_bubbles = pd.DataFrame(bubble_data)
         df_bubbles.to_parquet(
-            out_dir / f"{image_basename}_bubble_data.parquet.gzip",
+            out_dir / f"{img_path.stem}_bubble_data.parquet.gzip",
             compression="gzip")
 
         if debug:

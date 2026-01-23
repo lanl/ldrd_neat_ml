@@ -22,7 +22,9 @@ on where to find the input image data for blob detection; save the
 output images.
 
 The `.yaml` file should follow the format below (an example
-can be found at `neat_ml/data/opencv_detection_test.yaml`):
+can be found at `neat_ml/data/opencv_detection_test.yaml`)
+Input paths can be provided as either absolute or relative
+file paths.
 
 ```yaml
 roots:

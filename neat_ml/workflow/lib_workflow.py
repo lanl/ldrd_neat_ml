@@ -75,12 +75,15 @@ def stage_opencv(
     
     proc_dir = paths["proc_dir"]
     det_dir = paths["det_dir"]
-    img_dir = Path(img_dir_str)
+    img_dir = Path(img_dir_str).expanduser().resolve()
 
     if list(det_dir.glob("*_bubble_data.parquet.gzip")):
         log.info(f"Detection already exists for {ds_id}. Skipping.")
         return None
     
+    # expand user inputs to absolute file paths  
+    proc_dir = proc_dir.expanduser().resolve()
+    det_dir = det_dir.expanduser().resolve()
     proc_dir.mkdir(parents=True, exist_ok=True)
     det_dir.mkdir(parents=True, exist_ok=True)
 
