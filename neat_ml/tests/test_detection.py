@@ -7,11 +7,9 @@ import cv2
 matplotlib.use("Agg")
 import pytest
 from matplotlib.testing.compare import compare_images
-import pooch  # type: ignore[import-untyped]
 from numpy.testing import assert_allclose
 
 from neat_ml.opencv.detection import (
-    collect_tiff_paths,
     _detect_single_image,
     _save_debug_overlay,
     run_opencv,
@@ -21,8 +19,7 @@ def test_visual_regression_debug_overlay(
     tmp_path: Path,
     reference_images: tuple,
 ):
-    img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
-
+    img_path = Path(reference_images[0])
     actual_dir = tmp_path / "overlay"
     df_in = pd.DataFrame({"image_filepath": [img_path]})
     run_opencv(df=df_in, out_dir=actual_dir, debug=True)
@@ -71,19 +68,11 @@ def test_detect_single_image_processed(tmp_path: Path, reference_images: tuple):
     """
     regression test for detection of keypoints in processed image
     """ 
-    img_path = collect_tiff_paths(pooch.os_cache("test_images"))[1]
+    img_path = Path(reference_images[0])
     num_blobs, median_r, bubble_data = _detect_single_image(img_path)
     assert num_blobs == 1735
     assert_allclose(median_r, 3.623063564300537)
     assert bubble_data.shape == (1735, 5)
-
-
-def test_collect_tiff_paths_error():
-    """
-    test that ``collect_tiff_paths`` throws ValuError when provided relative path
-    """
-    with pytest.raises(ValueError, match="Absolute file path required"):
-        collect_tiff_paths(Path("./img_dir"))
 
 
 def test_run_opencv_out_dir_error():

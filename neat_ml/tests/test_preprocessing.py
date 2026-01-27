@@ -2,7 +2,6 @@ from pathlib import Path
 import cv2
 import matplotlib
 import pytest
-import pooch  # type: ignore[import-untyped]
 import os
 import logging
 
@@ -17,7 +16,7 @@ def test_process_directory_single_image(
     reference_images : tuple,
 ):
     raw_input = reference_images[3] 
-    pp.process_directory(pooch.os_cache("test_images"), tmp_path)
+    pp.process_directory(Path(raw_input), tmp_path)
     processed_tiff = tmp_path / os.path.basename(raw_input)
     img = cv2.imread(processed_tiff, cv2.IMREAD_GRAYSCALE)
     actual_png = tmp_path / "raw_processed.png"
@@ -44,19 +43,19 @@ def test_process_directory_warns_on_unreadable_file(
     assert "Could not read file, skipping:" in caplog.text
 
 
-@pytest.mark.parametrize("img_path",
+@pytest.mark.parametrize("input_path",
     [
-        "images_raw.tiff",
-        "",
+        2,  # case where the file path suffix for a single file is not `.tiff` or `.tif`
+        "no_files",  # case where there are no files found in a provided directory
     ]
 )
-def test_iter_images_yields_path(img_path):
+def test_process_directory_error(tmp_path, reference_images, input_path):
     """
-    test functionality of ``iter_images`` to return path from
-    either directory or single image file path.
+    check that FileNotFoundError raised when no .tiff/.tif files found
     """
-    base_path = pooch.os_cache("test_images")
-    in_path = os.path.join(base_path, img_path)
-    out_paths = pp.iter_images(in_path)
-    for out_path in out_paths:
-        assert os.path.isfile(out_path)
+    if type(input_path) is int:
+        input_path = Path(reference_images[input_path])
+    else:
+        input_path = tmp_path / input_path
+    with pytest.raises(FileNotFoundError, match="No `.tiff` or `.tif` files found"):
+        pp.process_directory(input_path, tmp_path)

@@ -1,11 +1,9 @@
 """
 Pre-processing utilities for TIFF images.
 
-The module offers three public functions:
+The module offers two public functions:
 
     - ``process_image``: CLAHE contrast enhancement followed by un-sharp masking.
-
-    - ``iter_images``: lazy generator that yields every TIFF under a root path.
 
     - ``process_directory``: end-to-end batch processor that writes enhanced
                              images to a target folder.
@@ -13,19 +11,18 @@ The module offers three public functions:
 All heavy lifting happens in process_image; the other helpers are mere
 orchestration wrappers.
 """
-import os
 from pathlib import Path
-from typing import Iterable
 import cv2
 import numpy as np
 import logging
+from tqdm.auto import tqdm
+from itertools import chain
 
 
 log = logging.getLogger(__name__)
 
 __all__ = [
     "process_image",
-    "iter_images",
     "process_directory",
 ]
 
@@ -78,56 +75,47 @@ def process_image(
     return sharpened
 
 
-def iter_images(img_path: Path) -> Iterable[Path]:
-    """
-    Recursively yield all files under ``img_path`` with the
-    extensions ``.tif`` or ``.tiff``.
-
-    ``img_path`` can be a directory of images or a path to
-    a single image.
-
-    Parameters
-    ----------
-    img_path : Path
-        Directory that is walked depth-first OR image
-        file path 
-
-    Returns
-    -------
-    Iterable[pathlib.Path]
-        Absolute paths of discovered images.
-    """
-    
-    SUPPORTED_EXTS = (".tiff", ".tif")
-    if os.path.isfile(img_path):
-        yield img_path
-    elif os.path.isdir(img_path):
-        for dirpath, _, files in os.walk(img_path):
-            for name in files:
-                if name.lower().endswith(SUPPORTED_EXTS):
-                    yield Path(dirpath) / name
-
 def process_directory(
-    input_dir: Path, 
+    input_path: Path, 
     output_dir: Path
 ) -> None:
     """
-    Run CLAHE + un-sharp masking on every TIFF found in input_dir.
+    Run CLAHE + un-sharp masking on every TIFF found in input_path
+    or any single TIFF image path provided.
 
-    The processed images are written to output_dir
-    sub-directory structure is not preserved, so identical
-    filenames will be overwritten.
+    Note: The processed images are written to ``output_dir``
+    so ``input_path`` sub-directory structure is not preserved
+    and therefore identical filenames will be overwritten.
 
     Parameters
     ----------
-    input_dir : Path
-        Folder tree that contains raw .tiff / .tif files.
+    input_path : Path
+        Path to directory that contains raw .tiff/.tif files
+        or single .tiff/.tif image file path.
     output_dir : Path
         Destination folder; will be created if missing.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    for in_path in iter_images(input_dir):
+    input_paths = []
+    # check if a single input image is provided
+    if input_path.is_file() and input_path.suffix.lower() in [".tiff", ".tif"]:
+        input_paths.append(input_path)
+    # otherwise find all the `.tiff` or `.tif` files recursively in the path
+    else:
+        input_paths.extend(list(chain(
+            input_path.glob("**/*.tiff"),
+            input_path.glob("**/*.tif"))
+            )
+        )
+    # if no files are found in the provided path, raise ``FileNotFoundError``
+    if not input_paths:
+        raise FileNotFoundError(f"No `.tiff` or `.tif` files found in {input_path}")
+    # iterate through images and perform preprocessing
+    for in_path in tqdm(
+        input_paths,
+        total=len(input_paths),
+        desc="Preprocessing Images",
+    ):
         out_path = output_dir / in_path.name
         img = cv2.imread(in_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
         if img is not None:

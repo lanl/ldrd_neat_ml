@@ -11,31 +11,8 @@ from tqdm.auto import tqdm
 
 
 __all__: Sequence[str] = [
-    "collect_tiff_paths", 
     "run_opencv"
-]
-
-def collect_tiff_paths(
-    img_dir: Path
-) -> list[Path]:
-    """
-    Recursively locate every TIFF image beneath a given directory.
-
-    Parameters
-    ----------
-    img_dir : Path
-        Root directory to search for files.
-
-    Returns
-    -------
-    list[path]
-        List of absolute file paths for each .tiff file found.
-    """
-    if not img_dir.is_absolute():
-        raise ValueError(
-            f"Absolute file path required, got {img_dir}"
-        )
-    return list(img_dir.glob("**/*.tiff"))
+] 
 
 
 def _detect_single_image(
