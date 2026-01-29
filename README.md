@@ -2,13 +2,71 @@
 
 ## Installing the project
 
-To install the project, clone the repository and install
-the package, core dependencies, and optional dependencies
-by calling:
+Download the package from the following GitHub repository:  
+
+```bash
+git clone git@github.com:lanl/ldrd_neat_ml.git
+```
+
+Install the project, core dependencies,
+and optional dependencies by calling:
 
 ```
 python -m pip install -v ".[dev]" 
 ```
+
+## Writing a `.yaml` input file for OpenCV detection
+
+The workflow takes as input a `.yaml` configuration file with information
+on where to find the input image data for blob detection; save the
+output images.
+
+The `.yaml` file should follow the format below (an example
+can be found at `neat_ml/data/opencv_detection_test.yaml`)
+Input paths can be provided as either absolute or relative
+file paths.
+
+```yaml
+roots:
+  work: path/to/save/output
+
+datasets:
+  - id: name_of_save_folder
+    method: Currently only supports ``OpenCV`` (or ``opencv``) as input
+    class: subfolder_for_image_class
+    time_label: subfolder_for_timestamp
+
+    detection:
+      img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
+      debug: True/False for debug (`True` will save side-by-side figure
+             of raw image next to bounding box overlay.)
+```
+
+## Running OpenCV detection
+
+To run the workflow with a given `.yaml` file: 
+
+`python run_workflow.py --config <YAML file> --steps detect`
+
+To run the workflow using ``opencv_detection_test.yaml``:
+
+1. download and install the project
+2. run the test-suite to download the test images from `pooch`
+3. run the following command to get the path where the images are stored
+
+```
+python -c "import pooch; print(pooch.os_cache('test_images'))"
+```
+
+4. replace ``datatsets:detection:img_dir`` `path/to/pooch/images` in the `.yaml` with the local filepath
+5. call the `run_workflow` command with `--config neat_ml/data/opencv_detection_test.yaml`
+
+This should process and detect bubbles from the image file `images_raw.tiff` and 
+place the outputs under ``roots:work`` filepath from the `.yaml` file
+
+For information relevant to running the workflow:  
+
+`python run_workflow.py --help`
 
 ## Running the Main ML workflow
 

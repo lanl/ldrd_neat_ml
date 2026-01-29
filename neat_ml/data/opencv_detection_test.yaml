@@ -1,0 +1,12 @@
+roots:
+  work: neat_ml/tests/data/
+
+datasets:
+  - id: Test
+    method: OpenCV
+    class: ''
+    time_label: ''
+    
+    detection:
+      img_dir: 'path/to/pooch/images/images_raw.tiff'
+      debug: True
