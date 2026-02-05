@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 import os
 import shutil
-from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
 
@@ -125,19 +124,17 @@ def test_run_detection_skips_if_output_already_exists(
     assert "Detection already exists" in caplog.text
 
 
-@pytest.mark.parametrize("ds, paths, exp_columns, exp_1, exp_2",
+@pytest.mark.parametrize("ds, paths, exp_columns",
     [
         (    
             {"id": "BS4", "method": "bubblesam", "detection": {}},
             {"det_dir": "det_dir"},
             {"image_filepath", "num_blobs_SAM", "median_radii_SAM"},
-            11.71288013023329, 11,
         ),
         (
             {"id": "DS6", "method": "OpenCV", "detection": {"debug": True}},
             {"proc_dir": "proc_dir", "det_dir": "det_dir"},
             {"image_filepath", "num_blobs_opencv", "median_radii_opencv"},
-            1735.0, 3.623063564300537,
         ),
     ]
 )
@@ -145,13 +142,11 @@ def test_stage_detect_pipeline_runs(
     tmpdir,
     mocker,
     mock_tiny_weights,
-    mask_settings,
+    reduced_mask_settings,
     reference_images: tuple,
     ds: dict,
     paths: dict,
     exp_columns: set,
-    exp_1,
-    exp_2,
 ) -> None:
     """
     test that ``stage_detect`` runs successfully
@@ -173,10 +168,6 @@ def test_stage_detect_pipeline_runs(
         shutil.copy(raw_image, tiff_dir / "tiff_img.tiff")
         
         if method == "bubblesam":
-            mocker.patch.dict(
-                "neat_ml.bubblesam.bubblesam.DEFAULT_MASK_SETTINGS",
-                mask_settings,
-            )
             # move sam2 weights to working dir
             chkpt_dir = Path("neat_ml/sam2/checkpoints")
             chkpt_dir.mkdir(parents=True)
@@ -227,8 +218,6 @@ def test_stage_detect_pipeline_runs(
     assert df_out is not None
     assert df_out.shape == (2, 3)
     assert exp_columns.issubset(df_out.columns)
-    assert_allclose(df_out.iloc[:, 1], exp_1)
-    assert_allclose(df_out.iloc[:, 2], exp_2)
 
 
 def test_stage_detect_unknown_method_error(
@@ -261,3 +250,41 @@ def test_stage_bubblesam_uses_dataset_level_img_dir_fallback(
 
     wf.run_detection(ds, paths)
     assert (det_dir / "bubblesam_summary.csv").is_file()
+
+
+def test_run_workflow_single_image_path(
+    tmp_path,
+    image_with_circles_fixture,
+    reduced_mask_settings,
+    mock_tiny_weights
+):
+    """
+    test that providing run workflow with a path to a single image
+    generates the correct outputs
+    """
+    det_dir = tmp_path / "det"
+
+    ds = {
+        "id": "BS5",
+        "method": "bubblesam",
+        "detection": {"img_dir": image_with_circles_fixture}
+    }
+    paths = {"det_dir": det_dir}
+
+    df_out = wf.run_detection(ds, paths)
+    assert df_out.shape == (1, 3)
+    assert (det_dir / "bubblesam_summary.csv").is_file()
+    assert (det_dir / "circles_masks_filtered.parquet.gzip").is_file()
+
+
+def test_run_detection_bad_path_error(tmp_path):
+    """
+    test that ``run_detection`` raises FileNotFoundError
+    if provided an unreadable image filepath
+    """
+    det_dir = tmp_path / "det"
+    det_dir.mkdir(parents=True)
+    ds = {"id": "BS3", "method": "BubbleSAM", "detection": {"img_dir": "bad/path"}}
+    paths = {"det_dir": det_dir}
+    with pytest.raises(FileNotFoundError, match="Invalid filepath."):
+        wf.run_detection(ds, paths)

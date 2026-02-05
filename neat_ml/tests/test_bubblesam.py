@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.testing.compare import compare_images
 from importlib.resources import files
 from importlib.resources.abc import Traversable
+import logging
 
 from neat_ml.bubblesam.bubblesam import (
     show_anns,
@@ -137,19 +138,6 @@ def test_save_masks_creates_pngs(tmp_path: Path):
     expected = seg.astype(np.uint8) * 255
     assert_array_equal(actual, expected)
 
-@pytest.fixture(scope="session")
-def image_with_circles_fixture(tmp_path_factory) -> Path:
-    """
-    Return a path to a 100x100 black RGB image with two white circles.
-    """
-    img = np.zeros((100, 100, 3), np.uint8)
-    white, filled = (255, 255, 255), -1
-    cv2.circle(img, center=(30, 30), radius=10, color=white, thickness=filled)
-    cv2.circle(img, center=(70, 65), radius=15, color=white, thickness=filled)
-    fpath = tmp_path_factory.mktemp("imgs") / "circles.png"
-    cv2.imwrite(fpath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    return fpath
-
 def test_bubblesam_detection_generates_pngs_cpu(
     tmp_path: Path,
     image_with_circles_fixture: Path,
@@ -260,3 +248,23 @@ def test_analyze_and_filter_masks_no_props(center_pixel):
     mask_df = pd.DataFrame({"segmentation": [image.astype(bool)]}) 
     out_df = analyze_and_filter_masks(mask_df)    
     assert out_df.empty
+
+
+def test_setup_cuda_mps_warns(
+    mocker,
+    caplog,
+    model_chkpt = CHECKPOINT,
+):
+    """
+    test that a warning is raised when initializing ``setup_cuda``
+    with `mps` backend
+    """
+    mocker.patch("torch.backends.mps.is_available", return_value=True)
+    caplog.set_level(logging.WARNING) 
+    model = SAMModel(
+        model_config="sam2_hiera_t.yaml",
+        checkpoint_path=model_chkpt,
+        device="mps",
+    )
+    model.setup_cuda()
+    assert "Support for MPS devices is preliminary" in caplog.text

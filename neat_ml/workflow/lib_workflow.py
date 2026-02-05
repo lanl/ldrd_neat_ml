@@ -121,6 +121,10 @@ def run_detection(
             proc_dir.glob("**/*.tif")
         )  # type: ignore[assignment]
         df_imgs = pd.DataFrame({"image_filepath": img_paths})
+    else:
+        raise FileNotFoundError(
+            "Invalid filepath. Must provide path to image or directory."
+        )
     # run specified detection method
     if method.lower() == "opencv":
         df_out = run_opencv(df_imgs, det_dir, debug=debug)
