@@ -250,8 +250,11 @@ def test_analyze_and_filter_masks_no_props(center_pixel):
     assert out_df.empty
 
 
+@pytest.mark.skipif(
+    not torch.backends.mps.is_available(),
+    reason="This test is intended for macos systems with torch mps support"
+)
 def test_setup_cuda_mps_warns(
-    mocker,
     caplog,
     model_chkpt = CHECKPOINT,
 ):
@@ -259,7 +262,6 @@ def test_setup_cuda_mps_warns(
     test that a warning is raised when initializing ``setup_cuda``
     with `mps` backend
     """
-    mocker.patch("torch.backends.mps.is_available", return_value=True)
     caplog.set_level(logging.WARNING) 
     model = SAMModel(
         model_config="sam2_hiera_t.yaml",
