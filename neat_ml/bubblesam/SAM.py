@@ -27,16 +27,16 @@ class SAMModel:
         """
         Description
         -----------
-        Construct the wrapper and remember paths / device; 
+        Construct the wrapper, build the SAM2 model, and remember paths / device; 
 
         Parameters
         ----------
         model_config : str
-                YAML cfg describing network architecture.
+                Path to YAML cfg describing network architecture.
         checkpoint_path : Traversable
                 Path to *.pt checkpoint with learned weights.
         device : str
-                Torch device ('cuda' | 'cpu' | 'cuda:0', …).
+                Torch device ('cuda' | 'cpu' | 'mps' | 'cuda:0', …).
         """
         self.model_config = model_config
         self.checkpoint = checkpoint_path
@@ -47,7 +47,8 @@ class SAMModel:
         """
         Description
         -----------
-        Enable bfloat16 and TF32 on Ampere GPUs for speed.
+        Enable bfloat16 and TF32 on Ampere GPUs for speed or
+        log warning when using `mps` backend on macos
         
         Note: this code is derived from the example jupyter notebook
         stored at:

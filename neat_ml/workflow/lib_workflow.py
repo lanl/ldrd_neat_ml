@@ -61,7 +61,7 @@ def run_detection(
         ``method == BubbleSAM``
     paths : dict[str, Path]
         Paths from get_path_structure() (proc_dir, det_dir if built).
-        
+    
     Returns:
     --------
     df_out: Optional[pd.DataFrame]

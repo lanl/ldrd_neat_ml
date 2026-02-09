@@ -43,7 +43,6 @@ dev = ['mypy',
        'types-pyyaml',
        'pytest-mock',
 ]
-
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
 "neat_ml.tests.baseline" = ["*.png"]

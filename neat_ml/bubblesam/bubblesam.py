@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # via visual inspection to increase the number of bubbles
 # detected and with consideration of computational
 # cost. As noted in the `README.md`, increased speed
-# and lower GPU memory can be achieved by reducing
+# and lower memory use can be achieved by reducing
 # ``points_per_side`` from 32 to 16.
 #
 # NOTE: these parameters were not determined via 
@@ -218,10 +218,6 @@ def plot_filtered_masks(
     ax.axis("off")
     fig.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    elif torch.backends.mps.is_available():
-        torch.mps.empty_cache()
 
 
 def bubblesam_detection(
@@ -266,11 +262,7 @@ def bubblesam_detection(
     masks = sam_model.generate_masks(image, mask_settings)
     masks_summary_df = pd.DataFrame(masks)
     
-    filtered_df = analyze_and_filter_masks(
-        masks_summary_df,
-        area_threshold=25,
-        circularity_threshold=0.90
-    )
+    filtered_df = analyze_and_filter_masks(masks_summary_df)
    
     # save filtered dataframe as parquet file
     # convert ``contours`` column to list to save as parquet
@@ -315,7 +307,7 @@ def run_bubblesam(
     debug: bool = False,
 ) -> pd.DataFrame:
     """
-    Primary orchestrator entry point - matches call-site in run_workflow.py.
+    Perform detection of bubbles in input images using SAM2
 
     Parameters
     ----------

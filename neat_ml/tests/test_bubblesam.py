@@ -30,7 +30,7 @@ def _skip_unless_available(model_chkpt: Traversable = CHECKPOINT) -> None:
     """
     Abort the whole module if we cannot load sam2 or the checkpoint.
     """
-    pytest.importorskip("sam2", reason="sam2 package is required for SAM-2 tests")
+    pytest.importorskip("neat_ml.sam2", reason="sam2 package is required for SAM-2 tests")
     if not model_chkpt.is_file():
         pytest.skip(
             f"SAM-2 checkpoint not found at {model_chkpt}. "
@@ -174,6 +174,7 @@ def test_bubblesam_detection_generates_pngs_cpu(
         result1 = compare_images(
             desired_overlay, actual_overlay,  tol=1e-4
         )  # type: ignore[call-overload]
+        # loosened tolerance below to accommodate cross-platform testing
         result2 = compare_images(
             desired_contours, actual_contours, tol=1e-2
         )  # type: ignore[call-overload]
@@ -198,7 +199,7 @@ def test_sam_internal_api(real_sam_model: SAMModel):
     assert isinstance(seg, np.ndarray)
     assert seg.dtype is np.dtype("bool")
     assert "area" in masks[0]
-    assert masks[0]["area"] ==  seg.sum()
+    assert masks[0]["area"] == seg.sum()
 
 def test_run_bubblesam_cpu(
     tmp_path: Path,
@@ -212,7 +213,7 @@ def test_run_bubblesam_cpu(
     """
     model_cfg = {
         "model_config": "sam2_hiera_t.yaml",
-        "checkpoint_path": CHECKPOINT,
+        "checkpoint_path": model_chkpt,
         "device": "cpu",
     }
     df_in = pd.DataFrame({"image_filepath": [image_with_circles_fixture]})

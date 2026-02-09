@@ -13,7 +13,7 @@ Install the Segment Anything-2 (SAM2) module, including the pre-trained weight c
 ```bash
 # install SAM2
 cd neat_ml/sam2
-pip install -e ".[notebooks]"
+pip install -e
 # download model checkpoints
 cd checkpoints
 # modify the provided bash script to download the appropriate checkpoints
@@ -22,10 +22,10 @@ sh download_ckpts.sh
 ```    
 
 NOTE:
-    * refer to ``neat_ml/sam2/INSTALL.sh`` for troubleshooting 
-    * GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
-      specific GPU on the users system. For download instructions and information visit:
-      `https://pytorch.org/get-started/locally/`
+* refer to ``neat_ml/sam2/INSTALL.sh`` for troubleshooting 
+* GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
+specific GPU on the users system. For download instructions and information visit:
+`https://pytorch.org/get-started/locally/`
 
 Install the project, core dependencies,
 and optional dependencies by calling:
@@ -61,7 +61,7 @@ roots:
 
 datasets:
   - id: name_of_save_folder
-    method: Currently only supports ``OpenCV`` or ``BubbleSAM`` as input
+    method: Supports ``OpenCV`` or ``BubbleSAM`` as input
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
 
@@ -80,8 +80,8 @@ module load cudatoolkit/24.7_12.5
 
 The `SAM2` model here uses the `sam2_hiera_large.pt` as the checkpoint file to detect
 bubbles from microscopy images. The parameters used for the `SAM2AutomaticMaskGenerator`
-are outlined in `bubbleSAM()` method in `neat_ml/bubblesam.py`. These parameters affect
-the performance of the model as well as the computational cost. 
+are outlined in `DEFAULT_MASK_SETTINGS` method in `neat_ml/bubblesam/bubblesam.py`.
+These parameters affect the performance of the model as well as the computational cost. 
 In order to run the script faster (or with less memory), modify the `points_per_side` to 16.
 
 ## Running the OpenCV or SAM2 workflow

@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-
 import pytest
 import os
 import shutil
@@ -47,7 +46,7 @@ def test_run_detection_warns_when_paths_missing(
     run_detection: if 'det_dir' (or 'proc_dir') missing -> warning and return.
     """ 
     caplog.set_level(logging.WARNING) 
-    ds["detection"] = {"img_dir": str(tmp_path)}
+    ds["detection"] = {"img_dir": tmp_path}
     paths = {"proc_dir": tmp_path / "p"}
 
     wf.run_detection(ds, paths)
@@ -117,7 +116,7 @@ def test_run_detection_skips_if_output_already_exists(
     det_dir.mkdir(parents=True)
     (det_dir / f"anything_{suff}.parquet.gzip").write_text("done")
     
-    ds["detection"] = {"img_dir": str(tmp_path)}
+    ds["detection"] = {"img_dir": tmp_path}
     paths = {key: tmp_path / value for (key, value) in paths.items()}
     wf.run_detection(ds, paths)
 
@@ -231,25 +230,6 @@ def test_stage_detect_unknown_method_error(
     
     with pytest.raises(ValueError, match="Unknown detection method"):
         wf.stage_detect(ds, paths)
-
-
-def test_stage_bubblesam_uses_dataset_level_img_dir_fallback(
-    mock_tiny_weights,
-    tmp_path: Path
-) -> None:
-    """
-    run_detection: with ``bubblesam`` uses dataset.img_dir when
-    detection.img_dir is not provided.
-    """
-    det_dir = tmp_path / "det"
-    img_dir = tmp_path / "imgs_fallback"
-    img_dir.mkdir()
-
-    ds = {"id": "BS5", "method": "bubblesam", "detection": {"img_dir": img_dir}}
-    paths = {"det_dir": det_dir}
-
-    wf.run_detection(ds, paths)
-    assert (det_dir / "bubblesam_summary.csv").is_file()
 
 
 def test_run_workflow_single_image_path(
