@@ -25,7 +25,8 @@ NOTE:
 * refer to ``neat_ml/sam2/INSTALL.sh`` for troubleshooting 
 * GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
 specific GPU on the users system. For download instructions and information visit:
-`https://pytorch.org/get-started/locally/`
+
+https://pytorch.org/get-started/locally/
 
 Install the project, core dependencies,
 and optional dependencies by calling:
@@ -80,9 +81,12 @@ module load cudatoolkit/24.7_12.5
 
 The `SAM2` model here uses the `sam2_hiera_large.pt` as the checkpoint file to detect
 bubbles from microscopy images. The parameters used for the `SAM2AutomaticMaskGenerator`
-are outlined in `DEFAULT_MASK_SETTINGS` method in `neat_ml/bubblesam/bubblesam.py`.
+are outlined in `DEFAULT_MASK_SETTINGS` dictionary in `neat_ml/bubblesam/bubblesam.py`.
 These parameters affect the performance of the model as well as the computational cost. 
 In order to run the script faster (or with less memory), modify the `points_per_side` to 16.
+A description of the parameter settings can be found at:
+
+https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/automatic_mask_generator.py#L36
 
 ## Running the OpenCV or SAM2 workflow
 
