@@ -268,3 +268,16 @@ def test_run_detection_bad_path_error(tmp_path):
     paths = {"det_dir": det_dir}
     with pytest.raises(FileNotFoundError, match="Invalid filepath."):
         wf.run_detection(ds, paths)
+        
+def test_stage_detect_returns_empty_dataframe(
+    tmp_path: Path
+):
+    """
+    test that stage detect returns an empty dataframe
+    when the output of ``run_detection`` is None
+    """
+    ds = {"id": "DS8", "method": "bubblesam"}
+    paths = {"proc_dir": tmp_path / "p", "det_dir": tmp_path / "d"}
+    
+    df_out = wf.stage_detect(ds, paths)
+    assert df_out.empty

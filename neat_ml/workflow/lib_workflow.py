@@ -137,7 +137,7 @@ def run_detection(
 def stage_detect(
     dataset_config: dict[str, Any],
     paths: dict[str, Path]
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame:
     """
     Route detection to OpenCV or BubbleSAM based on dataset.method.
 
@@ -150,7 +150,7 @@ def stage_detect(
 
     Returns:
     --------
-    df_out: Optional[pd.DataFrame]
+    df_out: pd.DataFrame
         dataframe containing summary of opencv bubble detection
         information 
     """
@@ -158,6 +158,9 @@ def stage_detect(
     ds_id = dataset_config.get("id")
     if method in ["opencv", "bubblesam"]:
         df_out = run_detection(dataset_config, paths)
-        return df_out
+        if df_out is not None:
+            return df_out
+        else:
+            return pd.DataFrame()
     else:
         raise ValueError(f"Unknown detection method '{method}' for dataset '{ds_id}'.")

@@ -42,7 +42,7 @@ def main(config_path: str, steps_str: str) -> None:
             # run detection and return output dataframe
             df_out = stage_detect(ds, paths)
             out_path = base_path / dataset_id  / method / img_class / timestamp
-            if df_out is not None:
+            if not df_out.empty:
                 df_out.to_csv(
                     out_path / "bubble_data_summary.csv"
                 )
