@@ -26,11 +26,11 @@ def _as_steps_set(steps_str: str) -> list[str]:
     list[str]
         Normalized steps. 'all' expands to full pipeline.
     """
-    raw: list[str] = [s.strip() for s in steps_str.split(",") if s.strip()]
+    raw = [s.strip() for s in steps_str.split(",") if s.strip()]
     if raw == ["all"]:
         return ["detect", "analysis"]
 
-    out: list[str] = []
+    out = []
     for s in raw:
         sl = s.lower()
         out.append(sl)
@@ -204,87 +204,81 @@ def stage_detect(
         raise ValueError(f"Unknown detection method '{method}' for dataset '{ds_id}'.")
        
 
-def stage_analyze_features(dataset_config: Dict[str, Any], paths: Dict[str, Path]) -> None:
+def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
     """
     Run per-image and aggregate feature analysis for one dataset.
 
     Parameters
     ----------
-    dataset_config : Dict[str, Any]
+    dataset_config : dict[str, Any]
         Dataset config with optional 'analysis' block.
-    paths : Dict[str, Path]
+    paths : dict[str, Path]
         Paths built for active steps.
-
-    Returns
-    -------
-    None
-        Writes per-image and aggregate CSVs.
     """
-    ds_id: str = str(dataset_config.get("id", "unknown"))
-    mode: str = str(dataset_config.get("method", ""))
-    time_label: str = str(dataset_config.get("time_label", ""))
+    ds_id = dataset_config.get("id", "unknown")
+    mode = dataset_config.get("method", "")
+    time_label = dataset_config.get("time_label", "")
 
-    composition_cols: list[str] = list(dataset_config.get("composition_cols", []))
-    analysis_cfg: Dict[str, Any] = dict(dataset_config.get("analysis", {}))
+    composition_cols = dataset_config.get("composition_cols", [])
+    analysis_cfg = dataset_config.get("analysis", {})
 
-    # input_dir: Path = Path(
-    #     analysis_cfg.get("input_dir", paths.get("det_dir", ""))
-    # )
-    input_dir_val: Optional[str] = (
+    input_dir_val = (
         analysis_cfg.get("input_dir")
         or (str(paths["det_dir"]) if "det_dir" in paths and paths["det_dir"] else None)
     )
     if not input_dir_val:
-        log.error("No analysis input_dir provided and det_dir unavailable. Skipping '%s'.", ds_id)
+        log.warning(f"No analysis input_dir provided and det_dir unavailable. Skipping '{ds_id}'.")
         return
 
-    input_dir: Path = Path(input_dir_val)
-    per_image_csv: Path = Path(
+    input_dir = Path(input_dir_val)
+    per_image_csv = Path(
         analysis_cfg.get("per_image_csv", paths.get("per_csv", Path()))
     )
-    aggregate_csv: Path = Path(
+    aggregate_csv = Path(
         analysis_cfg.get("aggregate_csv", paths.get("agg_csv", Path()))
     )
-    composition_csv: Optional[Path] = (
+    composition_csv = (
         Path(analysis_cfg["composition_csv"])
         if "composition_csv" in analysis_cfg else paths.get("composition_csv")
     )
 
-    group_cols: list[str] = list(
+    group_cols = list(
         analysis_cfg.get("group_cols", ["Group", "Label", "Time", "Class"])
     )
-    cols_to_add: list[str] = ["Group", "Phase_Separation"] + composition_cols
-    carry_over_cols: list[str] = ["Phase_Separation"] + composition_cols
+    cols_to_add = ["Group", "Phase_Separation"] + composition_cols
+    carry_over_cols = ["Phase_Separation"] + composition_cols
 
-    graph_method: Optional[str] = analysis_cfg.get("graph_method",
-                                                   dataset_config.get("graph_method"))
-    graph_param: Optional[int | float] = analysis_cfg.get(
-        "graph_param", dataset_config.get("graph_param")
-    )
+    graph_method = analysis_cfg.get("graph_method", dataset_config.get("graph_method"))
+    graph_param = analysis_cfg.get("graph_param", dataset_config.get("graph_param"))
+    
+    if graph_method is None:
+        raise ValueError("Please provide `graph_method` input.")
 
-    if not str(input_dir):
-        log.error("No analysis input_dir provided and det_dir unavailable. Skipping '%s'.",
-                  ds_id)
-        return
     if not input_dir.exists():
-        log.error("Analysis input_dir '%s' does not exist for '%s'.", input_dir, ds_id)
+        log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
         return
     if composition_csv and not Path(composition_csv).exists():
-        log.error("Composition CSV '%s' missing for '%s'.", composition_csv, ds_id)
+        log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
         return
     
     method_key = mode.lower()
-    expected_pattern: Optional[str] = "*_bubble_data.pkl" if method_key == "opencv" else "*_masks_filtered.pkl" if method_key == "bubblesam" else None
+    expected_pattern = ("*_bubble_data.parquet.gzip" if method_key == "opencv"
+        else "*_masks_filtered.parquet.gzip" if method_key == "bubblesam" else None
+    )
     if expected_pattern is not None and not any(input_dir.rglob(expected_pattern)):
-        log.error("No detection outputs matching '%s' under '%s' for dataset '%s' (mode='%s'). Skipping.",
-                  expected_pattern, input_dir, ds_id, mode)
+        log.warning(
+            (f"No detection outputs matching '{expected_pattern}' under"
+            f"'{input_dir}' for dataset '{ds_id}' (mode='{mode}'). Skipping.")
+        )
+        return
 
     aggregate_csv.parent.mkdir(parents=True, exist_ok=True)
     per_image_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    log.info("Analyzing '%s'. Input='%s' -> Per='%s', Agg='%s'.",
-             ds_id, input_dir, per_image_csv, aggregate_csv)
-
+    log.info(
+        f"Analyzing '{ds_id}'. Input='{input_dir}' -> Per='{per_image_csv}', Agg='{aggregate_csv}'."
+    )
+    
     full_analysis(
         input_dir=input_dir,
         per_image_csv=per_image_csv,
