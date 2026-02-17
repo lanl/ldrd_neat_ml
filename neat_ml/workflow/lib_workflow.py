@@ -83,12 +83,12 @@ def get_path_structure(
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
     if any(s in steps_set for s in {"analysis"}):
-        a_cfg: Dict[str, Any] = dict(dataset_config.get("analysis", {}))
-        default_per: Path = results_root / ds_id / "per_image.csv"
-        default_agg: Path = results_root / ds_id / "aggregate.csv"
+        a_cfg = dataset_config.get("analysis", {})
+        default_per  = results_root / ds_id / "per_image.csv"
+        default_agg = results_root / ds_id / "aggregate.csv"
         paths["per_csv"] = Path(a_cfg.get("per_image_csv", default_per))
         paths["agg_csv"] = Path(a_cfg.get("aggregate_csv", default_agg))
-        comp_choice: Optional[str] = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
+        comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)
 
@@ -235,7 +235,9 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         or (str(paths["det_dir"]) if "det_dir" in paths and paths["det_dir"] else None)
     )
     if not input_dir_val:
-        log.warning(f"No analysis input_dir provided and det_dir unavailable. Skipping '{ds_id}'.")
+        log.warning(
+            f"No analysis input_dir provided and det_dir unavailable. Skipping '{ds_id}'."
+        )
         return
 
     input_dir = Path(input_dir_val)
@@ -261,6 +263,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     
     if graph_method is None:
         raise ValueError("Please provide `graph_method` input.")
+    if (graph_method.lower() in ["knn", "radius"]) and (graph_param is None):
+        raise ValueError(f"Graph method: {graph_method} requires `graph_param` input.")
 
     if not input_dir.exists():
         log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
@@ -284,7 +288,10 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     per_image_csv.parent.mkdir(parents=True, exist_ok=True)
 
     log.info(
-        f"Analyzing '{ds_id}'. Input='{input_dir}' -> Per='{per_image_csv}', Agg='{aggregate_csv}'."
+        (
+            f"Analyzing '{ds_id}'. Input='{input_dir}' ->"
+            f"Per='{per_image_csv}', Agg='{aggregate_csv}'."
+        )
     )
     
     full_analysis(

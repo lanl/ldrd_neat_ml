@@ -361,8 +361,30 @@ def test_process_parquet_files_errors(tmp_path: Path):
     with pytest.raises(FileNotFoundError, match="No valid files were processed"):
         da.process_parquet_files(tmp_path, mode="OpenCV", graph_method="delaunay")
 
-@pytest.mark.parametrize("mode", ["OpenCV", "BubbleSAM"])
-def test_full_analysis_pipeline(mock_dir, mode):
+@pytest.mark.parametrize("mode, tiff_name", 
+    [
+        (
+            "OpenCV",
+            (
+                'offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9'
+                '-4b1c-b304-ea40e77f0780_bubble_data.tiff'
+            ),
+        ),
+        (
+            "BubbleSAM",
+            (
+                'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
+                '-4285-824d-e82eafedce90_masks_filtered.tiff'
+            ),
+        )
+
+    ]
+)
+def test_full_analysis_pipeline(
+    mock_dir,
+    mode,
+    tiff_name,
+):
     input_dir, output_dir, comp_csv = mock_dir
     per_image_csv = output_dir / f"per_image_{mode}.csv"
     aggregate_csv = output_dir / f"aggregate_{mode}.csv"
@@ -383,6 +405,10 @@ def test_full_analysis_pipeline(mock_dir, mode):
     assert per_image_csv.exists()
     assert aggregate_csv.exists()
     df_agg = pd.read_csv(aggregate_csv)
+    df_per = pd.read_csv(per_image_csv)
+    assert df_per["image_name"].item() == tiff_name
+    assert df_agg.shape == (1, 98)
+    assert df_per.shape == (1, 30)
     
     assert "Phase_Separation" in df_agg.columns
     assert "Offset" in df_agg.columns
