@@ -1,0 +1,25 @@
+roots:
+  work: neat_ml/tests/data/
+  results: neat_ml/tests/data/
+
+datasets:
+  - id: Test
+    method: BubbleSAM
+    class: ''
+    time_label: ''
+    composition_cols:
+      - "Dextran 500 kg/mol (wt%)"
+      - "PEO 20 kg/mol (wt%)"
+    analysis:
+      input_dir: path/to/parquet/files
+      composition_csv: path/to/composition/information
+      per_image_csv: path/to/save/per/image/csv
+      aggregate_csv: path/to/save/aggregate/csv 
+      group_cols:
+        - Group
+        - Label
+        - Time
+        - Class
+      graph_method: radius OR knn OR delaunay
+      graph_param: optional param for radius and knn methods 
+
