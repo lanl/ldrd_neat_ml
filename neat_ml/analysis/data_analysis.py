@@ -617,7 +617,7 @@ def process_parquet_files(
         metrics = calculate_all_spatial_metrics(
             df_blobs, graph_method=graph_method, graph_param=graph_param
         )
-        metrics["image_name"] = parquet_path.with_suffix(".tiff").name
+        metrics["image_name"] =  parquet_path.name.replace("parquet.gzip", "tiff")
         metrics.update(metadata)
         rows.append(metrics)
 
