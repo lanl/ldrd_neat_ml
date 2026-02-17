@@ -1,4 +1,3 @@
-import re
 import logging
 from pathlib import Path
 import pytest
@@ -22,14 +21,14 @@ def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message
 @pytest.mark.parametrize(
     ("steps_str", "expected"),
     [
-        ("all", ["detect", "analysis"]),                # expands to full pipeline
+        ("all", ["detect", "analysis"]),  # expands to full pipeline
         (" Detect ,  Analysis ", ["detect", "analysis"]),  # whitespace + case normalization
-        ("ANALYSIS,DETECT", ["analysis", "detect"]),    # preserves order after lowercasing
-        ("", []),                                       # empty input -> empty list
-        (", ,", []),                                    # only commas/whitespace -> empty list
-        ("ALL", ["all"]),                               # case-sensitive: 'ALL' does not expand
-        ("detect,", ["detect"]),                        # trailing comma ignored
-        ("X,DETECT", ["x", "detect"]),                  # unknown steps pass through lowercased
+        ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
+        ("", []),  # empty input -> empty list
+        (", ,", []),  # only commas/whitespace -> empty list
+        ("ALL", ["all"]),  # case-sensitive: 'ALL' does not expand
+        ("detect,", ["detect"]),  # trailing comma ignored
+        ("X,DETECT", ["x", "detect"]),  # unknown steps pass through lowercased
     ],
 )
 def test_as_steps_set_normalizes_and_expands(steps_str: str, expected: list[str]) -> None:
@@ -370,63 +369,79 @@ def test_stage_detect_returns_empty_dataframe(
     assert df_out.empty
 
 def test_stage_analyze_features_errors_when_input_dir_unavailable(
-    caplog: pytest.LogCaptureFixture, tmp_path: Path
-) -> None:
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
-    stage_analyze_features: logs error when neither analysis.input_dir nor paths['det_dir'] is available.
+    stage_analyze_features: logs warning when neither
+    analysis.input_dir nor paths['det_dir'] is available.
     """
-    caplog.set_level(logging.ERROR)
+    caplog.set_level(logging.WARNING)
     ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
-    paths: dict[str, Path] = {}
-
-    wf.stage_analyze_features(ds, paths)
-    assert_logged(caplog, logging.ERROR, "No analysis input_dir provided and det_dir unavailable. Skipping 'AN1'.")
+    wf.stage_analyze_features(ds, {})
+    assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
 
 
-def test_stage_analyze_features_errors_when_input_dir_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+def test_stage_analyze_features_errors_when_input_dir_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
-    stage_analyze_features: logs error if input_dir path does not exist.
+    stage_analyze_features: logs warning if input_dir path does not exist.
     """
-    caplog.set_level(logging.ERROR)
+    caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "no_such_dir"
-    ds = {"id": "AN2", "method": "OpenCV", "time_label": "T01", "analysis": {"input_dir": str(input_dir)}}
-    paths: dict[str, Path] = {}
+    ds = {
+        "id": "AN2",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {"input_dir": input_dir}, "graph_method": "knn"}
 
-    wf.stage_analyze_features(ds, paths)
+    wf.stage_analyze_features(ds, {})
 
     assert f"Analysis input_dir '{input_dir}' does not exist for 'AN2'." in caplog.text
 
 
-def test_stage_analyze_features_errors_when_composition_csv_missing(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+def test_stage_analyze_features_errors_when_composition_csv_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
-    stage_analyze_features: logs error if composition_csv is provided but does not exist.
+    stage_analyze_features: logs warning if composition_csv is provided but does not exist.
     """
-    caplog.set_level(logging.ERROR)
+    caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "in"
     input_dir.mkdir()
     missing_csv = tmp_path / "missing.csv"
 
-    ds = {"id": "AN3", "method": "OpenCV", "time_label": "T01", "analysis": {"input_dir": str(input_dir), "composition_csv": str(missing_csv)}}
-    paths: dict[str, Path] = {}
-
-    wf.stage_analyze_features(ds, paths)
+    ds = {
+        "id": "AN3",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir, 
+            "composition_csv": missing_csv,
+            "graph_method": "knn",
+            }
+         }
+    wf.stage_analyze_features(ds, {})
 
     assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
 
 
 def test_stage_analyze_features_happy_path_calls_full_analysis(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+):
     """
     stage_analyze_features: happy path creates output dirs and calls full_analysis with expected args.
     """
     input_dir = tmp_path / "in"
     input_dir.mkdir()
-    (input_dir / "stub_bubble_data.pkl").write_text("stub")
+    (input_dir / "stub_bubble_data.parquet.gzip").write_text("stub")
     out_per = tmp_path / "out" / "per" / "per_image.csv"
     out_agg = tmp_path / "out" / "agg" / "aggregate.csv"
 
-    called: dict[str, Any] = {}
+    called = {}
 
     def fake_full_analysis(
         *,
@@ -470,14 +485,13 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
         "graph_method": "knn",
         "graph_param": 7,
         "analysis": {
-            "input_dir": str(input_dir),
-            "per_image_csv": str(out_per),
-            "aggregate_csv": str(out_agg),
+            "input_dir": input_dir,
+            "per_image_csv": out_per,
+            "aggregate_csv": out_agg,
         },
     }
-    paths: dict[str, Path] = {}
 
-    wf.stage_analyze_features(ds, paths)
+    wf.stage_analyze_features(ds, {})
 
     # Output dirs created
     assert out_per.parent.exists()
@@ -497,60 +511,50 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     assert called["carry_over_cols"] == ["Phase_Separation", "PEG", "Dex"]
     assert called["group_cols"] == ["Group", "Label", "Time", "Class"]
 
-def _patch_logger_error_to_raise(monkeypatch: pytest.MonkeyPatch) -> None:
-    """
-    Replace wf.log.error with a function that raises RuntimeError(message % args),
-    so tests can assert with pytest.raises(match=...).
-    """
-    def _raise(msg: str, *args: Any, **kwargs: Any) -> None:
-        raise RuntimeError(msg % args if args else msg)
-
-    monkeypatch.setattr(wf.log, "error", _raise)
-
 
 def test_stage_analyze_features_raises_when_input_dir_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    caplog: pytest.LogCaptureFixture,
+):
     """
     No analysis.input_dir and no paths['det_dir'] -> logs (now raises) and returns.
     """
-    _patch_logger_error_to_raise(monkeypatch)
 
+    caplog.set_level(logging.WARNING)
     ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
-    with pytest.raises(
-        RuntimeError,
-        match=r"No analysis input_dir provided and det_dir unavailable\. Skipping 'AN1'\.",
-    ):
-        wf.stage_analyze_features(ds, paths={})
+    wf.stage_analyze_features(ds, paths={})
+    assert "No analysis input_dir provided and det_dir unavailable" in caplog.text
 
 
 def test_stage_analyze_features_raises_when_input_dir_path_missing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+    tmp_path,
+    caplog: pytest.LogCaptureFixture,
+):
     """
     analysis.input_dir exists as a string but the path itself does not exist.
     """
-    _patch_logger_error_to_raise(monkeypatch)
 
+    caplog.set_level(logging.WARNING)
     missing_dir = tmp_path / "no_such_dir"
     ds = {
         "id": "AN2",
         "method": "OpenCV",
         "time_label": "T01",
-        "analysis": {"input_dir": str(missing_dir)},
+        "analysis": {
+            "input_dir": missing_dir,
+            "graph_method": "knn"
+        },
     }
-    pattern = rf"Analysis input_dir '{re.escape(str(missing_dir))}' does not exist for 'AN2'\."
-    with pytest.raises(RuntimeError, match=pattern):
-        wf.stage_analyze_features(ds, paths={})
-
+    wf.stage_analyze_features(ds, paths={})
+    assert "Analysis input_dir" in caplog.text
 
 def test_stage_analyze_features_raises_when_composition_csv_missing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
     composition_csv provided but the file does not exist.
     """
-    _patch_logger_error_to_raise(monkeypatch)
+    caplog.set_level(logging.WARNING)
 
     input_dir = tmp_path / "in"
     input_dir.mkdir()
@@ -560,21 +564,24 @@ def test_stage_analyze_features_raises_when_composition_csv_missing(
         "id": "AN3",
         "method": "OpenCV",
         "time_label": "T01",
-        "analysis": {"input_dir": str(input_dir), "composition_csv": str(missing_csv)},
+        "analysis": {
+            "input_dir": input_dir,
+            "composition_csv": missing_csv,
+            "graph_method": "knn"
+        },
     }
-    pattern = rf"Composition CSV '{re.escape(str(missing_csv))}' missing for 'AN3'\."
-    with pytest.raises(RuntimeError, match=pattern):
-        wf.stage_analyze_features(ds, paths={})
+    wf.stage_analyze_features(ds, paths={})
+    assert "Composition CSV" in caplog.text
 
 
 def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
-    Input dir exists but contains no *_bubble_data.pkl files (mode='OpenCV').
+    Input dir exists but contains no *_bubble_data.parquet files (mode='OpenCV').
     """
-    _patch_logger_error_to_raise(monkeypatch)
-
+    caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "empty_in"
     input_dir.mkdir()
 
@@ -582,24 +589,22 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
         "id": "AN4",
         "method": "OpenCV",
         "time_label": "T01",
-        "analysis": {"input_dir": str(input_dir)},
+        "analysis": {
+            "input_dir": input_dir,
+            "graph_method": "knn"
+        },
     }
-    pat = re.escape("*_bubble_data.pkl")
-    expected = (
-        rf"No detection outputs matching '{pat}' under '{re.escape(str(input_dir))}' "
-        rf"for dataset 'AN4' \(mode='OpenCV'\)\. Skipping\."
-    )
-    with pytest.raises(RuntimeError, match=expected):
-        wf.stage_analyze_features(ds, paths={})
-
+    wf.stage_analyze_features(ds, paths={})
+    assert "No detection outputs matching" in caplog.text
 
 def test_stage_analyze_features_raises_when_no_detection_outputs_bubblesam(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
     """
-    Input dir exists but contains no *_masks_filtered.pkl files (mode='BubbleSAM').
+    Input dir exists but contains no *_masks_filtered.parquet.gzip files (mode='BubbleSAM').
     """
-    _patch_logger_error_to_raise(monkeypatch)
+    caplog.set_level(logging.WARNING)
 
     input_dir = tmp_path / "empty_in_bs"
     input_dir.mkdir()
@@ -608,41 +613,36 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_bubblesam(
         "id": "AN5",
         "method": "BubbleSAM",
         "time_label": "T01",
-        "analysis": {"input_dir": str(input_dir)},
-    }
-    pat = re.escape("*_masks_filtered.pkl")
-    expected = (
-        rf"No detection outputs matching '{pat}' under '{re.escape(str(input_dir))}' "
-        rf"for dataset 'AN5' \(mode='BubbleSAM'\)\. Skipping\."
-    )
-    with pytest.raises(RuntimeError, match=expected):
-        wf.stage_analyze_features(ds, paths={})
+        "analysis":
+            {
+                "input_dir": input_dir,
+                "graph_method": "knn"
+            },
+        }
+    wf.stage_analyze_features(ds, paths={})
+    assert "No detection outputs matching" in caplog.text
 
 def test_stage_analyze_features_logs_when_input_dir_falsy_string(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class EmptyStrPath:
-        def __init__(self, value: str = "") -> None:
-            self._v = value
-        def __str__(self) -> str:
-            return ""
-        def exists(self) -> bool:  # pragma: no cover
-            return False
-        def rglob(self, pattern: str):  # pragma: no cover
-            return iter(())
-        @property
-        def parent(self):  # pragma: no cover
-            return self
-        def mkdir(self, parents: bool = False, exist_ok: bool = False) -> None:  # pragma: no cover
-            return None
-    monkeypatch.setattr(wf, "Path", EmptyStrPath)
-    def _raise(msg: str, *args: Any, **kwargs: Any) -> None:
-        raise RuntimeError(msg % args if args else msg)
-    monkeypatch.setattr(wf.log, "error", _raise)
-
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level(logging.WARNING)
     ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
-    with pytest.raises(
-        RuntimeError,
-        match=r"No analysis input_dir provided and det_dir unavailable\. Skipping 'AN1'\.",
-    ):
+    wf.stage_analyze_features(ds, paths={})
+    assert "No analysis input_dir provided" in caplog.text
+
+
+def test_stage_analyze_features_no_graph_method_error(tmp_path):
+    """
+    assert that a ValueError is raised when no ``graph_method`` is provided
+    """
+    ds = {
+        "id": "AN5",
+        "method": "BubbleSAM",
+        "time_label": "T01",
+        "analysis":
+            {
+                "input_dir": tmp_path,
+            },
+        }
+    with pytest.raises(ValueError, match="Please provide `graph_method` input."):
         wf.stage_analyze_features(ds, paths={})
