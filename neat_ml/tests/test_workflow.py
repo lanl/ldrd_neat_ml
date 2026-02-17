@@ -8,6 +8,7 @@ import pandas as pd
 from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
+import pandas as pd
 
 def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
     """
@@ -395,7 +396,12 @@ def test_stage_analyze_features_errors_when_input_dir_missing(
         "id": "AN2",
         "method": "OpenCV",
         "time_label": "T01",
-        "analysis": {"input_dir": input_dir}, "graph_method": "knn"}
+        "analysis": { 
+            "input_dir": input_dir,
+            "graph_method": "knn",
+            "graph_param": 1
+        }
+    }
 
     wf.stage_analyze_features(ds, {})
 
@@ -422,6 +428,7 @@ def test_stage_analyze_features_errors_when_composition_csv_missing(
             "input_dir": input_dir, 
             "composition_csv": missing_csv,
             "graph_method": "knn",
+            "graph_param": 1
             }
          }
     wf.stage_analyze_features(ds, {})
@@ -430,53 +437,17 @@ def test_stage_analyze_features_errors_when_composition_csv_missing(
 
 
 def test_stage_analyze_features_happy_path_calls_full_analysis(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    mock_dir,
 ):
     """
-    stage_analyze_features: happy path creates output dirs and calls full_analysis with expected args.
+    stage_analyze_features: happy path creates output dirs
+    and calls full_analysis with expected args.
     """
-    input_dir = tmp_path / "in"
-    input_dir.mkdir()
-    (input_dir / "stub_bubble_data.parquet.gzip").write_text("stub")
-    out_per = tmp_path / "out" / "per" / "per_image.csv"
-    out_agg = tmp_path / "out" / "agg" / "aggregate.csv"
-
-    called = {}
-
-    def fake_full_analysis(
-        *,
-        input_dir: Path,
-        per_image_csv: Path,
-        aggregate_csv: Path,
-        mode: str,
-        graph_method: str | None,
-        graph_param: int | float | None,
-        composition_csv: Path | None,
-        cols_to_add: list[str],
-        group_cols: list[str],
-        carry_over_cols: list[str],
-        time_label: str,
-        exclude_numeric_cols: list[str],
-    ) -> None:
-        called.update(
-            {
-                "input_dir": input_dir,
-                "per_image_csv": per_image_csv,
-                "aggregate_csv": aggregate_csv,
-                "mode": mode,
-                "graph_method": graph_method,
-                "graph_param": graph_param,
-                "composition_csv": composition_csv,
-                "cols_to_add": cols_to_add,
-                "group_cols": group_cols,
-                "carry_over_cols": carry_over_cols,
-                "time_label": time_label,
-                "exclude_numeric_cols": exclude_numeric_cols,
-            }
-        )
-
-    monkeypatch.setattr(wf, "full_analysis", fake_full_analysis)
-
+    input_dir, output_dir, comp_csv = mock_dir
+    out_per = output_dir / "per_image.csv"
+    out_agg = output_dir / "aggregate.csv"
+    
     ds = {
         "id": "AN4",
         "method": "OpenCV",
@@ -490,26 +461,15 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
             "aggregate_csv": out_agg,
         },
     }
+    roots = {"work": input_dir, "results": output_dir}
+    paths = wf.get_path_structure(roots, ds, ["analysis"])
+    wf.stage_analyze_features(ds, paths)
 
-    wf.stage_analyze_features(ds, {})
-
-    # Output dirs created
-    assert out_per.parent.exists()
-    assert out_agg.parent.exists()
-
-    # Call arguments validated
-    assert called["input_dir"] == input_dir
-    assert called["per_image_csv"] == out_per
-    assert called["aggregate_csv"] == out_agg
-    assert called["mode"] == "OpenCV"
-    assert called["graph_method"] == "knn"
-    assert called["graph_param"] == 7
-    assert called["composition_csv"] is None
-    assert called["time_label"] == "T99"
-    assert called["exclude_numeric_cols"] == ["Offset"]
-    assert called["cols_to_add"] == ["Group", "Phase_Separation", "PEG", "Dex"]
-    assert called["carry_over_cols"] == ["Phase_Separation", "PEG", "Dex"]
-    assert called["group_cols"] == ["Group", "Label", "Time", "Class"]
+    # assertions about the outputs from calling ``full_analysis``
+    df_per = pd.read_csv(out_per) 
+    df_agg = pd.read_csv(out_agg)
+    assert df_per.shape == (1, 30)
+    assert df_agg.shape == (1, 95)
 
 
 def test_stage_analyze_features_raises_when_input_dir_unavailable(
@@ -541,7 +501,8 @@ def test_stage_analyze_features_raises_when_input_dir_path_missing(
         "time_label": "T01",
         "analysis": {
             "input_dir": missing_dir,
-            "graph_method": "knn"
+            "graph_method": "knn",
+            "graph_param": 1
         },
     }
     wf.stage_analyze_features(ds, paths={})
@@ -567,7 +528,8 @@ def test_stage_analyze_features_raises_when_composition_csv_missing(
         "analysis": {
             "input_dir": input_dir,
             "composition_csv": missing_csv,
-            "graph_method": "knn"
+            "graph_method": "knn",
+            "graph_param": 1
         },
     }
     wf.stage_analyze_features(ds, paths={})
@@ -591,7 +553,8 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
         "time_label": "T01",
         "analysis": {
             "input_dir": input_dir,
-            "graph_method": "knn"
+            "graph_method": "knn",
+            "graph_param": 1
         },
     }
     wf.stage_analyze_features(ds, paths={})
@@ -616,7 +579,8 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_bubblesam(
         "analysis":
             {
                 "input_dir": input_dir,
-                "graph_method": "knn"
+                "graph_method": "knn",
+                "graph_param": 1
             },
         }
     wf.stage_analyze_features(ds, paths={})
@@ -631,9 +595,22 @@ def test_stage_analyze_features_logs_when_input_dir_falsy_string(
     assert "No analysis input_dir provided" in caplog.text
 
 
-def test_stage_analyze_features_no_graph_method_error(tmp_path):
+@pytest.mark.parametrize("graph_method, graph_param, err_msg",
+    [
+        (None, None, "Please provide `graph_method` input."),
+        ("knn", None, "Graph method:")
+    ]
+)
+def test_stage_analyze_features_no_graph_method_param_error(
+    tmp_path,
+    graph_method,
+    graph_param,
+    err_msg
+):
     """
     assert that a ValueError is raised when no ``graph_method`` is provided
+    OR when ``graph_method`` is "knn" or "radius" and no ``graph_param`` is
+    provided.
     """
     ds = {
         "id": "AN5",
@@ -642,7 +619,9 @@ def test_stage_analyze_features_no_graph_method_error(tmp_path):
         "analysis":
             {
                 "input_dir": tmp_path,
+                "graph_method": graph_method,
+                "graph_param": graph_param,
             },
         }
-    with pytest.raises(ValueError, match="Please provide `graph_method` input."):
+    with pytest.raises(ValueError, match=err_msg):
         wf.stage_analyze_features(ds, paths={})
