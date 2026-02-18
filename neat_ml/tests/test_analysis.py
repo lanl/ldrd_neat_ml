@@ -355,11 +355,20 @@ def test_merge_composition_data():
             merge_key="UniqueID"
         )
 
-def test_process_parquet_files_errors(tmp_path: Path):
-    with pytest.raises(ValueError, match="Mode must be either"):
-        da.process_parquet_files(tmp_path, mode="BadMode", graph_method="delaunay")
-    with pytest.raises(FileNotFoundError, match="No valid files were processed"):
-        da.process_parquet_files(tmp_path, mode="OpenCV", graph_method="delaunay")
+@pytest.mark.parametrize("mode, err, err_msg",
+    [
+        ("BadMode", ValueError, "Mode must be either"),
+        ("OpenCV", FileNotFoundError, "No valid files were processed"),
+    ]
+)
+def test_process_parquet_files_errors(
+    tmp_path: Path,
+    mode,
+    err,
+    err_msg,
+):
+    with pytest.raises(err, match=err_msg):
+        da.process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
 
 @pytest.mark.parametrize("mode, tiff_name", 
     [
