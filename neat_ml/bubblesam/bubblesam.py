@@ -10,7 +10,6 @@ import joblib
 import logging
 from matplotlib.axes import Axes
 from numpy.random import Generator
-from importlib.resources import files
 
 from skimage.measure import label, regionprops, find_contours
 from matplotlib.patches import Rectangle
@@ -20,40 +19,6 @@ from .SAM import SAMModel
 memory = joblib.Memory("joblib_cache", verbose=0)
 
 logger = logging.getLogger(__name__)
-
-# these settings are used to parametrize 
-# ``SAM2AutomaticMaskGenerator`` and were hand-tuned
-# via visual inspection to increase the number of bubbles
-# detected and with consideration of computational
-# cost. As noted in the `README.md`, increased speed
-# and lower memory use can be achieved by reducing
-# ``points_per_side`` from 32 to 16.
-#
-# NOTE: these parameters were not determined via 
-# systematic hyperparameter optimization (issue #13)
-DEFAULT_MASK_SETTINGS = {
-    "points_per_side": 32,
-    "points_per_batch": 128,
-    "pred_iou_thresh": 0.80,
-    "stability_score_thresh": 0.80,
-    "stability_score_offset": 0.10,
-    "crop_n_layers": 4,
-    "box_nms_thresh": 0.10,
-    "crop_n_points_downscale_factor": 1,
-    "min_mask_region_area": 5,
-    "use_m2m": True,
-}
-
-checkpoint_path = files("neat_ml.sam2").joinpath("checkpoints/sam2_hiera_large.pt")
-
-DEFAULT_MODEL_CFG = {
-    "model_config": "sam2_hiera_l.yaml",
-    "checkpoint_path": checkpoint_path,
-    "device": ("cuda" if torch.cuda.is_available()
-        else "mps" if torch.backends.mps.is_available()
-        else "cpu"
-    ),
-}
 
 
 def save_masks(masks: list[dict[str, Any]], output_path: Path) -> None:
@@ -100,6 +65,8 @@ def show_anns(
     """
     if len(anns) == 0:
         return
+    # sort the annotations from largest to smallest so that
+    # large areas do not cover small areas
     sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
     ax.set_autoscale_on(False)
 
@@ -118,8 +85,8 @@ def show_anns(
 
 def analyze_and_filter_masks(
     masks_summary_df: pd.DataFrame,
-    area_threshold: float = 25,
-    circularity_threshold: float = 0.9
+    area_threshold: float,
+    circularity_threshold: float
 ) -> pd.DataFrame:
     """
     Analyzes each mask (row) in masks_summary_df, measuring shape properties 
@@ -130,14 +97,14 @@ def analyze_and_filter_masks(
     masks_summary_df : pd.DataFrame
         DataFrame containing at least a column 'segmentation' with boolean masks.
     area_threshold : float
-        Minimum area for the mask to be retained. Value of minimum area was determined
-        by hand-tuning based on visual observation to exclude objects that were
-        too small to be considered bubbles in the microscopy images 
+        Minimum area for the mask to be retained. Default value of minimum area
+        was determined by hand-tuning based on visual observation to exclude objects
+        that were too small to be considered bubbles in the microscopy images 
     circularity_threshold : float
         Circularity threshold to consider for the mask to be "circular."
-        Value for threshold was determined by hand-tuning based on visual inspection
-        to exclude "debris" particles while accounting for non-perfectly circular
-        shape of bubbles in microscopy images
+        Default value for threshold was determined by hand-tuning based on visual
+        inspection to exclude "debris" particles while accounting for non-perfectly
+        circular shape of bubbles in microscopy images
         
     Returns
     -------
@@ -224,8 +191,9 @@ def bubblesam_detection(
     image_path: Path,
     output_dir: Path,
     sam_model: SAMModel,
-    mask_settings: dict[str, Any],
     rng: Generator,
+    area_threshold: float,
+    circularity_threshold: float,
     debug: bool = False,
 ) -> pd.DataFrame:
     """
@@ -240,10 +208,12 @@ def bubblesam_detection(
                  The directory to save the masks.
     sam_model : SAMModel
                 The initialized SAM model.
-    mask_settings : dict[str, Any]
-                    Settings for mask generation.
     rng : Generator
           pseudorandom number generator
+    area_threshold: float
+        threshold for minimum area to count detection as a bubble
+    circularity_threshold: float
+        threshold for circularity of detection to count as a bubble
     debug : bool
             If True, diagnostic images (overlay and filtered contours) will be saved.
 
@@ -259,10 +229,14 @@ def bubblesam_detection(
         raise FileNotFoundError(f"Image at path {image_path} not found.")
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    masks = sam_model.generate_masks(image, mask_settings)
+    masks = sam_model.generate_masks(image)
     masks_summary_df = pd.DataFrame(masks)
     
-    filtered_df = analyze_and_filter_masks(masks_summary_df)
+    filtered_df = analyze_and_filter_masks(
+        masks_summary_df,
+        area_threshold,
+        circularity_threshold
+    )
    
     # save filtered dataframe as parquet file
     # convert ``contours`` column to list to save as parquet
@@ -291,9 +265,9 @@ def bubblesam_detection(
             masks_summary_df=filtered_df,
             output_path=output_dir / f'{image_basename}_filtered_contours.png'
         )
-    if torch.cuda.is_available():
+    if (torch.cuda.is_available() and sam_model.device != "cpu"):
         torch.cuda.empty_cache()
-    elif torch.backends.mps.is_available():
+    elif (torch.backends.mps.is_available() and sam_model.device != "cpu"):
         torch.mps.empty_cache()
 
     return filtered_df
@@ -302,8 +276,7 @@ def run_bubblesam(
     df_imgs: pd.DataFrame,
     output_dir: Path,
     *,
-    model_cfg: dict[str, Any] = DEFAULT_MODEL_CFG,
-    mask_settings: dict[str, Any] = DEFAULT_MASK_SETTINGS,
+    model_cfg: dict[str, Any],
     debug: bool = False,
 ) -> pd.DataFrame:
     """
@@ -313,14 +286,11 @@ def run_bubblesam(
     ----------
     df_imgs : pd.DataFrame
         Dataframe containing absolute image filepaths.
-        Requires 'image_filepath'.
+        Requires column name: 'image_filepath'.
     output_dir : Path
         Target directory for _masks_filtered parquet + summary CSV.
     model_cfg : dict[str, Any]
-        Dict of settings for ``SAM2`` model. default is ``DEFAULT_MODEL_CFG``.
-    mask_settings : dict[str, Any]
-        Dict of settings for ``SAM2AutomaticMaskGenerator``.
-        default is ``DEFAULT_MASK_SETTINGS``
+        Dict of settings for ``SAM2`` model.
     debug : bool
         Save graphical overlays.
 
@@ -336,16 +306,24 @@ def run_bubblesam(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sam_model = SAMModel(**model_cfg)
-    sam_model.setup_cuda()
 
     radii = np.zeros(len(df_imgs), dtype=np.float64)
     counts = np.zeros(len(df_imgs), dtype=np.int64)
 
+    # get input threshold values or else use defaults.
+    area_threshold = model_cfg.get("area_threshold", 25.0)
+    circularity_threshold = model_cfg.get("circularity_threshold", 0.90)
     for i, img_fp in tqdm(
         enumerate(df_imgs["image_filepath"]), total=len(df_imgs), desc="[BubbleSAM]"
     ):
         stats_df = bubblesam_detection(
-            img_fp, out_dir, sam_model, mask_settings, rng, debug,
+            img_fp,
+            out_dir,
+            sam_model,
+            rng,
+            area_threshold,
+            circularity_threshold,
+            debug,
         )
         counts[i] = len(stats_df)
         radii[i] = np.sqrt(np.median(stats_df["area"]) / np.pi) if len(stats_df) else 0.0
@@ -355,6 +333,6 @@ def run_bubblesam(
     summary["num_blobs_SAM"] = counts
     summary.fillna(0, inplace=True)
 
-    (out_dir / "bubblesam_summary.csv").write_text(summary.to_csv(index=False))
+    summary.to_csv(out_dir / "bubblesam_summary.csv", index=False)
     logger.info(f"BubbleSAM processed {len(df_imgs)} images -> {out_dir}")
     return summary

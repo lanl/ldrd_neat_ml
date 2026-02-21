@@ -16,30 +16,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
-      with:
-        submodules: recursive
-        fetch-depth: 0
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
     - name: install and lint
       run: |
-        python -m pip install -e ./neat_ml/sam2/
-        python -m pip install -v -e ".[dev]"
+        python -m pip install "git+https://github.com/facebookresearch/sam2.git"
+        python -m pip install -v ".[dev]"
         mypy neat_ml
         ruff check neat_ml
-    - name: Cache SAM2 checkpoint
-      id: cache-sam2
-      uses: actions/cache@v4
-      with:
-        path: neat_ml/sam2/checkpoints/sam2_hiera_tiny.pt
-        key: sam2-hiera-tiny-checkpoint
-    - name: Download SAM2 checkpoint
-      if: steps.cache-sam2.outputs.cache-hit != 'true'
-      run: |
-        wget -q https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_tiny.pt \
-          -O neat_ml/sam2/checkpoints/sam2_hiera_tiny.pt
     - name: install fonts
       if: runner.os == 'Linux'
       run: |

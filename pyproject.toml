@@ -29,7 +29,8 @@ dependencies = [
     'pooch',
     'pyarrow',
     'torch',
-    'torchvision'
+    'torchvision',
+    'huggingface_hub'
 ]
 [project.optional-dependencies]
 dev = ['mypy',

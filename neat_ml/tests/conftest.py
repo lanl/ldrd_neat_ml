@@ -5,7 +5,6 @@ from importlib import resources
 from typing import Generator, Any
 import pooch  # type: ignore[import-untyped]
 from matplotlib import rcParams
-import neat_ml
 from pathlib import Path
 import cv2
 
@@ -85,18 +84,6 @@ def mask_settings():
 
 
 @pytest.fixture(scope="session")
-def mock_tiny_weights(session_mocker):
-    tiny_weights = resources.files(neat_ml) / "sam2/checkpoints/sam2_hiera_tiny.pt" 
-    session_mocker.patch.dict("neat_ml.bubblesam.bubblesam.DEFAULT_MODEL_CFG",
-        {
-            "model_config": "sam2_hiera_t.yaml",
-            "checkpoint_path": tiny_weights,
-        }
-    )
-    return tiny_weights
-
-
-@pytest.fixture(scope="session")
 def image_with_circles_fixture(tmp_path_factory) -> Path:
     """
     Return a path to a 100x100 black RGB image with two white circles.
@@ -105,14 +92,6 @@ def image_with_circles_fixture(tmp_path_factory) -> Path:
     white, filled = (255, 255, 255), -1
     cv2.circle(img, center=(30, 30), radius=10, color=white, thickness=filled)
     cv2.circle(img, center=(70, 65), radius=15, color=white, thickness=filled)
-    fpath = tmp_path_factory.mktemp("imgs") / "circles.png"
+    fpath = tmp_path_factory.mktemp("imgs") / "circles.tiff"
     cv2.imwrite(fpath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     return fpath
-
-
-@pytest.fixture(scope="session")
-def reduced_mask_settings(session_mocker, mask_settings):
-    session_mocker.patch.dict(
-        "neat_ml.bubblesam.bubblesam.DEFAULT_MASK_SETTINGS",
-        mask_settings,
-    )

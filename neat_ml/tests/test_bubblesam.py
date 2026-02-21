@@ -11,8 +11,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.testing.compare import compare_images
-from importlib.resources import files
-from importlib.resources.abc import Traversable
 import logging
 
 from neat_ml.bubblesam.bubblesam import (
@@ -24,48 +22,12 @@ from neat_ml.bubblesam.bubblesam import (
 )
 from neat_ml.bubblesam.SAM import SAMModel
 
-CHECKPOINT = files("neat_ml.sam2").joinpath("checkpoints/sam2_hiera_tiny.pt")
-
-def _skip_unless_available(model_chkpt: Traversable = CHECKPOINT) -> None:
-    """
-    Abort the whole module if we cannot load sam2 or the checkpoint.
-    """
-    pytest.importorskip("neat_ml.sam2", reason="sam2 package is required for SAM-2 tests")
-    if not model_chkpt.is_file():
-        pytest.skip(
-            f"SAM-2 checkpoint not found at {model_chkpt}. "
-            "Install it to run integration tests.",
-            allow_module_level=True,
-        )
-
-_skip_unless_available()
-
-@pytest.mark.skipif(
-    (torch.cuda.is_available() or torch.backends.mps.is_available()),
-    reason="This test is intended for systems without GPU support"
-)
-def test_setup_cuda_does_not_crash_on_cpu(
-    model_chkpt: Traversable = CHECKPOINT,
-):
-    """
-    Ensures that calling setup_cuda() in an environment with no GPU
-    completes without error.
-    """
-    model = SAMModel(
-        model_config="sam2_hiera_t.yaml",
-        checkpoint_path=model_chkpt,
-        device="cpu",
-    )
-    try:
-        model.setup_cuda()
-    except Exception as e:
-        pytest.fail(f"setup_cuda() raised an unexpected exception on CPU: {e}")
 
 @pytest.mark.skipif(
     not torch.cuda.is_available(),
     reason="This test requires a CUDA-enabled GPU"
 )
-def test_setup_cuda_on_real_gpu(model_chkpt: Traversable = CHECKPOINT):
+def test_setup_cuda_on_real_gpu(mask_settings):
     """
     Verifies that setup_cuda() correctly configures torch backends on
     a live GPU. This test only runs if a CUDA device is found.
@@ -74,8 +36,8 @@ def test_setup_cuda_on_real_gpu(model_chkpt: Traversable = CHECKPOINT):
     torch.backends.cudnn.allow_tf32 = False
 
     model = SAMModel(
-        model_config="sam2_hiera_t.yaml",
-        checkpoint_path=model_chkpt,
+        mask_settings=mask_settings,
+        checkpoint_path="facebook/sam2.1-hiera-tiny",
         device="cuda",
     )
     model.setup_cuda()
@@ -84,13 +46,13 @@ def test_setup_cuda_on_real_gpu(model_chkpt: Traversable = CHECKPOINT):
         assert torch.backends.cudnn.allow_tf32
 
 @pytest.fixture(scope="module")
-def real_sam_model(model_chkpt: Traversable = CHECKPOINT) -> SAMModel:
+def real_sam_model(mask_settings) -> SAMModel:
     """
     Actual SAM-2 network on CPU
     """
     return SAMModel(
-        model_config="sam2_hiera_t.yaml",
-        checkpoint_path=model_chkpt,
+        mask_settings=mask_settings,
+        checkpoint_path="facebook/sam2.1-hiera-tiny",
         device="cpu",
     )
 
@@ -103,8 +65,13 @@ def test_bubblesam_detection_missing_file_raises(
     
     rng = np.random.default_rng()
     with pytest.raises(FileNotFoundError, match=expected):
-        bubblesam_detection(missing_path, tmp_path, real_sam_model, {}, rng)
-
+        bubblesam_detection(
+            missing_path,
+            tmp_path,
+            real_sam_model,
+            rng,
+            0.0, 0.0,
+        )
 
 @pytest.mark.parametrize("slice_idx, return_call",
     [
@@ -115,13 +82,34 @@ def test_bubblesam_detection_missing_file_raises(
 def test_show_anns(slice_idx, return_call):
     """
     Smoke-test that show_anns draws without raising.
+    Verifies that annotations are rendered in descending area order (largest first).
     """
     rng = np.random.default_rng(0)
-    seg = np.ones((20, 20), bool)
+    seg_large = np.ones((20, 20), bool)
+    seg_small = np.zeros((20, 20), bool)
+    seg_small[0:5, 0:5] = True
+
     fig, ax = plt.subplots(1, 1)
-    masks = [{"segmentation": seg, "area": seg.sum()}]
+
+    # pass small mask before large to test sorting
+    masks = [
+        {"segmentation": seg_small, "area": seg_small.sum()},
+        {"segmentation": seg_large, "area": seg_large.sum()},
+    ]
+
     show_anns(masks[slice_idx], ax, rng)
     assert len(ax.get_images()) == return_call
+
+    if return_call:
+        rendered = ax.get_images()[0].get_array()
+        # the large mask covers the entire canvas, so if sorting is correct,
+        # the small mask pixels (top-left 5x5) must be rendered on top of
+        # the large mask, meaning they should differ from the rest of the image.
+        center_pixel = rendered[10, 10]   # inside large only
+        overlap_pixel = rendered[2, 2]    # inside both small (on top) and large
+
+        # if sorted correctly, small is drawn after large, overlap differs from center
+        assert not np.allclose(overlap_pixel, center_pixel)
 
 
 def test_save_masks_creates_pngs(tmp_path: Path):
@@ -138,11 +126,26 @@ def test_save_masks_creates_pngs(tmp_path: Path):
     expected = seg.astype(np.uint8) * 255
     assert_array_equal(actual, expected)
 
-def test_bubblesam_detection_generates_pngs_cpu(
+@pytest.mark.parametrize("device",
+    [
+        "cpu",
+        pytest.param(
+            "mps",
+            marks=[
+                pytest.mark.skipif(
+                    not torch.backends.mps.is_available()
+                    and not torch.cuda.is_available(), reason="only run when gpu available"
+                )
+            ]
+        ),
+    ]
+)
+def test_bubblesam_detection_generates_pngs(
     tmp_path: Path,
     image_with_circles_fixture: Path,
     real_sam_model: SAMModel,
     mask_settings: dict,
+    device: str,
 ):
     """
     bubblesam_detection(debug=True) should run the real model, save two PNGs,
@@ -154,12 +157,15 @@ def test_bubblesam_detection_generates_pngs_cpu(
     out_dir = tmp_path / "run"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    real_sam_model.device = device
+
     df = bubblesam_detection(
         image_path=img_fp,
         output_dir=out_dir,
         sam_model=real_sam_model,
-        mask_settings=mask_settings,
         rng=rng,
+        area_threshold=25.0,
+        circularity_threshold=0.90,
         debug=True,
     )
     assert not df.empty
@@ -181,40 +187,74 @@ def test_bubblesam_detection_generates_pngs_cpu(
         assert result1 is None
         assert result2 is None
 
-def test_sam_internal_api(real_sam_model: SAMModel):
+@pytest.mark.parametrize("device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda", 
+            marks=[
+                pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="only run on cuda enabled gpus"
+                )
+            ]
+        ),
+        pytest.param(
+            "mps",
+            marks=[
+                pytest.mark.skipif(
+                    not torch.backends.mps.is_available(), reason="only run on macos with mps backend"
+                )
+            ]
+        ),
+    ]
+)
+def test_sam_internal_api(
+    real_sam_model: SAMModel,
+    image_with_circles_fixture: Path,
+    device,
+):
     """
-    Call _build_model() and generate_masks() directly to confirm they
-    execute and return plausible results on CPU.
+    Call generate_masks() directly to confirm execution
+    and return plausible results across devices.
     """
-    torch_model = real_sam_model._build_model()
-    assert isinstance(torch_model, torch.nn.Module)
+    real_sam_model.device = device
+    input_img = cv2.imread(image_with_circles_fixture)  #type: ignore[call-overload]
+    masks = real_sam_model.generate_masks(image=input_img)
+    mask = masks[0]
+    seg = mask["segmentation"]
+    assert seg.sum() == mask["area"] == 8879
+    assert_array_equal(mask["bbox"], [0.0, 0.0, 99.0, 99.0])
+    assert_allclose(mask["predicted_iou"], 0.9946634769439697)
 
-    dummy_rgb = np.full((100, 100, 3), 200, np.uint8)
-    masks = real_sam_model.generate_masks(
-        image=dummy_rgb, mask_settings={}
-    )
-    assert len(masks) > 0
-
-    seg = masks[0]["segmentation"]
-    assert isinstance(seg, np.ndarray)
-    assert seg.dtype is np.dtype("bool")
-    assert "area" in masks[0]
-    assert masks[0]["area"] == seg.sum()
-
-def test_run_bubblesam_cpu(
+@pytest.mark.parametrize("device",
+    [
+        "cpu",
+        pytest.param(
+            "gpu",
+            marks=[
+                pytest.mark.skipif(
+                    not torch.backends.mps.is_available()
+                    and not torch.cuda.is_available(), reason="only run when gpu available"
+                )
+            ]
+        ),
+    ]
+)
+def test_run_bubblesam(
     tmp_path: Path,
     image_with_circles_fixture: Path,
     mask_settings,
-    model_chkpt: Traversable = CHECKPOINT,
+    device,
 ):
     """
-    End-to-end test on CPU: run_bubblesam should produce a summary CSV
-    with expected columns.
+    End-to-end test of run_bubblesam. Output dataframe should contain
+    appropriate columns and reproducable values associated with the
+    detection of two circles in a binary image.
     """
     model_cfg = {
-        "model_config": "sam2_hiera_t.yaml",
-        "checkpoint_path": model_chkpt,
-        "device": "cpu",
+        "mask_settings": mask_settings,
+        "checkpoint_path": "facebook/sam2.1-hiera-tiny",
+        "device": device,
     }
     df_in = pd.DataFrame({"image_filepath": [image_with_circles_fixture]})
     out_dir = tmp_path / "summary_run"
@@ -223,7 +263,6 @@ def test_run_bubblesam_cpu(
         df_in,
         out_dir,
         model_cfg=model_cfg,
-        mask_settings=mask_settings,
         debug=False,
     )
 
@@ -231,7 +270,7 @@ def test_run_bubblesam_cpu(
     assert expected_cols.issubset(set(summary.columns))
     assert summary["num_blobs_SAM"].item() == 2
     assert_allclose(summary["median_radii_SAM"].item(), 12.778613837669742)
-    assert summary["image_filepath"].item().name == "circles.png"
+    assert summary["image_filepath"].item().name == "circles.tiff"
 
 
 @pytest.mark.parametrize("center_pixel",
@@ -242,12 +281,12 @@ def test_run_bubblesam_cpu(
 def test_analyze_and_filter_masks_no_props(center_pixel):
     """
     test that the function returns an empty dataframe when either
-    the mask has no ROI's or the detected area has zero perimeter
+    the mask has no regions of interest or the detected area has zero perimeter
     """
     image = np.zeros([3, 3])
     image[1, 1] = center_pixel
     mask_df = pd.DataFrame({"segmentation": [image.astype(bool)]}) 
-    out_df = analyze_and_filter_masks(mask_df)    
+    out_df = analyze_and_filter_masks(mask_df, 25.0, 0.90)    
     assert out_df.empty
 
 
@@ -257,17 +296,16 @@ def test_analyze_and_filter_masks_no_props(center_pixel):
 )
 def test_setup_cuda_mps_warns(
     caplog,
-    model_chkpt = CHECKPOINT,
+    mask_settings,
 ):
     """
     test that a warning is raised when initializing ``setup_cuda``
     with `mps` backend
     """
     caplog.set_level(logging.WARNING) 
-    model = SAMModel(
-        model_config="sam2_hiera_t.yaml",
-        checkpoint_path=model_chkpt,
-        device="mps",
+    SAMModel(
+        mask_settings=mask_settings,
+        checkpoint_path="facebook/sam2.1-hiera-tiny",
+        device="gpu",
     )
-    model.setup_cuda()
     assert "Support for MPS devices is preliminary" in caplog.text

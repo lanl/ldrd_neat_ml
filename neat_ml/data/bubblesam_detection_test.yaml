@@ -1,5 +1,5 @@
 roots:
-  work: neat_ml/tests/data/
+  work: neat_ml/tests/data/pps_16
 
 datasets:
   - id: Test
@@ -8,5 +8,22 @@ datasets:
     time_label: ''
     
     detection:
-      img_dir: 'path/to/pooch/images/images_raw.tiff'
+      img_dir: '/Users/awitmer/Library/Caches/test_images/images_raw.tiff'
       debug: True
+      model_cfg:
+        mask_settings:
+          points_per_side: 32
+          points_per_batch: 128
+          pred_iou_thresh: 0.80
+          stability_score_thresh: 0.80
+          stability_score_offset: 0.10
+          crop_n_layers: 4
+          box_nms_thresh: 0.10
+          crop_n_points_downscale_factor: 1
+          min_mask_region_area: 5
+          use_m2m: True
+        checkpoint_path: "facebook/sam2.1-hiera-large"
+        device: "gpu"
+        area_threshold: 25.0
+        circularity_threshold: 0.90
+        

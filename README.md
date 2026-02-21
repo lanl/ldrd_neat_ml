@@ -5,24 +5,16 @@
 Download the package from the following GitHub repository:  
 
 ```bash
-git clone --recurse-submodules git@github.com:lanl/ldrd_neat_ml.git
+git clone git@github.com:lanl/ldrd_neat_ml.git
 ```
 
-Install the Segment Anything-2 (SAM2) module, including the pre-trained weight checkpoints:
+Install the Segment Anything-2 (SAM2) module:
 
 ```bash
-# install SAM2
-cd neat_ml/sam2
-pip install -e
-# download model checkpoints
-cd checkpoints
-# modify the provided bash script to download the appropriate checkpoints
-git apply ../../download_checkpoints.diff
-sh download_ckpts.sh
-```    
+python -m pip install "git+https://github.com/facebookresearch/sam2.git"
+```
 
 NOTE:
-* refer to ``neat_ml/sam2/INSTALL.sh`` for troubleshooting 
 * GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
 specific GPU on the users system. For download instructions and information visit:
 
@@ -35,20 +27,18 @@ and optional dependencies by calling:
 python -m pip install -v ".[dev]" 
 ```
 
-
-### Running the test-suite
-
-After installation, the test-suite can be run using:
-
-```
-pyton -m pytest
-```
-
 ## Writing a `.yaml` input file for OpenCV or SAM2 detection
 
 The workflow takes as input a `.yaml` configuration file with information
 on where to find the input image data for blob detection; save the
 output images.
+
+When using the `BubbleSAM` detection method, the `.yaml` file also provides
+parameters for mask generation with the `SAM2AutomaticMaskGenerator` function,
+postprocessing and an option to use `cpu` or `gpu` for mask generation.
+This `yaml` input file is separate from the `yaml` files used by `SAM-2` to
+build the model architecture, e.g. `sam2.1-hiera-l.yaml`, but user provided
+mask parameters override the built-in parameters for the `SAM-2` model.
 
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
@@ -70,23 +60,47 @@ datasets:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
       debug: True/False for debug (`True` will save side-by-side figure
              of raw image next to bounding box overlay.)
+      # below only include when using the ``BubbleSAM`` detection method
+      model_cfg:
+        # default mask settings for running the SAM2AutomaticMaskGenerator
+        mask_settings:
+          points_per_side: 32
+          points_per_batch: 128
+          pred_iou_thresh: 0.80
+          stability_score_thresh: 0.80
+          stability_score_offset: 0.10
+          crop_n_layers: 4
+          box_nms_thresh: 0.10
+          crop_n_points_downscale_factor: 1
+          min_mask_region_area: 5
+          use_m2m: True
+        # checkpoint path to download pre-trained SAM-2 weights using ``HuggingFace``
+        # see: https://github.com/facebookresearch/sam2?tab=readme-ov-file#sam-21-checkpoints
+        # for list of available checkpoints
+        checkpoint_path: "facebook/sam2.1-hiera-large",
+        device: "gpu" OR "cpu"
+        area_threshold: threshold for minimum area of a detected bubble
+        circularity_threshold: threshold for minimum circularity of a detected bubble
 ```
 
-### To run the code in CHICOMA:  
-```bash
-module load cudatoolkit/24.7_12.5  
-```  
-
 ## Detecting Bubbles using SAM-2
+The `SAM2` model here uses the `sam2.1_hiera_large.pt` as the checkpoint file to detect
+bubbles from microscopy images. The default parameters used for the `SAM2AutomaticMaskGenerator`
+are outlined in `neat_ml/data/bubblesam_detection_test.yaml`. These parameters were determined
+via visual inspection to increase the number of bubbles detected and with consideration of
+computational cost.  
 
-The `SAM2` model here uses the `sam2_hiera_large.pt` as the checkpoint file to detect
-bubbles from microscopy images. The parameters used for the `SAM2AutomaticMaskGenerator`
-are outlined in `DEFAULT_MASK_SETTINGS` dictionary in `neat_ml/bubblesam/bubblesam.py`.
-These parameters affect the performance of the model as well as the computational cost. 
-In order to run the script faster (or with less memory), modify the `points_per_side` to 16.
+NOTE: these parameters were not determined via systematic hyperparameter optimization (see: issue #13)
+
+In order to run the code faster (or with less memory), modify the `points_per_batch` to 64 (from 128).
+
 A description of the parameter settings can be found at:
 
 https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/automatic_mask_generator.py#L36
+
+NOTE: running the workflow using the `MPS` backend on `MacOS` may result in a `NotImplementedError`,
+in which case setting the environment variable `export PYTORCH_ENABLE_MPS_FALLBACK=1` allows `PyTorch`
+to use the `CPU` for unsupported operations on `MPS`.
 
 ## Running the OpenCV or SAM2 workflow
 
@@ -94,10 +108,10 @@ To run the workflow with a given `.yaml` file:
 
 `python run_workflow.py --config <YAML file> --steps detect`
 
-To run the workflow using ``opencv_detection_test.yaml``:
+To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
 1. download and install the project
-2. run the test-suite to download the test images from `pooch`
+2. run the test suite to download the test images from `pooch`
 3. run the following command to get the path where the images are stored
 
 ```

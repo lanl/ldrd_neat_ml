@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 import pandas as pd
-from itertools import chain
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
 from neat_ml.opencv.detection import run_opencv
@@ -117,9 +116,7 @@ def run_detection(
     if proc_dir.is_file():
         df_imgs = pd.DataFrame({"image_filepath": [proc_dir]})
     elif proc_dir.is_dir():
-        img_paths = chain(proc_dir.glob("**/*.tiff"),
-            proc_dir.glob("**/*.tif")
-        )  # type: ignore[assignment]
+        img_paths = proc_dir.glob("**/*.tiff")  # type: ignore[assignment]
         df_imgs = pd.DataFrame({"image_filepath": img_paths})
     else:
         raise FileNotFoundError(
@@ -129,7 +126,8 @@ def run_detection(
     if method.lower() == "opencv":
         df_out = run_opencv(df_imgs, det_dir, debug=debug)
     else:
-        df_out = run_bubblesam(df_imgs, det_dir, debug=debug)
+        model_cfg = detection_cfg.get("model_cfg")
+        df_out = run_bubblesam(df_imgs, det_dir, model_cfg=model_cfg, debug=debug)
     log.info(f"{method} Detection Ran Successfully.")
     return df_out
 
@@ -139,7 +137,7 @@ def stage_detect(
     paths: dict[str, Path]
 ) -> pd.DataFrame:
     """
-    Route detection to OpenCV or BubbleSAM based on dataset.method.
+    Route detection to OpenCV or BubbleSAM based on dataset_config.method.
 
     Parameters
     ----------
