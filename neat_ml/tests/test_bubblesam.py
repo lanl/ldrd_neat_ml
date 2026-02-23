@@ -23,28 +23,6 @@ from neat_ml.bubblesam.bubblesam import (
 from neat_ml.bubblesam.SAM import SAMModel
 
 
-@pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="This test requires a CUDA-enabled GPU"
-)
-def test_setup_cuda_on_real_gpu(mask_settings):
-    """
-    Verifies that setup_cuda() correctly configures torch backends on
-    a live GPU. This test only runs if a CUDA device is found.
-    """
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
-
-    model = SAMModel(
-        mask_settings=mask_settings,
-        checkpoint_path="facebook/sam2.1-hiera-tiny",
-        device="cuda",
-    )
-    model.setup_cuda()
-    if torch.cuda.get_device_properties(0).major >= 8:
-        assert torch.backends.cuda.matmul.allow_tf32
-        assert torch.backends.cudnn.allow_tf32
-
 @pytest.fixture(scope="module")
 def real_sam_model(mask_settings) -> SAMModel:
     """
@@ -130,11 +108,18 @@ def test_save_masks_creates_pngs(tmp_path: Path):
     [
         "cpu",
         pytest.param(
+            "cuda",
+            marks=[
+                pytest.mark.skipif(
+                    not torch.cuda.is_available(), reason="only run on cuda enabled gpus"
+                )
+            ]
+        ),
+        pytest.param(
             "mps",
             marks=[
                 pytest.mark.skipif(
-                    not torch.backends.mps.is_available()
-                    and not torch.cuda.is_available(), reason="only run when gpu available"
+                    not torch.backends.mps.is_available(), reason="only run on mps enabled gpus"
                 )
             ]
         ),
@@ -281,7 +266,7 @@ def test_run_bubblesam(
 def test_analyze_and_filter_masks_no_props(center_pixel):
     """
     test that the function returns an empty dataframe when either
-    the mask has no regions of interest or the detected area has zero perimeter
+    the mask has no regions of interest (ROI) or the detected area has zero perimeter
     """
     image = np.zeros([3, 3])
     image[1, 1] = center_pixel

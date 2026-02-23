@@ -1,5 +1,5 @@
 roots:
-  work: neat_ml/tests/data/pps_16
+  work: neat_ml/tests/data/
 
 datasets:
   - id: Test
@@ -8,7 +8,7 @@ datasets:
     time_label: ''
     
     detection:
-      img_dir: '/Users/awitmer/Library/Caches/test_images/images_raw.tiff'
+      img_dir: 'path/to/pooch/images/images_raw.tiff'
       debug: True
       model_cfg:
         mask_settings:

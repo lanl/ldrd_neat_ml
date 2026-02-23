@@ -55,6 +55,11 @@ class SAMModel:
         https://github.com/facebookresearch/sam2/blob/main/
         notebooks/automatic_mask_generator_example.ipynb
         """
+        self.device = (
+            "cuda" if (torch.cuda.is_available() and device == "gpu")
+            else "mps" if (torch.backends.mps.is_available() and device == "gpu")
+            else "cpu"
+        )
         if device == "gpu":
             if torch.cuda.is_available():
                 torch.autocast(
@@ -72,11 +77,6 @@ class SAMModel:
                     "give numerically different outputs and sometimes degraded performance on MPS. "
                     "See e.g. https://github.com/pytorch/pytorch/issues/84936 for a discussion."
                 )
-        self.device = (
-            "cuda" if (torch.cuda.is_available() and device == "gpu")
-            else "mps" if (torch.backends.mps.is_available() and device == "gpu")
-            else "cpu"
-        )
         return self.device
 
     def _build_model(self) -> torch.nn.Module:

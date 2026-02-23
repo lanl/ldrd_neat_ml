@@ -238,7 +238,7 @@ def test_stage_detect_unknown_method_error(
         ("bubblesam", "cpu", {"det_dir": "det"}, "masks_filtered"),
         pytest.param(
             "bubblesam",
-            "mps",
+            "gpu",
             {"det_dir": "det"},
             "masks_filtered",
             marks=[
@@ -250,7 +250,6 @@ def test_stage_detect_unknown_method_error(
         ),
         # case using opencv method
         ("opencv", None, {"det_dir": "det", "proc_dir": "proc"}, "bubble_data")
-
     ]
 )
 def test_run_workflow_single_image_path(

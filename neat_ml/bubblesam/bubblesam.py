@@ -97,14 +97,9 @@ def analyze_and_filter_masks(
     masks_summary_df : pd.DataFrame
         DataFrame containing at least a column 'segmentation' with boolean masks.
     area_threshold : float
-        Minimum area for the mask to be retained. Default value of minimum area
-        was determined by hand-tuning based on visual observation to exclude objects
-        that were too small to be considered bubbles in the microscopy images 
+        Minimum area for the mask to be retained. 
     circularity_threshold : float
         Circularity threshold to consider for the mask to be "circular."
-        Default value for threshold was determined by hand-tuning based on visual
-        inspection to exclude "debris" particles while accounting for non-perfectly
-        circular shape of bubbles in microscopy images
         
     Returns
     -------
@@ -311,6 +306,15 @@ def run_bubblesam(
     counts = np.zeros(len(df_imgs), dtype=np.int64)
 
     # get input threshold values or else use defaults.
+    # Default values of `area_threshold` and `circularity_threshold`
+    # were determined by hand-tuning based on visual observation to exclude objects
+    # that were too small to be considered bubbles and to filter out "debris" particles
+    # while accounting for non-perfectly circular shape of bubbles in microscopy images.
+    #
+    # These parameters can be customized by the user via the input config `.yaml` files.
+    # `area_threshold` is separate from `min_mask_region_area`, which is used by the
+    # `SAM2AutomaticMaskGenerator` to remove small holes in detected areas and very small
+    # segmentations
     area_threshold = model_cfg.get("area_threshold", 25.0)
     circularity_threshold = model_cfg.get("circularity_threshold", 0.90)
     for i, img_fp in tqdm(

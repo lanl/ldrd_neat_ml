@@ -35,16 +35,16 @@ output images.
 
 When using the `BubbleSAM` detection method, the `.yaml` file also provides
 parameters for mask generation with the `SAM2AutomaticMaskGenerator` function,
-postprocessing and an option to use `cpu` or `gpu` for mask generation.
+postprocessing, and an option to use `cpu` or `gpu` for mask generation.
 This `yaml` input file is separate from the `yaml` files used by `SAM-2` to
 build the model architecture, e.g. `sam2.1-hiera-l.yaml`, but user provided
 mask parameters override the built-in parameters for the `SAM-2` model.
 
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
-and `neat_ml/data/bubblesam_detection_test.yaml`)
-Input paths can be provided as either absolute or relative
-file paths.
+and `neat_ml/data/bubblesam_detection_test.yaml`).
+Input paths for `work` and `img_dir` parameters can be
+provided as either absolute or relative file paths.
 
 ```yaml
 roots:
@@ -90,7 +90,8 @@ are outlined in `neat_ml/data/bubblesam_detection_test.yaml`. These parameters w
 via visual inspection to increase the number of bubbles detected and with consideration of
 computational cost.  
 
-NOTE: these parameters were not determined via systematic hyperparameter optimization (see: issue #13)
+NOTE: these parameters were not determined via systematic hyperparameter optimization
+(see: [Issue #13](https://github.com/lanl/ldrd_neat_ml/issues/13))
 
 In order to run the code faster (or with less memory), modify the `points_per_batch` to 64 (from 128).
 
