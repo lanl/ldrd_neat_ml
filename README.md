@@ -1,4 +1,4 @@
-# LDRD_NEAT_ML (LANL copyright assertion ID: O# (O4975))
+# Emulsion Droplets Detection Suite (LANL copyright assertion ID: O# (O4975))
 
 ## Installing the project
 
