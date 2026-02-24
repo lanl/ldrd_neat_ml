@@ -84,6 +84,15 @@ datasets:
         device: "gpu" OR "cpu"
 ```
 
+### To run the code on CHICOMA:  
+```bash
+# before running workflow on back-end node...
+# download `SAM2` checkpoints on front-end node using HuggingFace CLI
+hf download "facebook/sam2.1-hiera-large"
+# load cuda module
+module load cudatoolkit/12.6.0
+```  
+
 ## Detecting Bubbles using SAM-2
 The `SAM2` model here uses the `sam2.1_hiera_large.pt` as the checkpoint file to detect
 bubbles from microscopy images. The default parameters used for the `SAM2AutomaticMaskGenerator`

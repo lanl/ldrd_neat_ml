@@ -10,6 +10,8 @@ datasets:
     detection:
       img_dir: 'path/to/pooch/images/images_raw.tiff'
       debug: True
+      area_threshold: 25.0
+      circularity_threshold: 0.90
       model_cfg:
         mask_settings:
           points_per_side: 32
@@ -23,7 +25,4 @@ datasets:
           min_mask_region_area: 5
           use_m2m: True
         checkpoint_path: "facebook/sam2.1-hiera-large"
-        device: "gpu"
-        area_threshold: 25.0
-        circularity_threshold: 0.90
-        
+        device: "gpu" 
