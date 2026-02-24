@@ -236,10 +236,14 @@ def test_run_bubblesam(
     appropriate columns and reproducable values associated with the
     detection of two circles in a binary image.
     """
-    model_cfg = {
-        "mask_settings": mask_settings,
-        "checkpoint_path": "facebook/sam2.1-hiera-tiny",
-        "device": device,
+    
+    detection_cfg = {
+        "model_cfg":
+            {
+                "mask_settings": mask_settings,
+                "checkpoint_path": "facebook/sam2.1-hiera-tiny",
+                "device": device,
+            }
     }
     df_in = pd.DataFrame({"image_filepath": [image_with_circles_fixture]})
     out_dir = tmp_path / "summary_run"
@@ -247,7 +251,7 @@ def test_run_bubblesam(
     summary = run_bubblesam(
         df_in,
         out_dir,
-        model_cfg=model_cfg,
+        detection_cfg=detection_cfg,
         debug=False,
     )
 
@@ -294,3 +298,12 @@ def test_setup_cuda_mps_warns(
         device="gpu",
     )
     assert "Support for MPS devices is preliminary" in caplog.text
+
+
+def test_run_bubblesam_model_cfg_error():
+    """
+    test that ``run_bubblesam`` raises value error
+    when provided empty `model_cfg` input
+    """
+    with pytest.raises(ValueError, match="Must provide model configuration"):
+        run_bubblesam(pd.DataFrame(), Path("output"), detection_cfg={})

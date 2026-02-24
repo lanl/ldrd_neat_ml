@@ -126,8 +126,7 @@ def run_detection(
     if method.lower() == "opencv":
         df_out = run_opencv(df_imgs, det_dir, debug=debug)
     else:
-        model_cfg = detection_cfg.get("model_cfg")
-        df_out = run_bubblesam(df_imgs, det_dir, model_cfg=model_cfg, debug=debug)
+        df_out = run_bubblesam(df_imgs, det_dir, detection_cfg=detection_cfg, debug=debug)
     log.info(f"{method} Detection Ran Successfully.")
     return df_out
 

@@ -271,7 +271,7 @@ def run_bubblesam(
     df_imgs: pd.DataFrame,
     output_dir: Path,
     *,
-    model_cfg: dict[str, Any],
+    detection_cfg: dict[str, Any],
     debug: bool = False,
 ) -> pd.DataFrame:
     """
@@ -284,8 +284,8 @@ def run_bubblesam(
         Requires column name: 'image_filepath'.
     output_dir : Path
         Target directory for _masks_filtered parquet + summary CSV.
-    model_cfg : dict[str, Any]
-        Dict of settings for ``SAM2`` model.
+    detection_cfg : dict[str, Any]
+        Dict of settings for ``SAM2`` model and postprocessing.
     debug : bool
         Save graphical overlays.
 
@@ -300,6 +300,9 @@ def run_bubblesam(
     out_dir = output_dir.expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    model_cfg = detection_cfg.get("model_cfg")
+    if not model_cfg:
+        raise ValueError("Must provide model configuration via input yaml file")
     sam_model = SAMModel(**model_cfg)
 
     radii = np.zeros(len(df_imgs), dtype=np.float64)
@@ -315,8 +318,8 @@ def run_bubblesam(
     # `area_threshold` is separate from `min_mask_region_area`, which is used by the
     # `SAM2AutomaticMaskGenerator` to remove small holes in detected areas and very small
     # segmentations
-    area_threshold = model_cfg.get("area_threshold", 25.0)
-    circularity_threshold = model_cfg.get("circularity_threshold", 0.90)
+    area_threshold = detection_cfg.get("area_threshold", 25.0)
+    circularity_threshold = detection_cfg.get("circularity_threshold", 0.90)
     for i, img_fp in tqdm(
         enumerate(df_imgs["image_filepath"]), total=len(df_imgs), desc="[BubbleSAM]"
     ):

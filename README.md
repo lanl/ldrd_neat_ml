@@ -61,6 +61,9 @@ datasets:
       debug: True/False for debug (`True` will save side-by-side figure
              of raw image next to bounding box overlay.)
       # below only include when using the ``BubbleSAM`` detection method
+      area_threshold: threshold for minimum area of a detected bubble
+      circularity_threshold: threshold for minimum circularity of a detected bubble
+      # model configuration settings for SAM2
       model_cfg:
         # default mask settings for running the SAM2AutomaticMaskGenerator
         mask_settings:
@@ -79,8 +82,6 @@ datasets:
         # for list of available checkpoints
         checkpoint_path: "facebook/sam2.1-hiera-large",
         device: "gpu" OR "cpu"
-        area_threshold: threshold for minimum area of a detected bubble
-        circularity_threshold: threshold for minimum circularity of a detected bubble
 ```
 
 ## Detecting Bubbles using SAM-2
