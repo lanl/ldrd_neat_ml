@@ -30,7 +30,7 @@ class SAMModel:
         checkpoint_path : str
                 Path to model checkpoint with learned weights.
         device : str
-                Torch device ('cuda' | 'cpu' | 'mps' | 'cuda:0', …).
+                 user choice of device to use for mask generation ("cpu" or "gpu")
         mask_settings : dict | None
                 Generator hyper-parameters (*kwargs).
         """
@@ -54,6 +54,18 @@ class SAMModel:
 
         https://github.com/facebookresearch/sam2/blob/main/
         notebooks/automatic_mask_generator_example.ipynb
+
+        Parameters
+        ----------
+        device : str
+            user defined device choice for performing mask generation ("cpu" and "gpu").
+            device is routed to appropriate `SAM2` backend based on available hardware.
+
+        Returns
+        -------
+        self.device : str
+            appropriate `SAM2` model backend as determined by user input and available
+            system hardware.
         """
         self.device = (
             "cuda" if (torch.cuda.is_available() and device == "gpu")
@@ -79,7 +91,7 @@ class SAMModel:
                 )
         return self.device
 
-    def _build_model(self) -> torch.nn.Module:
+    def _build_model(self) -> SAM2AutomaticMaskGenerator:
         """
         Description
         -----------
@@ -87,8 +99,8 @@ class SAMModel:
 
         Returns
         -------
-        torch.nn.Module
-                SAM-2 network on requested device.
+        SAM2AutomaticMaskGenerator
+            SAM-2 model with pretrained weights and mask settings on requested device.
         """
         self._model = SAM2AutomaticMaskGenerator.from_pretrained(
             self.checkpoint,

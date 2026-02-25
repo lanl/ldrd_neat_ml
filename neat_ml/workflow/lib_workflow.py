@@ -149,7 +149,9 @@ def stage_detect(
     --------
     df_out: pd.DataFrame
         dataframe containing summary of opencv bubble detection
-        information 
+        information OR empty dataframe that propagates through
+        `run_workflow.py` if dataset errors are raised in
+        `run_detection`.
     """
     method = dataset_config.get("method", "").lower()
     ds_id = dataset_config.get("id")

@@ -14,11 +14,10 @@ Install the Segment Anything-2 (SAM2) module:
 python -m pip install "git+https://github.com/facebookresearch/sam2.git"
 ```
 
-NOTE:
-* GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
-specific GPU on the users system. For download instructions and information visit:
-
-https://pytorch.org/get-started/locally/
+> [!IMPORTANT]
+> GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
+> specific GPU on the users system. For download instructions and information visit: 
+> https://pytorch.org/get-started/locally/
 
 Install the project, core dependencies,
 and optional dependencies by calling:
@@ -100,18 +99,20 @@ are outlined in `neat_ml/data/bubblesam_detection_test.yaml`. These parameters w
 via visual inspection to increase the number of bubbles detected and with consideration of
 computational cost.  
 
-NOTE: these parameters were not determined via systematic hyperparameter optimization
-(see: [Issue #13](https://github.com/lanl/ldrd_neat_ml/issues/13))
+> [!NOTE]
+> These parameters were not determined via systematic hyperparameter optimization
+> (see: [Issue #13](https://github.com/lanl/ldrd_neat_ml/issues/13))
 
-In order to run the code faster (or with less memory), modify the `points_per_batch` to 64 (from 128).
+> [!TIP]
+> In order to run the code faster (or with less memory), modify the `points_per_batch` to 64 (from 128).
 
 A description of the parameter settings can be found at:
-
 https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/automatic_mask_generator.py#L36
 
-NOTE: running the workflow using the `MPS` backend on `MacOS` may result in a `NotImplementedError`,
-in which case setting the environment variable `export PYTORCH_ENABLE_MPS_FALLBACK=1` allows `PyTorch`
-to use the `CPU` for unsupported operations on `MPS`.
+> [!WARNING]
+> running the workflow using the `MPS` backend on `MacOS` may result in a `NotImplementedError`,
+> in which case setting the environment variable `export PYTORCH_ENABLE_MPS_FALLBACK=1` allows `PyTorch`
+> to use the `CPU` for unsupported operations on `MPS`.
 
 ## Running the OpenCV or SAM2 workflow
 

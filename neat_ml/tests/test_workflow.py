@@ -325,7 +325,7 @@ def test_stage_detect_returns_empty_dataframe(
     test that stage detect returns an empty dataframe
     when the output of ``run_detection`` is `None` as
     a result of one of several dataset related warnings
-    is raised. Empty Dataframe is propagated through
+    being raised. Empty Dataframe is propagated through
     ``stage_detect`` to ``main``, where a warning about
     the empty return is raised
     """

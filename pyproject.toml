@@ -47,8 +47,3 @@ dev = ['mypy',
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
 "neat_ml.tests.baseline" = ["*.png"]
-
-[tool.coverage.run]
-omit = [
-    "neat_ml/sam2/*",
-]
