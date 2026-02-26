@@ -10,8 +10,14 @@ import joblib
 import logging
 from matplotlib.axes import Axes
 from numpy.random import Generator
+try:
+    import cucim.skimage.measure as cu
+    import cupy as cp
+except ImportError:
+    cu = None
+    cp = None
 
-from skimage.measure import label, regionprops, find_contours
+from skimage.measure import label, regionprops
 from matplotlib.patches import Rectangle
 
 from .SAM import SAMModel
@@ -86,7 +92,8 @@ def show_anns(
 def analyze_and_filter_masks(
     masks_summary_df: pd.DataFrame,
     area_threshold: float,
-    circularity_threshold: float
+    circularity_threshold: float,
+    device: str,
 ) -> pd.DataFrame:
     """
     Analyzes each mask (row) in masks_summary_df, measuring shape properties 
@@ -100,6 +107,8 @@ def analyze_and_filter_masks(
         Minimum area for the mask to be retained. 
     circularity_threshold : float
         Circularity threshold to consider for the mask to be "circular."
+    device : str
+        Device used for running ``SAM2`` model
         
     Returns
     -------
@@ -111,8 +120,13 @@ def analyze_and_filter_masks(
 
     for idx, row in masks_summary_df.iterrows():
         seg = row['segmentation']
-        labeled_seg = label(seg)
-        props_list = regionprops(labeled_seg)
+        if (device == "cuda" and cu and cp):
+            seg = cp.asarray(seg)
+            labeled_seg = cu.label(seg)
+            props_list = cu.regionprops(labeled_seg)
+        else:
+            labeled_seg = label(seg)
+            props_list = regionprops(labeled_seg)
         if len(props_list) == 0:
             continue
 
@@ -125,16 +139,37 @@ def analyze_and_filter_masks(
         circ = (4.0 * np.pi * area) / (perimeter ** 2)
         major_axis = rp.major_axis_length
         minor_axis = rp.minor_axis_length
+        h, w = seg.shape[:2]
+        # Using a small margin (2 pixels) to be safe
+        max_allowed_area = (h - 2) * (w - 2)
         if area >= area_threshold and circ >= circularity_threshold:
+            binary_mask = seg.astype('uint8') * 255
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+            # reshape contours for plotting and remove any contours
+            # close to the size of the image because cv2.findContours
+            # can sometimes detect the image edge itself.
+            all_contours = [
+                c.reshape(-1, 2)[:, ::-1]
+                for c in contours
+                if cv2.contourArea(c) < max_allowed_area
+            ]
+            radius = np.sqrt(area / np.pi)
+            euler_number = rp.euler_number
+            # output of cucim ``rp`` stores values as objects
+            if (device == "cuda" and cu):
+                area = area.item()
+                radius = radius.item()
+                circ = circ.item()
+                euler_number = euler_number.item()
             mask_info = {              
                 'bbox': rp.bbox,
-                'contour': find_contours(seg, level=0.5)[0],
+                'contour': all_contours,
                 'major_axis': major_axis,
                 'minor_axis': minor_axis,
                 'area': area,
-                'radius': np.sqrt(area / np.pi),
+                'radius': radius,
                 'circ': circ,
-                'euler_number': rp.euler_number
+                'euler_number': euler_number
             }
 
             filtered_rows.append(mask_info)
@@ -166,7 +201,7 @@ def plot_filtered_masks(
     for idx, row in masks_summary_df.iterrows():
         contour = row['contour']
         bbox = row['bbox']
-        ax.plot(contour[:, 1], contour[:, 0], linewidth=1, color='blue')
+        ax.plot(contour[0][:, 1], contour[0][:, 0], linewidth=1, color='blue')
         min_row, min_col, max_row, max_col = bbox
         rect = Rectangle(
             (min_col, min_row),
@@ -230,15 +265,14 @@ def bubblesam_detection(
     filtered_df = analyze_and_filter_masks(
         masks_summary_df,
         area_threshold,
-        circularity_threshold
+        circularity_threshold,
+        sam_model.device,
     )
    
     # save filtered dataframe as parquet file
     # convert ``contours`` column to list to save as parquet
     save_filtered_df = filtered_df.copy()
-    save_filtered_df['contour'] = save_filtered_df['contour'].apply(
-        lambda x: x.tolist() if isinstance(x, np.ndarray) else x
-    )
+    save_filtered_df['contour'] = save_filtered_df['contour'].astype(str)
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip'
     )

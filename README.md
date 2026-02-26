@@ -15,9 +15,15 @@ python -m pip install "git+https://github.com/facebookresearch/sam2.git"
 ```
 
 > [!IMPORTANT]
-> GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
+> NVIDIA GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
 > specific GPU on the users system. For download instructions and information visit: 
 > https://pytorch.org/get-started/locally/
+>
+> Measurement of detected bubbles using `SAM2` is optionally handled using the `cucim.skimage.measure` library.
+> In order to speed up post-processing of detected bubbles, install the `cucim` package with:
+> `python -m pip install cucim-cu12` which requires the `NVIDIA` drivers to be installed first.
+> `CUDA` enabled post-processing will only be performed if the user selects `device: "gpu"`
+> via the input `yaml` file (as described below) and has a `CUDA` enabled `GPU` available.
 
 Install the project, core dependencies,
 and optional dependencies by calling:

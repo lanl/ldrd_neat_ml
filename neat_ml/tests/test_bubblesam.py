@@ -195,7 +195,8 @@ def test_bubblesam_detection_generates_pngs(
 )
 def test_sam_internal_api(
     real_sam_model: SAMModel,
-    image_with_circles_fixture: Path,
+    reference_images: tuple, 
+    tmp_path: Path, 
     device,
 ):
     """
@@ -203,13 +204,14 @@ def test_sam_internal_api(
     and return plausible results across devices.
     """
     real_sam_model.device = device
-    input_img = cv2.imread(image_with_circles_fixture)  #type: ignore[call-overload]
-    masks = real_sam_model.generate_masks(image=input_img)
-    mask = masks[0]
-    seg = mask["segmentation"]
-    assert seg.sum() == mask["area"] == 8879
-    assert_array_equal(mask["bbox"], [0.0, 0.0, 99.0, 99.0])
-    assert_allclose(mask["predicted_iou"], 0.9946634769439697)
+    input_img = cv2.imread(reference_images[3])  #type: ignore[call-overload]
+    top_corner = input_img[:256, :256, :]  #type: ignore[index]
+    masks = real_sam_model.generate_masks(image=top_corner)
+    iou = np.mean([x.get("predicted_iou") for x in masks])  #type: ignore[arg-type]
+    total_area = np.sum([x.get("area") for x in masks])
+    assert len(masks) == 24
+    assert total_area == 5091
+    assert_allclose(iou, 0.880697)
 
 @pytest.mark.parametrize("device",
     [
@@ -252,7 +254,7 @@ def test_run_bubblesam(
         df_in,
         out_dir,
         detection_cfg=detection_cfg,
-        debug=False,
+        debug=True,
     )
 
     expected_cols = {"image_filepath", "median_radii_SAM", "num_blobs_SAM"}
@@ -275,7 +277,7 @@ def test_analyze_and_filter_masks_no_props(center_pixel):
     image = np.zeros([3, 3])
     image[1, 1] = center_pixel
     mask_df = pd.DataFrame({"segmentation": [image.astype(bool)]}) 
-    out_df = analyze_and_filter_masks(mask_df, 25.0, 0.90)    
+    out_df = analyze_and_filter_masks(mask_df, 25.0, 0.90, "cpu")
     assert out_df.empty
 
 
