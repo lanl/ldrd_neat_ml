@@ -74,7 +74,7 @@ def test_run_detection_warns_when_img_dir_missing(
     tmp_path: Path,
     ds: dict,
     paths: dict,
-) -> None:
+):
     """
     run_detection: if detection.img_dir missing -> warning and return.
     """
@@ -109,7 +109,7 @@ def test_run_detection_skips_if_output_already_exists(
     paths: dict,
     suff: str,
     method: str,
-) -> None:
+):
     """
     stage_opencv: if *_bubble_data.parquet.gzip exists -> skip and DO NOT call pipeline steps.
     """
@@ -147,7 +147,7 @@ def test_stage_detect_pipeline_runs(
     ds: dict,
     paths: dict,
     exp_columns: set,
-) -> None:
+):
     """
     test that ``stage_detect`` runs successfully
     when provided the appropriate directories.

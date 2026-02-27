@@ -38,7 +38,7 @@ def real_sam_model(mask_settings) -> SAMModel:
 def test_bubblesam_detection_missing_file_raises(
     tmp_path: Path,
     real_sam_model: SAMModel,
-) -> None:
+):
     missing_path = tmp_path / "does_not_exist.png"
     expected = f"Image at path {missing_path} not found."
     
