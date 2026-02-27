@@ -121,8 +121,8 @@ def analyze_and_filter_masks(
     for idx, row in masks_summary_df.iterrows():
         seg = row['segmentation']
         if (device == "cuda" and cu and cp):
-            seg = cp.asarray(seg)
-            labeled_seg = cu.label(seg)
+            seg_array = cp.asarray(seg)
+            labeled_seg = cu.label(seg_array)
             props_list = cu.regionprops(labeled_seg)
         else:
             labeled_seg = label(seg)
@@ -270,11 +270,16 @@ def bubblesam_detection(
     )
    
     # save filtered dataframe as parquet file
-    # convert ``contours`` column to list to save as parquet
+    # convert ``contours`` and ``bbox`` columns to list to save as parquet
     save_filtered_df = filtered_df.copy()
-    save_filtered_df['contour'] = save_filtered_df['contour'].astype(str)
+    save_filtered_df["bbox"] = save_filtered_df["bbox"].apply(list)
+    save_filtered_df["contour"] = save_filtered_df["contour"].apply(
+        lambda x: [arr.tolist() if isinstance(arr, np.ndarray) else arr for arr in x]
+    )
     save_filtered_df.to_parquet(
-        output_dir / f'{image_basename}_masks_filtered.parquet.gzip'
+        output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
+        engine="fastparquet",
+        compression="gzip",
     )
 
     if debug:

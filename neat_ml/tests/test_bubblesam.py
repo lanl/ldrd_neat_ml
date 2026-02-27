@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.testing.compare import compare_images
 import logging
+from pandas.testing import assert_frame_equal
 
 from neat_ml.bubblesam.bubblesam import (
     show_anns,
@@ -153,7 +154,15 @@ def test_bubblesam_detection_generates_pngs(
         circularity_threshold=0.90,
         debug=True,
     )
-    assert not df.empty
+    saved_df = pd.read_parquet(
+        out_dir / "circles_masks_filtered.parquet.gzip",
+        engine="fastparquet",
+    )
+    saved_df["bbox"] = saved_df["bbox"].apply(tuple)
+    saved_df['contour'] = saved_df['contour'].apply(
+        lambda x: [np.array(arr, dtype='int32') for arr in x]
+    )
+    assert_frame_equal(df, saved_df)
 
     actual_overlay  = out_dir / f"{stem}_with_mask.png"
     actual_contours = out_dir / f"{stem}_filtered_contours.png"
@@ -254,7 +263,7 @@ def test_run_bubblesam(
         df_in,
         out_dir,
         detection_cfg=detection_cfg,
-        debug=True,
+        debug=False,
     )
 
     expected_cols = {"image_filepath", "median_radii_SAM", "num_blobs_SAM"}
