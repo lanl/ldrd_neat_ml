@@ -19,7 +19,7 @@ python -m pip install "git+https://github.com/facebookresearch/sam2.git"
 > specific GPU on the users system. For download instructions and information visit: 
 > https://pytorch.org/get-started/locally/
 >
-> Measurement of detected bubbles using `SAM2` is optionally handled using the `cucim.skimage.measure` library.
+> Measurement of bubbles detected by `SAM2` is optionally handled using the `cucim.skimage.measure` library.
 > In order to speed up post-processing of detected bubbles, install the `cucim` package with:
 > `python -m pip install cucim-cu12` which requires the `NVIDIA` drivers to be installed first.
 > `CUDA` enabled post-processing will only be performed if the user selects `device: "gpu"`
@@ -66,8 +66,8 @@ datasets:
       debug: True/False for debug (`True` will save side-by-side figure
              of raw image next to bounding box overlay.)
       # below only include when using the ``BubbleSAM`` detection method
-      area_threshold: threshold for minimum area of a detected bubble
-      circularity_threshold: threshold for minimum circularity of a detected bubble
+      area_threshold: (float) threshold for minimum area of a detected bubble
+      circularity_threshold: (float) threshold for minimum circularity of a detected bubble
       # model configuration settings for SAM2
       model_cfg:
         # default mask settings for running the SAM2AutomaticMaskGenerator

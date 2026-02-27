@@ -44,7 +44,7 @@ def test_run_detection_warns_when_paths_missing(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
     ds: dict,
-) -> None:
+):
     """
     run_detection: if 'det_dir' (or 'proc_dir') missing -> warning and return.
     """ 
