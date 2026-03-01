@@ -1,4 +1,2 @@
-exclude = ["neat_ml/sam2", "venv"]
-
 [lint]
 extend-select = ["B006", "B008", "UP032"]

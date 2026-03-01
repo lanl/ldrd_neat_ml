@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 import pandas as pd
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
@@ -8,11 +8,17 @@ from neat_ml.opencv.detection import run_opencv
 from neat_ml.bubblesam.bubblesam import run_bubblesam
 from neat_ml.analysis.data_analysis import full_analysis
 
-__all__ = ["get_path_structure", "run_detection", "stage_detect", "stage_analyze_features", "_as_steps_set"]
+__all__ = [
+    "get_path_structure",
+    "run_detection",
+    "stage_detect",
+    "stage_analyze_features",
+    "as_steps_set",
+]
 
 log = logging.getLogger(__name__)
 
-def _as_steps_set(steps_str: str) -> list[str]:
+def as_steps_set(steps_str: str) -> list[str]:
     """
     Normalize a comma list to canonical step names.
 
@@ -59,6 +65,7 @@ def get_path_structure(
         Paths keyed by step usage (proc_dir, det_dir).
     """
     paths = {}
+    steps_set = set(steps)
     ds_id = dataset_config.get("id", "unknown")
     method = dataset_config.get("method", "")
     class_label = dataset_config.get("class", "")

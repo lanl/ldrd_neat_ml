@@ -1,12 +1,10 @@
-
-
 import argparse
 import logging
 import yaml
 from pathlib import Path
 import warnings
 
-from neat_ml.workflow.lib_workflow import (_as_steps_set,
+from neat_ml.workflow.lib_workflow import (as_steps_set,
                                            get_path_structure, 
                                            stage_detect,
                                            stage_analyze_features)
@@ -24,7 +22,7 @@ def main(config_path: str, steps_str: str) -> None:
     steps_str : str
         Comma separated list of steps. (Currently, only detect)
     """
-    steps: list[str] = _as_steps_set(steps_str)
+    steps: list[str] = as_steps_set(steps_str)
 
     with open(config_path, "r") as fh:
         cfg = yaml.safe_load(fh)
@@ -86,4 +84,3 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     main(args.config, args.steps)
-

@@ -8,7 +8,6 @@ import pandas as pd
 from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
-import pandas as pd
 
 def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
     """
@@ -34,10 +33,10 @@ def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message
 )
 def test_as_steps_set_normalizes_and_expands(steps_str: str, expected: list[str]) -> None:
     """
-    _as_steps_set: normalizes case/whitespace, preserves order, expands exact 'all',
+    as_steps_set: normalizes case/whitespace, preserves order, expands exact 'all',
     and passes unknown tokens through in lowercase.
     """
-    assert wf._as_steps_set(steps_str) == expected
+    assert wf.as_steps_set(steps_str) == expected
 
 def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """

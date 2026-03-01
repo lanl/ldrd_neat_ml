@@ -124,7 +124,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect`
+`python run_workflow.py --config <YAML file> --steps detect,analysis`
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -146,22 +146,13 @@ For information relevant to running the workflow:
 
 `python run_workflow.py --help`
 
-## Running the OpenCV or BubbleSAM workflow
-
-To run the workflow, user must follow the instructions 
-give below. 
-
-You can find the relevant information from:  
-
-`python run_workflow.py --help`
-
-Sample incantation: `python run_workflow.py --config <YAML file> --steps detect,analysis`
-
 ## Running the Main ML workflow
 
-Note that the first incantation of the main ML workflow may take several minutes, 
-but when iterating or re-running the workflow there are cached operations 
-that should speed things up (i.e., `pickle` and `joblib` caching).
+Note that the first incantation of the main ML
+workflow may take several minutes, but when iterating
+or re-running the workflow there are cached operations
+that should speed things up (i.e., `pickle` and `joblib`
+caching).
 
 Sample incantation: `python main.py --random_seed 42`
 
