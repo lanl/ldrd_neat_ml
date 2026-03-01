@@ -2,9 +2,9 @@ name: Base CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, nidhin_bubblesam_detection_backup ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, nidhin_bubblesam_detection_backup ]
 
 jobs:
   test:
