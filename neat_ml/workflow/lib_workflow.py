@@ -223,6 +223,7 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     paths : dict[str, Path]
         Paths built for active steps.
     """
+    # gather dataset configuration settings
     ds_id = dataset_config.get("id", "unknown")
     mode = dataset_config.get("method", "")
     time_label = dataset_config.get("time_label", "")
@@ -230,6 +231,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     composition_cols = dataset_config.get("composition_cols", [])
     analysis_cfg = dataset_config.get("analysis", {})
 
+    # get the user provided input path storing parquet files OR
+    # the detection dir where parquets were saved after detection
     input_dir_val = (
         analysis_cfg.get("input_dir")
         or (str(paths["det_dir"]) if "det_dir" in paths and paths["det_dir"] else None)
@@ -240,17 +243,26 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         )
         return
 
+    # get paths for saving per image and aggregate csv files
     input_dir = Path(input_dir_val)
+    if not input_dir.exists():
+        log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
+        return
+
     per_image_csv = Path(
-        analysis_cfg.get("per_image_csv", paths.get("per_csv", Path()))
+        analysis_cfg.get("per_image_csv") or paths.get("per_csv") or Path.cwd()
     )
     aggregate_csv = Path(
-        analysis_cfg.get("aggregate_csv", paths.get("agg_csv", Path()))
+        analysis_cfg.get("aggregate_csv") or paths.get("agg_csv") or Path.cwd()
     )
+    # get the path for the composition csv from input configuration
     composition_csv = (
         Path(analysis_cfg["composition_csv"])
         if "composition_csv" in analysis_cfg else paths.get("composition_csv")
     )
+    if composition_csv and not Path(composition_csv).exists():
+        log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
+        return
 
     group_cols = list(
         analysis_cfg.get("group_cols", ["Group", "Label", "Time", "Class"])
@@ -266,13 +278,6 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     if (graph_method.lower() in ["knn", "radius"]) and (graph_param is None):
         raise ValueError(f"Graph method: {graph_method} requires `graph_param` input.")
 
-    if not input_dir.exists():
-        log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
-        return
-    if composition_csv and not Path(composition_csv).exists():
-        log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
-        return
-    
     method_key = mode.lower()
     expected_pattern = ("*_bubble_data.parquet.gzip" if method_key == "opencv"
         else "*_masks_filtered.parquet.gzip" if method_key == "bubblesam" else None

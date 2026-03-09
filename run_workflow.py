@@ -1,5 +1,3 @@
-
-
 import argparse
 import logging
 import yaml
@@ -24,7 +22,7 @@ def main(config_path: str, steps_str: str) -> None:
     steps_str : str
         Comma list of steps or 'all'.
     """
-    steps: list[str] = _as_steps_set(steps_str)
+    steps = as_steps_set(steps_str)
 
     with open(config_path, "r") as fh:
         cfg = yaml.safe_load(fh)

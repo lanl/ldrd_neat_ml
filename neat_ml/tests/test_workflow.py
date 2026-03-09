@@ -9,15 +9,6 @@ from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
 
-def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
-    """
-    Assert a log record exists with the given level and exact message.
-    """
-    matched = any(rec.levelno == level and rec.getMessage() == expected_message for rec in caplog.records)
-    if not matched:
-        dump = "\n".join(f"[{r.levelname}] {r.getMessage()}" for r in caplog.records)
-        raise AssertionError(f"Expected log at level {level} with message:\n{expected_message}\nGot:\n{dump}")
-    
 @pytest.mark.parametrize(
     ("steps_str", "expected"),
     [
@@ -42,11 +33,19 @@ def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """
     get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
     """
-    roots = {"work": str(tmp_path), "results": str(tmp_path / "results")}
-    ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    roots = {"work": tmp_path, "results": tmp_path / "results"}
+    ds = {
+        "id": "DS1",
+        "method": "OpenCV",
+        "class": "pos",
+        "time_label": "T01",
+        "analysis": {
+            "composition_csv": "comp.csv"
+        }
+    }
     steps = ['detect','analysis']
 
-    paths = wf.get_path_structure(roots, ds, steps)
+    paths = wf.get_path_structure(roots, ds, steps)  #type: ignore[arg-type]
 
     base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
     assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
@@ -55,6 +54,7 @@ def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     # Default analysis outputs
     assert paths["per_csv"] == tmp_path / "results" / "DS1" / "per_image.csv"
     assert paths["agg_csv"] == tmp_path / "results" / "DS1" / "aggregate.csv"
+    assert paths["composition_csv"] == Path("comp.csv")
 
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
