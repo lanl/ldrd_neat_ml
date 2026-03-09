@@ -7,7 +7,6 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay, QhullError
-from pyarrow.lib import ArrowInvalid, ArrowIOError
 import logging
 
 __all__: Sequence[str] = [
@@ -100,7 +99,7 @@ def _parse_filename(fname: str, method: str) -> dict[str, Any]:
     }
 
 
-def _load_df(p: Path, method: str) -> pd.DataFrame:
+def _load_df(parquet_path: Path, method: str) -> pd.DataFrame:
     """
     Loads a parquet file and converts it to the standard blob schema.
 
@@ -109,7 +108,7 @@ def _load_df(p: Path, method: str) -> pd.DataFrame:
 
     Parameters
     ----------
-    p : Path
+    parquet_path : Path
         The path to the `*_masks_filtered.parquet.gzip` file.
 
     Returns
@@ -117,7 +116,7 @@ def _load_df(p: Path, method: str) -> pd.DataFrame:
     pd.DataFrame
         A DataFrame with 'center', 'area', 'radius', and 'bbox' columns.
     """
-    df = pd.read_parquet(p)
+    df = pd.read_parquet(parquet_path)
     if method.lower() == "bubblesam":
         if {"area", "bbox"}.issubset(df.columns):
             bbox_list = df["bbox"].tolist()
@@ -229,7 +228,7 @@ def calculate_voronoi_stats(
         finite_areas = []
         for region_id in vor.point_region:
             verts = vor.regions[region_id]
-            # for all valid regions calculate the are of the region
+            # for all valid regions calculate the area of the region
             # using the shoelace formula, filtering out infinite area
             # regions and extremely small regions.
             if verts and all(v >= 0 for v in verts):
@@ -326,31 +325,69 @@ def calculate_graph_metrics(
         # https://docs.scipy.org/doc/scipy-1.17.0/reference/generated/scipy.spatial.KDTree.html
         if method == "radius" and isinstance(param, (int, float)) and param > 0:
             tree = KDTree(points)
-            for i, j in tree.query_pairs(r=param):
-                dist = np.linalg.norm(points[i] - points[j])
-                graph.add_edge(i, j, distance=dist)
+            # gather point pairs from tree with radius param
+            pairs = list(tree.query_pairs(r=param))
+            # find difference between pairs of points
+            diff = np.diff(points[pairs])
+            # calculate the euclidian distance between pairs of points 
+            dist = np.linalg.norm(diff, axis=1)
+            # add point, distance pairs to graph edges
+            graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
         # alternatively calculate the graph using the KDTree
         # to find the k-nearest neighbors of the points as determined
         # by the input `param`
         elif method == "knn" and isinstance(param, int) and param > 0:
+            # k is the minimum of the input parameter
+            # OR the maximal number of neighbors (nodes-1) 
             k = min(param, n_nodes - 1)
             tree = KDTree(points)
+            # gather point pairs from tree with knn 
             dists, idxs = tree.query(points, k=k + 1)
-            for i in range(n_nodes):
-                for nn_idx in range(1, k + 1):
-                    j = idxs[i, nn_idx]
-                    if not graph.has_edge(i, j):
-                        dist = dists[i, nn_idx]
-                        graph.add_edge(i, j, distance=dist)
+            # broadcast the first column (node indices) to the shape of the
+            # knn array so that we can group the nodes with each of their
+            # nearest neighbors
+            node_idx = np.broadcast_to(idxs[:, [0]], idxs[:, 1:].shape)
+            # group the node, neighbor pairs with their respective
+            # distances and remove non-unique pairs
+            pairs_idx = np.column_stack(
+                (node_idx.ravel(), idxs[:, 1:].ravel(), dists[:, 1:].ravel())
+            )
+            unique_pairs = np.unique(np.sort(pairs_idx, axis=1), axis=0)  
+            # add all the edges to the graph
+            new_edges = (
+                (
+                    unique_pairs[n, 0],
+                    unique_pairs[n, 1],
+                    {"distance": unique_pairs[n, 2]}
+                ) for n in range(len(unique_pairs))
+            ) 
+            graph.add_edges_from(new_edges)
+
         # alternatively calculate the graph using Delaunay triangulation
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.Delaunay.html
         elif method == "delaunay" and n_nodes >= 3:
+            # calculate the delaunay triangulation of input points
             tri = Delaunay(points)
-            for simplex in tri.simplices:
-                for i, j in zip(simplex, np.roll(simplex, -1)):
-                    if not graph.has_edge(i, j):
-                        dist = np.linalg.norm(points[i] - points[j])
-                        graph.add_edge(i, j, distance=dist)
+            # get the indices of the points forming the triangles
+            tri_sim = tri.simplices
+            # shift all points so that we can calculate
+            # the distance between adjacent points
+            tri_sim_shift = np.roll(tri_sim, shift=-1, axis=1)
+            # stack points and neighbors, remove non-unique pairs
+            # and calculate the euclidean distance between the points
+            point_pairs = np.column_stack((tri_sim.ravel(), tri_sim_shift.ravel()))
+            unique_pairs = np.unique(np.sort(point_pairs, axis=1), axis=0)
+            diff = np.diff(points[unique_pairs])
+            dist = np.linalg.norm(diff, axis=1)
+            # add new edges to the graph
+            new_edges = (
+                (
+                    unique_pairs[n, 0],
+                    unique_pairs[n, 1],
+                    {"distance": dist[n]}
+                ) for n in range(len(unique_pairs))
+            )
+            graph.add_edges_from(new_edges)
     except Exception as exc:
         warnings.warn(f"Graph construction ({method}) failed: {exc}")
     
@@ -409,7 +446,7 @@ def extract_blob_properties(
     -------
     tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float]]
         A tuple containing: (centroids, areas, radii, (image_width, image_height)).
-        Returns None for arrays if data is missing.
+        Returns empty arrays/NaN values if data is missing.
     """
     required_cols = {center_col, area_col, radius_col, bbox_col}
     if not required_cols.issubset(df.columns) or df.empty:
@@ -497,8 +534,8 @@ def calculate_summary_statistics(
     group_cols: list[str],
     carry_over_cols: list[str],
     *,
-    exclude_numeric_cols: Sequence[str] | None = None,
-    exclude_numeric_regex: Sequence[str] | None = None,
+    exclude_numeric_cols: list[str] | None = None,
+    exclude_numeric_regex: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate numeric metrics per group, excluding selected numeric columns.
@@ -511,9 +548,9 @@ def calculate_summary_statistics(
         Columns to group by; must exist in df.
     carry_over_cols : list[str]
         Columns to preserve per group using 'first'.
-    exclude_numeric_cols : Sequence[str] | None
+    exclude_numeric_cols : list[str] | None
         Exact numeric column names to exclude (e.g., ['Offset']).
-    exclude_numeric_regex : Sequence[str] | None
+    exclude_numeric_regex : list[str] | None
         Regex patterns; numeric columns matching any are excluded.
 
     Returns
@@ -522,39 +559,37 @@ def calculate_summary_statistics(
         One row per group with min/max/median/std for allowed numeric cols.
         Carry-over columns are included without aggregation.
     """
-    valid_groups = [c for c in group_cols if c in df.columns]
-    if not valid_groups:
+    # check that any of the grouping columns exist in df
+    valid_cols = list(set(group_cols).intersection(df.columns)) 
+    if not valid_cols:
         raise ValueError(f"None of the grouping columns {group_cols} exist.")
 
-    carry = [c for c in carry_over_cols if c in df.columns]
+    # ignore unwanted columns based on user input
+    df_out = df.loc[
+        :, (~df.columns.isin((exclude_numeric_cols
+            if exclude_numeric_cols else []) + group_cols))
+        & (~df.columns.str.contains("|".join(exclude_numeric_regex or ["$^"])))
+    ]
 
-    num_all = list(df.select_dtypes(include="number").columns)
-    excl_set = set(exclude_numeric_cols or [])
-    excl_rx = [re.compile(p) for p in (exclude_numeric_regex or [])]
+    # collect all remaining columns that contain numerical data
+    df_num = df_out.select_dtypes(include="number")
 
-    def _skip(col: str) -> bool:
-        """Return True if col should be excluded from numeric aggregation."""
-        if col in valid_groups or col in carry or col in excl_set:
-            return True
-        return any(r.search(col) for r in excl_rx)
+    # if no numerical columns exist, return a dataframe with just the
+    # user provided columns
+    carry = list(set(carry_over_cols).intersection(df.columns))
+    if df_num.empty:
+        return df[group_cols + carry].drop_duplicates().reset_index(drop=True)
 
-    numeric_cols = [c for c in num_all if not _skip(c)]
-
-    if not numeric_cols:
-        return df[valid_groups + carry].drop_duplicates().reset_index(drop=True)
-
-    agg_spec = {c: ["min", "max", "median", "std"] for c in numeric_cols}
-    agg_spec.update({c: ["first"] for c in carry})
+    # initialize dictionary keys for aggregation
+    agg_spec = {c: ["min", "max", "median", "std"] for c in df_num.columns}
+    agg_spec.update({c: ["first"] for c in df[carry].columns})
 
     grouped = df.groupby(
-        valid_groups, as_index=False
+        valid_cols, as_index=False
     ).agg(agg_spec)  # type: ignore[arg-type]
 
-    grouped.columns = [
-        f"{col[0]}_{col[1]}" if col[1] else col[0] for col in grouped.columns
-    ]
-    for c in carry:
-        grouped.rename(columns={f"{c}_first": c}, inplace=True)
+    grouped.columns = ['_'.join(filter(None, map(str, col))) for col in grouped.columns]
+    grouped.rename(columns={f"{c}_first": c for c in df[carry].columns}, inplace=True)
 
     return grouped
 
@@ -611,8 +646,10 @@ def process_parquet_files(
             metadata["Time"] = time_label
         try:
             df_blobs = _load_df(parquet_path, mode)
-        except (ArrowInvalid, ArrowIOError, ValueError) as exc:
-            warnings.warn(f"Failed to load or parse {parquet_path}: {exc}")
+        except Exception as exc:
+            warnings.warn(
+                f"Failed to load or parse {parquet_path}: {type(exc).__name__}({exc})"
+            )
             continue
         metrics = calculate_all_spatial_metrics(
             df_blobs, graph_method=graph_method, graph_param=graph_param
@@ -640,8 +677,8 @@ def full_analysis(
     group_cols: Sequence[str] | None = None,
     carry_over_cols: Sequence[str] | None = None,
     time_label: str | None = None,
-    exclude_numeric_cols: Sequence[str] | None = None,
-    exclude_numeric_regex: Sequence[str] | None = None,
+    exclude_numeric_cols: list[str] | None = None,
+    exclude_numeric_regex: list[str] | None = None,
 ) -> None:
     """Executes the complete data analysis pipeline.
 
@@ -676,11 +713,13 @@ def full_analysis(
         Non-numeric columns to preserve during aggregation.
     time_label : Optional[str]
         A label to assign to the 'Time' metadata column.
-    exclude_numeric_cols : Sequence[str] | None
+    exclude_numeric_cols : list[str] | None
         Exact numeric columns to exclude from aggregation.
-    exclude_numeric_regex : Sequence[str] | None
+    exclude_numeric_regex : list[str] | None
         Regex patterns; matching numeric columns are excluded.
     """
+    # iterate through all parquet files and return a dataframe
+    # containing per image statistics
     per_img_df = process_parquet_files(
         input_dir,
         mode=mode,
@@ -689,6 +728,7 @@ def full_analysis(
         time_label=time_label,
     )
 
+    # re-order df columns to put the file information first
     id_cols = ["image_name", "Offset", "Position", "Label", "Class", "Time", "UniqueID"]
     ordered_cols = id_cols + [c for c in per_img_df.columns if c not in id_cols]
     per_img_df = per_img_df[ordered_cols]
@@ -696,14 +736,19 @@ def full_analysis(
     per_img_df.to_csv(per_image_csv, index=False)
     log.info(f"Per-image metrics saved to: {per_image_csv}")
 
+    # merge the per image dataframe with user sepcified columns
+    # from the composition dataframe on ``UniqueID``
     if composition_csv and cols_to_add:
         comp_df = pd.read_csv(composition_csv)
         per_img_df = _merge_composition_data(
             per_img_df, comp_df, cols_to_add=cols_to_add, merge_key="UniqueID"
         )
 
+    # determine which df columns on which to aggregate statistics (user specified
+    # or default) and which columns to preserve without aggregating
     final_group_cols = list(group_cols or ["Group", "Label", "Time", "Class"])
     final_carry_cols = list(carry_over_cols or [])
+    # aggregate per image statistics 
     agg_df = calculate_summary_statistics(
         per_img_df,
         group_cols=final_group_cols,
@@ -712,6 +757,7 @@ def full_analysis(
         exclude_numeric_regex=exclude_numeric_regex,
     )
 
+    # remove rows with NaN or empty values and save aggregated df
     agg_clean_df = _drop_invalid_phase_rows(agg_df, 'Phase_Separation')
     aggregate_csv.parent.mkdir(parents=True, exist_ok=True)
     agg_clean_df.to_csv(aggregate_csv, index=False)

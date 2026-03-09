@@ -54,8 +54,7 @@ def test_calculate_voronoi_stats(pts, exp):
         rng = np.random.default_rng(seed=0)
         pts = rng.random((pts, 2))
     actual = da.calculate_voronoi_stats(pts)
-    actual_keys = list(actual.keys())
-    exp_out = pd.DataFrame([exp], columns=actual_keys)
+    exp_out = pd.DataFrame([exp], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
     # account for floating point precision errors with absolute tolerance
     assert_frame_equal(actual_out, exp_out, atol=1e-4)
@@ -73,18 +72,24 @@ def test_calculate_voronoi_stats(pts, exp):
             80,
             [4, 4, 2.0, 0.0, 1, 1.0, 0.0, 80.0, 105.0]
         ),
+        # test case where k=1 nearest neighbors
         (
             "knn", 
             1,
             [4, 3, 1.5, 0.5, 1, 1.0, 0.0, 80.0, 105.0]
+        ),
+        # test case where k=3 nearest neighbors (different size output tree)
+        (
+            "knn", 
+            3,
+            [4, 6, 3.0, 0.0, 1, 1.0, 1.0, 91.04569499661586, 105.0]
         ),
     ]
 )
 def test_calculate_graph_metrics(make_dummy_blobs, method, param, expected):
     _, pts, areas, _ = make_dummy_blobs
     actual = da.calculate_graph_metrics(pts, areas, method=method, param=param)
-    actual_keys = list(actual.keys())
-    exp_out = pd.DataFrame([expected], columns=actual_keys)
+    exp_out = pd.DataFrame([expected], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
     assert_frame_equal(actual_out, exp_out)
     
@@ -102,8 +107,8 @@ def test_extract_blob_properties(make_dummy_blobs):
     )
 
     npt.assert_array_equal(actual_centres, expected_centres)
-    npt.assert_array_equal(actual_areas,   expected_areas)
-    npt.assert_array_equal(actual_radii,   expected_radii)
+    npt.assert_array_equal(actual_areas, expected_areas)
+    npt.assert_array_equal(actual_radii, expected_radii)
     npt.assert_allclose((actual_w, actual_h), (100.0, 100.0))
 
 def test_calculate_all_spatial_metrics(make_dummy_blobs):
@@ -126,7 +131,7 @@ def test_calculate_all_spatial_metrics(make_dummy_blobs):
         "graph_num_edges": 5,
     }
     actual_df = pd.DataFrame(actual, index=[0])
-    actual_df = actual_df[list(expected.keys())]
+    actual_df = actual_df[expected.keys()]
     expected_df = pd.DataFrame(expected, index=[0])
     assert_frame_equal(actual_df, expected_df)
 
@@ -299,10 +304,16 @@ def test_calculate_summary_statistics():
         "Group": ["A", "A", "B"],
         "Time": [0, 0, 1],
         "metric": [10.0, 20.0, 30.0],
+        "other_metric": [5.0, 10.0, 15.0],
+        "exclude_metric": [1.0, 2.0, 3.0],
         "info": ["x", "x", "y"],
     })
     actual = da.calculate_summary_statistics(
-        df, group_cols=["Group"], carry_over_cols=["info"]
+        df,
+        group_cols=["Group"],
+        carry_over_cols=["info"],
+        exclude_numeric_cols=["other_metric"],
+        exclude_numeric_regex=["exclude"],
     )
     assert len(actual) == 2
     assert "metric_median" in actual.columns
@@ -423,7 +434,7 @@ def test_full_analysis_pipeline(
     assert "Offset" in df_agg.columns
 
 def test_merge_composition_data_missing_cols_message():
-    """1) Ensure clear error text when requested cols are missing in composition_df."""
+    """Ensure clear error text when requested cols are missing in composition_df."""
     summary_df = pd.DataFrame({"UniqueID": ["id1"], "metric": [42]})
     comp_df = pd.DataFrame({"UniqueID": ["id1"]})  # 'Phase' is missing
 
@@ -440,42 +451,64 @@ def test_merge_composition_data_missing_cols_message():
 
 def test_process_parquet_files_warns_and_continues_bubblesam(tmp_path: Path):
     """
-    2) process_directory:
-       - warns on unparseable filenames, AND
-       - warns on loader failures (ValueError from _load_bubblesam_df),
-       - but still returns rows for the good files.
+    test that ``process_parquet_files`` warns on unparseable filenames and
+    warns on loader failures (ValueError from _load_bubblesam_df), but still
+    returns rows for the good files.
     """
     input_dir = tmp_path / "input"
     input_dir.mkdir()
 
+    # a file that contains all the necessary information for
+    # returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         "1111-1111-1111-111111111111_masks_filtered.parquet.gzip")
     pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
         input_dir / good
     )
+    # a parquet file that is not in the correct format and
+    # therefore is not readable by the ``_parqe_filename`` function
     unparseable = "weird_masks_filtered.parquet.gzip"
     pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
         input_dir / unparseable
     )
+    # a file that does not contain the appropriate columns
+    # for calculating the output metrics
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
         "2222-2222-2222-222222222222_masks_filtered.parquet.gzip")
     pd.DataFrame({"wrong_col": [1]}).to_parquet(input_dir / badcontent)
+    # a file that does not readable parquet data
+    arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
+        "3333-3333-3333-333333333333_masks_filtered.parquet.gzip")
+    with open(input_dir / arrow_invalid, "w") as f:
+        f.write("ArrowInvalid text file")
+    # a file that is completely empty
+    arrow_io = ("offset -1_center_A3_O_Ph_Raw_44444444-"
+        "4444-4444-4444-444444444444_masks_filtered.parquet.gzip")
+    with open(input_dir / arrow_io, "w") as f:
+        pass
 
     with pytest.warns(UserWarning) as record:
         df = da.process_parquet_files(input_dir, mode="BubbleSAM",graph_method="delaunay")
 
     msgs = [str(w.message) for w in record.list]
+    # four total error messages, three exceptions that raise
+    # a UserWarning, and one UserWarning that is raised if the
+    # input file cannot be parsed
+    assert sum("ArrowInvalid" in m for m in msgs) == 2
+    assert sum("ValueError" in m for m in msgs) == 1
     assert any("Could not parse metadata from filename" in m for m in msgs)
     assert any("Failed to load or parse" in m for m in msgs)
+    assert any("Either the file is corrupted or this is not a parquet file." in m for m in msgs)
+    assert any("Parquet file size is 0 bytes" in m for m in msgs)
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 1
 
 def test_calculate_nnd_stats_warns_on_no_finite_distances():
     """
-    3) Force the 'No finite neighbor distances found.' path:
-       Patch KDTree.query to return all-NaN distances so the function
-       raises internally then catches and warns, returning NaNs.
+    Force the 'No finite neighbor distances found.' by providing
+    extremely large value to ``calculate_nnd_stats`` and check that
+    return df contains nan values.
     """
     large_val = 1e308
 
@@ -496,8 +529,8 @@ def test_calculate_nnd_stats_warns_on_no_finite_distances():
 
 def test_calculate_graph_metrics_warns_on_exception():
     """
-    4) Cause a graph-construction failure and ensure it warns but still returns
-       sensible metrics (nodes present, no edges, multiple components).
+    Cause a graph-construction failure and ensure it warns but still returns
+    sensible metrics (nodes present, no edges, multiple components).
     """
     pts = np.array([
         [np.nan, np.nan],
