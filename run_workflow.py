@@ -22,7 +22,7 @@ def main(config_path: str, steps_str: str) -> None:
     steps_str : str
         Comma separated list of steps. (Currently, only detect)
     """
-    steps: list[str] = as_steps_set(steps_str)
+    steps = as_steps_set(steps_str)
 
     with open(config_path, "r") as fh:
         cfg = yaml.safe_load(fh)
