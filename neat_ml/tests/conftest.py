@@ -95,3 +95,58 @@ def image_with_circles_fixture(tmp_path_factory) -> Path:
     fpath = tmp_path_factory.mktemp("imgs") / "circles.tiff"
     cv2.imwrite(fpath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     return fpath
+
+
+@pytest.fixture(scope="session")
+def make_dummy_blobs():
+    """A tiny 4-blob square that is useful across multiple tests."""
+    centres = [(10.0, 10.0), (90.0, 10.0), (90.0, 90.0), (10.0, 90.0)]
+    areas   = [100.0, 120.0, 110.0,  90.0]
+    radii   = [5.0] * 4
+    bboxes  = [(0.0, 0.0, 100.0, 100.0)] * 4
+
+    df = pd.DataFrame(
+        {"center": centres, "area": areas, "radius": radii, "bbox": bboxes}
+    )
+    return df, np.asarray(centres, float), np.asarray(areas, float), np.asarray(radii, float)
+
+@pytest.fixture(scope="session")
+def square_points():
+    """Return four points forming a unit square plus helper arrays."""
+    pts = np.array([[0., 0.], [1., 0.], [1., 1.], [0., 1.]])
+    areas = np.full(4, 1.0)
+    return pts, areas
+
+@pytest.fixture(scope="session")
+def mock_dir(tmp_path_factory, make_dummy_blobs):
+    """Creates a mock directory structure for end-to-end pipeline testing."""
+    tmp_out_path = tmp_path_factory.mktemp("out")
+    input_dir = tmp_out_path / "input"
+    output_dir = tmp_out_path / "output"
+    input_dir.mkdir()
+    output_dir.mkdir()
+
+    ocv_fname = (
+        "offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9"
+        "-4b1c-b304-ea40e77f0780_bubble_data.parquet.gzip"
+    )
+    df_ocv, _, _, _ = make_dummy_blobs
+    df_ocv.to_parquet(input_dir / ocv_fname)
+
+    bsam_fname = (
+        "offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd-"
+        "4285-824d-e82eafedce90_masks_filtered.parquet.gzip"
+    )
+    df_bsam = pd.DataFrame({"area": [10.0], "bbox": [(0, 0, 10, 10)]})
+    df_bsam.to_parquet(input_dir / bsam_fname)
+
+    comp_df = pd.DataFrame({
+        "UniqueID": ["163c48ec-5ec9-4b1c-b304-ea40e77f0780",
+            "b96c0d64-03fd-4285-824d-e82eafedce90"],
+        "Phase_Separation": [True, False],
+        "Group": ["G1", "G2"],
+    })
+    comp_csv = tmp_out_path / "composition.csv"
+    comp_df.to_csv(comp_csv, index=False)
+
+    return input_dir, output_dir, comp_csv

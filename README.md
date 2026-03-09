@@ -60,6 +60,10 @@ datasets:
     method: Supports ``OpenCV`` or ``BubbleSAM`` as input
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
+    # `composition_cols` used for step: l
+    composition_cols:
+      - "Dextran 500 kg/mol (wt%)"
+      - "PEO 20 kg/mol (wt%)"
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -87,6 +91,19 @@ datasets:
         # for list of available checkpoints
         checkpoint_path: "facebook/sam2.1-hiera-large",
         device: "gpu" OR "cpu"
+    # below only when calling steps: analysis
+    analysis:
+      input_dir: path/to/parquet/files
+      composition_csv: path/to/composition/information
+      per_image_csv: path/to/save/per/image/csv
+      aggregate_csv: path/to/save/aggregate/csv 
+      group_cols:
+        - Group
+        - Label
+        - Time
+        - Class
+      graph_method: radius OR knn OR delaunay
+      graph_param: optional param for radius and knn methods 
 ```
 
 ### To run the code on CHICOMA:  
@@ -124,7 +141,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect`
+`python run_workflow.py --config <YAML file> --steps detect,analysis`
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 

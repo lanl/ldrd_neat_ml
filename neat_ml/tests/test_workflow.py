@@ -9,20 +9,52 @@ from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
 
+@pytest.mark.parametrize(
+    ("steps_str", "expected"),
+    [
+        ("all", ["detect", "analysis"]),  # expands to full pipeline
+        (" Detect ,  Analysis ", ["detect", "analysis"]),  # whitespace + case normalization
+        ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
+        ("", []),  # empty input -> empty list
+        (", ,", []),  # only commas/whitespace -> empty list
+        ("ALL", ["all"]),  # case-sensitive: 'ALL' does not expand
+        ("detect,", ["detect"]),  # trailing comma ignored
+        ("X,DETECT", ["x", "detect"]),  # unknown steps pass through lowercased
+    ],
+)
+def test_as_steps_set_normalizes_and_expands(steps_str: str, expected: list[str]) -> None:
+    """
+    as_steps_set: normalizes case/whitespace, preserves order, expands exact 'all',
+    and passes unknown tokens through in lowercase.
+    """
+    assert wf.as_steps_set(steps_str) == expected
 
 def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """
     get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
     """
-    roots = {"work": str(tmp_path)}
-    ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    roots = {"work": tmp_path, "results": tmp_path / "results"}
+    ds = {
+        "id": "DS1",
+        "method": "OpenCV",
+        "class": "pos",
+        "time_label": "T01",
+        "analysis": {
+            "composition_csv": "comp.csv"
+        }
+    }
+    steps = ['detect','analysis']
 
-    paths = wf.get_path_structure(roots, ds)
+    paths = wf.get_path_structure(roots, ds, steps)  #type: ignore[arg-type]
 
     base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
     assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
     assert paths["det_dir"] == base / "T01_Processed_OpenCV_With_Blob_Data"
 
+    # Default analysis outputs
+    assert paths["per_csv"] == tmp_path / "results" / "DS1" / "per_image.csv"
+    assert paths["agg_csv"] == tmp_path / "results" / "DS1" / "aggregate.csv"
+    assert paths["composition_csv"] == Path("comp.csv")
 
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
@@ -30,9 +62,10 @@ def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
     roots = {"result": str(tmp_path)}
     ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    steps = ['detect','analysis']
 
     with pytest.raises(KeyError, match="work"):
-        wf.get_path_structure(roots, ds)
+        wf.get_path_structure(roots, ds, steps)
 
 @pytest.mark.parametrize("ds",
     [
@@ -334,3 +367,260 @@ def test_stage_detect_returns_empty_dataframe(
     
     df_out = wf.stage_detect(ds, paths)
     assert df_out.empty
+
+def test_stage_analyze_features_errors_when_input_dir_unavailable(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    stage_analyze_features: logs warning when neither
+    analysis.input_dir nor paths['det_dir'] is available.
+    """
+    caplog.set_level(logging.WARNING)
+    ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
+    wf.stage_analyze_features(ds, {})
+    assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
+
+
+def test_stage_analyze_features_errors_when_input_dir_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    stage_analyze_features: logs warning if input_dir path does not exist.
+    """
+    caplog.set_level(logging.WARNING)
+    input_dir = tmp_path / "no_such_dir"
+    ds = {
+        "id": "AN2",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": { 
+            "input_dir": input_dir,
+            "graph_method": "knn",
+            "graph_param": 1
+        }
+    }
+
+    wf.stage_analyze_features(ds, {})
+
+    assert f"Analysis input_dir '{input_dir}' does not exist for 'AN2'." in caplog.text
+
+
+def test_stage_analyze_features_errors_when_composition_csv_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    stage_analyze_features: logs warning if composition_csv is provided but does not exist.
+    """
+    caplog.set_level(logging.WARNING)
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    missing_csv = tmp_path / "missing.csv"
+
+    ds = {
+        "id": "AN3",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir, 
+            "composition_csv": missing_csv,
+            "graph_method": "knn",
+            "graph_param": 1
+            }
+         }
+    wf.stage_analyze_features(ds, {})
+
+    assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
+
+
+def test_stage_analyze_features_happy_path_calls_full_analysis(
+    tmp_path: Path,
+    mock_dir,
+):
+    """
+    stage_analyze_features: happy path creates output dirs
+    and calls full_analysis with expected args.
+    """
+    input_dir, output_dir, comp_csv = mock_dir
+    out_per = output_dir / "per_image.csv"
+    out_agg = output_dir / "aggregate.csv"
+    
+    ds = {
+        "id": "AN4",
+        "method": "OpenCV",
+        "time_label": "T99",
+        "composition_cols": ["PEG", "Dex"],
+        "graph_method": "knn",
+        "graph_param": 7,
+        "analysis": {
+            "input_dir": input_dir,
+            "per_image_csv": out_per,
+            "aggregate_csv": out_agg,
+        },
+    }
+    roots = {"work": input_dir, "results": output_dir}
+    paths = wf.get_path_structure(roots, ds, ["analysis"])
+    wf.stage_analyze_features(ds, paths)
+
+    # assertions about the outputs from calling ``full_analysis``
+    df_per = pd.read_csv(out_per) 
+    df_agg = pd.read_csv(out_agg)
+    assert df_per.shape == (1, 30)
+    assert df_agg.shape == (1, 95)
+
+
+def test_stage_analyze_features_raises_when_input_dir_unavailable(
+    caplog: pytest.LogCaptureFixture,
+):
+    """
+    No analysis.input_dir and no paths['det_dir'] -> logs (now raises) and returns.
+    """
+
+    caplog.set_level(logging.WARNING)
+    ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
+    wf.stage_analyze_features(ds, paths={})
+    assert "No analysis input_dir provided and det_dir unavailable" in caplog.text
+
+
+def test_stage_analyze_features_raises_when_input_dir_path_missing(
+    tmp_path,
+    caplog: pytest.LogCaptureFixture,
+):
+    """
+    analysis.input_dir exists as a string but the path itself does not exist.
+    """
+
+    caplog.set_level(logging.WARNING)
+    missing_dir = tmp_path / "no_such_dir"
+    ds = {
+        "id": "AN2",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": missing_dir,
+            "graph_method": "knn",
+            "graph_param": 1
+        },
+    }
+    wf.stage_analyze_features(ds, paths={})
+    assert "Analysis input_dir" in caplog.text
+
+def test_stage_analyze_features_raises_when_composition_csv_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    composition_csv provided but the file does not exist.
+    """
+    caplog.set_level(logging.WARNING)
+
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    missing_csv = tmp_path / "missing.csv"
+
+    ds = {
+        "id": "AN3",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir,
+            "composition_csv": missing_csv,
+            "graph_method": "knn",
+            "graph_param": 1
+        },
+    }
+    wf.stage_analyze_features(ds, paths={})
+    assert "Composition CSV" in caplog.text
+
+
+def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    Input dir exists but contains no *_bubble_data.parquet files (mode='OpenCV').
+    """
+    caplog.set_level(logging.WARNING)
+    input_dir = tmp_path / "empty_in"
+    input_dir.mkdir()
+
+    ds = {
+        "id": "AN4",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir,
+            "graph_method": "knn",
+            "graph_param": 1
+        },
+    }
+    wf.stage_analyze_features(ds, paths={})
+    assert "No detection outputs matching" in caplog.text
+
+def test_stage_analyze_features_raises_when_no_detection_outputs_bubblesam(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    Input dir exists but contains no *_masks_filtered.parquet.gzip files (mode='BubbleSAM').
+    """
+    caplog.set_level(logging.WARNING)
+
+    input_dir = tmp_path / "empty_in_bs"
+    input_dir.mkdir()
+
+    ds = {
+        "id": "AN5",
+        "method": "BubbleSAM",
+        "time_label": "T01",
+        "analysis":
+            {
+                "input_dir": input_dir,
+                "graph_method": "knn",
+                "graph_param": 1
+            },
+        }
+    wf.stage_analyze_features(ds, paths={})
+    assert "No detection outputs matching" in caplog.text
+
+def test_stage_analyze_features_logs_when_input_dir_falsy_string(
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level(logging.WARNING)
+    ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
+    wf.stage_analyze_features(ds, paths={})
+    assert "No analysis input_dir provided" in caplog.text
+
+
+@pytest.mark.parametrize("graph_method, graph_param, err_msg",
+    [
+        (None, None, "Please provide `graph_method` input."),
+        ("knn", None, "Graph method:")
+    ]
+)
+def test_stage_analyze_features_no_graph_method_param_error(
+    tmp_path,
+    graph_method,
+    graph_param,
+    err_msg
+):
+    """
+    assert that a ValueError is raised when no ``graph_method`` is provided
+    OR when ``graph_method`` is "knn" or "radius" and no ``graph_param`` is
+    provided.
+    """
+    ds = {
+        "id": "AN5",
+        "method": "BubbleSAM",
+        "time_label": "T01",
+        "analysis":
+            {
+                "input_dir": tmp_path,
+                "graph_method": graph_method,
+                "graph_param": graph_param,
+            },
+        }
+    with pytest.raises(ValueError, match=err_msg):
+        wf.stage_analyze_features(ds, paths={})

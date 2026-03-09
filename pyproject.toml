@@ -31,7 +31,8 @@ dependencies = [
     'fastparquet',
     'torch',
     'torchvision',
-    'huggingface_hub'
+    'huggingface_hub',
+    'networkx',
 ]
 [project.optional-dependencies]
 dev = ['mypy',
@@ -44,6 +45,7 @@ dev = ['mypy',
        'types-Pillow',
        'types-pyyaml',
        'pytest-mock',
+       'pyarrow-stubs',
 ]
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
