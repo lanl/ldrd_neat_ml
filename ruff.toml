@@ -1,5 +1,3 @@
-exclude = ["neat_ml/sam2", "venv"]
-
 [lint]
 # ruff==0.16.0 introduces several default rules breaking linting
 # select "old" rules to maintain previous set (see issue #49)

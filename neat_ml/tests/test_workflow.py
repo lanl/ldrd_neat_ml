@@ -8,7 +8,6 @@ import pandas as pd
 from numpy.testing import assert_allclose
 
 import neat_ml.workflow.lib_workflow as wf
-import pandas as pd
 
 def assert_logged(caplog: pytest.LogCaptureFixture, level: int, expected_message: str) -> None:
     """
