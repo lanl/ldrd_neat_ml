@@ -471,7 +471,7 @@ def test_process_parquet_files_warns_and_continues_bubblesam(tmp_path: Path):
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 1
 
-def test_calculate_nnd_stats_warns_on_no_finite_distances(mocker):
+def test_calculate_nnd_stats_warns_on_no_finite_distances():
     """
     3) Force the 'No finite neighbor distances found.' path:
        Patch KDTree.query to return all-NaN distances so the function
@@ -494,7 +494,7 @@ def test_calculate_nnd_stats_warns_on_no_finite_distances(mocker):
     assert np.isnan(res["mean_nnd"]) and np.isnan(res["median_nnd"])
 
 
-def test_calculate_graph_metrics_warns_on_exception(mocker):
+def test_calculate_graph_metrics_warns_on_exception():
     """
     4) Cause a graph-construction failure and ensure it warns but still returns
        sensible metrics (nodes present, no edges, multiple components).

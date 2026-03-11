@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 import pandas as pd
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
@@ -75,7 +75,7 @@ def get_path_structure(
     steps_set = set(steps)
 
     base_proc = work_root / ds_id / method / class_label / time_label
-
+    results_root = Path(roots["results"])
 
     if method == 'OpenCV':
         paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
