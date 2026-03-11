@@ -24,6 +24,11 @@ dependencies = [
     'pyyaml',
     'pooch',
     'pyarrow',
+    'fastparquet',
+    'torch',
+    'torchvision',
+    'huggingface_hub',
+    'sam-2 @ git+https://github.com/facebookresearch/sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4'
 ]
 [project.optional-dependencies]
 dev = ['mypy',
@@ -34,7 +39,8 @@ dev = ['mypy',
        'pytest-cov',
        'types-tqdm',
        'types-Pillow',
-       'types-pyyaml'
+       'types-pyyaml',
 ]
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]
+"neat_ml.tests.baseline" = ["*.png"]

@@ -5,6 +5,8 @@ from importlib import resources
 from typing import Generator, Any
 import pooch  # type: ignore[import-untyped]
 from matplotlib import rcParams
+from pathlib import Path
+import cv2
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -63,3 +65,33 @@ def reference_images():
             detection_raw,
             detection_processed,
             images_raw)
+         
+
+@pytest.fixture(scope="session")
+def mask_settings():
+    return {
+        "points_per_side": 4,
+        "points_per_batch": 4,
+        "pred_iou_thresh": 0.80,
+        "stability_score_thresh": 0.80,
+        "stability_score_offset": 0.1,
+        "crop_n_layers": 1,
+        "box_nms_thresh": 0.1,
+        "crop_n_points_downscale_factor": 1,
+        "min_mask_region_area": 5,
+        "use_m2m": True,
+    }
+
+
+@pytest.fixture(scope="session")
+def image_with_circles_fixture(tmp_path_factory) -> Path:
+    """
+    Return a path to a 100x100 black RGB image with two white circles.
+    """
+    img = np.zeros((100, 100, 3), np.uint8)
+    white, filled = (255, 255, 255), -1
+    cv2.circle(img, center=(30, 30), radius=10, color=white, thickness=filled)
+    cv2.circle(img, center=(70, 65), radius=15, color=white, thickness=filled)
+    fpath = tmp_path_factory.mktemp("imgs") / "circles.tiff"
+    cv2.imwrite(fpath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    return fpath
