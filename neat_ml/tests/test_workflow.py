@@ -244,7 +244,7 @@ def test_stage_detect_unknown_method_error(
             marks=[
                 pytest.mark.skipif(
                     not (torch.backends.mps.is_available()
-                    and torch.cuda.is_available()), reason="only run when gpu available"
+                    or torch.cuda.is_available()), reason="only run when gpu available"
                 )
             ]
         ),
