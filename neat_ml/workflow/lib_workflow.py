@@ -82,7 +82,7 @@ def get_path_structure(
     steps_set = set(steps)
 
     base_proc = work_root / ds_id / method / class_label / time_label
-
+    results_root = Path(roots["results"])
 
     if method == 'OpenCV':
         paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
