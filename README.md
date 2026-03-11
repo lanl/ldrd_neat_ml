@@ -8,23 +8,6 @@ Download the package from the following GitHub repository:
 git clone git@github.com:lanl/ldrd_neat_ml.git
 ```
 
-Install the Segment Anything-2 (SAM2) module:
-
-```bash
-python -m pip install "git+https://github.com/facebookresearch/sam2.git"
-```
-
-> [!IMPORTANT]
-> NVIDIA GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
-> specific GPU on the users system. For download instructions and information visit: 
-> https://pytorch.org/get-started/locally/
->
-> Measurement of bubbles detected by `SAM2` is optionally handled using the `cucim.skimage.measure` library.
-> In order to speed up post-processing of detected bubbles, install the `cucim` package with:
-> `python -m pip install cucim-cu12` which requires the `NVIDIA` drivers to be installed first.
-> `CUDA` enabled post-processing will only be performed if the user selects `device: "gpu"`
-> via the input `yaml` file (as described below) and has a `CUDA` enabled `GPU` available.
-
 Install the project, core dependencies,
 and optional dependencies by calling:
 
@@ -65,8 +48,8 @@ datasets:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
       debug: True/False for debug (`True` will save side-by-side figure
              of raw image next to bounding box overlay.)
-      # below only include when using the ``BubbleSAM`` detection method
-      area_threshold: (float) threshold for minimum area of a detected bubble
+      # only include the content below when using the ``BubbleSAM`` detection method
+      area_threshold: (float) threshold for minimum area (in pixels) of a detected bubble
       circularity_threshold: (float) threshold for minimum circularity of a detected bubble
       # model configuration settings for SAM2
       model_cfg:
@@ -85,7 +68,7 @@ datasets:
         # checkpoint path to download pre-trained SAM-2 weights using ``HuggingFace``
         # see: https://github.com/facebookresearch/sam2?tab=readme-ov-file#sam-21-checkpoints
         # for list of available checkpoints
-        checkpoint_path: "facebook/sam2.1-hiera-large",
+        checkpoint_path: "facebook/sam2.1-hiera-large"
         device: "gpu" OR "cpu"
 ```
 
@@ -99,6 +82,18 @@ module load cudatoolkit/12.6.0
 ```  
 
 ## Detecting Bubbles using SAM-2
+
+> [!IMPORTANT]
+> NVIDIA GPU Users: the appropriate `CUDA`, `torch` and `torchvision` versions must be installed for the
+> specific GPU on the users system. For download instructions and information visit: 
+> https://pytorch.org/get-started/locally/
+>
+> Measurement of bubbles detected by `SAM2` is optionally handled using the `cucim.skimage.measure` library.
+> In order to speed up post-processing of detected bubbles, install the `cucim` package with:
+> `python -m pip install cucim-cu12` which requires the `NVIDIA` drivers to be installed first.
+> `CUDA` enabled post-processing will only be performed if the user selects `device: "gpu"`
+> via the input `yaml` file (as described below) and has a `CUDA` enabled `GPU` available.
+
 The `SAM2` model here uses the `sam2.1_hiera_large.pt` as the checkpoint file to detect
 bubbles from microscopy images. The default parameters used for the `SAM2AutomaticMaskGenerator`
 are outlined in `neat_ml/data/bubblesam_detection_test.yaml`. These parameters were determined

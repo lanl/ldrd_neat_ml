@@ -89,6 +89,7 @@ def show_anns(
     ax.imshow(img)
 
 
+@memory.cache
 def analyze_and_filter_masks(
     masks_summary_df: pd.DataFrame,
     area_threshold: float,

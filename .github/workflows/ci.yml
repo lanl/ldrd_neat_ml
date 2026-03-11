@@ -22,7 +22,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: install and lint
       run: |
-        python -m pip install "git+https://github.com/facebookresearch/sam2.git"
         python -m pip install -v ".[dev]"
         mypy neat_ml
         ruff check neat_ml
