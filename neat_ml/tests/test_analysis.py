@@ -65,29 +65,43 @@ def test_calculate_voronoi_stats(pts, exp):
         (
             "delaunay",
             None,
-            [4, 5, 2.5, 0.5, 1, 1.0, 0.8333333333333333, 86.62741699796952, 105.0]
+            [10, 21, 4.2, 1.1661903789690602, 1, 1.0,
+            0.5566666666666666, 399.3586811589318, 510.1],
         ),
+        # a radius param that only generates a single edge
         (
             "radius",
-            80,
-            [4, 4, 2.0, 0.0, 1, 1.0, 0.0, 80.0, 105.0]
+            100,
+            [10, 1, 0.2, 0.4000000000000001, 9,
+            0.2, 0.0, 92.28488500290825, 793.0]
+        ),
+        # a radius param that generates multiple edges
+        (
+            "radius",
+            200,
+            [10, 3, 0.6, 0.48989794855663565, 7, 0.2,
+            0.0, 128.97026785384764, 156.0]
         ),
         # test case where k=1 nearest neighbors
         (
             "knn", 
             1,
-            [4, 3, 1.5, 0.5, 1, 1.0, 0.0, 80.0, 105.0]
+            [10, 6, 1.2, 0.4, 4, 0.4, 0.0, 217.84017139873353, 632.25]
         ),
         # test case where k=3 nearest neighbors (different size output tree)
         (
             "knn", 
             3,
-            [4, 6, 3.0, 0.0, 1, 1.0, 1.0, 91.04569499661586, 105.0]
+            [10, 20, 4.0, 1.1832159566199232, 1, 1.0,
+            0.6066666666666667, 353.41649782593197, 510.1]
         ),
     ]
 )
-def test_calculate_graph_metrics(make_dummy_blobs, method, param, expected):
-    _, pts, areas, _ = make_dummy_blobs
+def test_calculate_graph_metrics(method, param, expected):
+    # generate realistic "points" and "areas" inputs
+    rng = np.random.default_rng(0)
+    pts = rng.integers(2, 2000, (10,2)) * 0.5
+    areas = rng.integers(1, 1000, 10).astype(float)
     actual = da.calculate_graph_metrics(pts, areas, method=method, param=param)
     exp_out = pd.DataFrame([expected], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
@@ -408,6 +422,7 @@ def test_full_analysis_pipeline(
     input_dir, output_dir, comp_csv = mock_dir
     per_image_csv = output_dir / f"per_image_{mode}.csv"
     aggregate_csv = output_dir / f"aggregate_{mode}.csv"
+    group_cols = ["Group", "Label", "Time", "Class", "Offset"]
 
     da.full_analysis(
         input_dir=input_dir,
@@ -418,7 +433,7 @@ def test_full_analysis_pipeline(
         composition_csv=comp_csv,
         cols_to_add=["Phase_Separation", "Group"],
         time_label="1st",
-        group_cols=["Group", "Label", "Time", "Class", "Offset"],
+        group_cols=group_cols,
         carry_over_cols=["Phase_Separation"],
     )
 
@@ -432,6 +447,7 @@ def test_full_analysis_pipeline(
     
     assert "Phase_Separation" in df_agg.columns
     assert "Offset" in df_agg.columns
+    npt.assert_array_equal(df_agg.columns[:5], group_cols)
 
 def test_merge_composition_data_missing_cols_message():
     """Ensure clear error text when requested cols are missing in composition_df."""
