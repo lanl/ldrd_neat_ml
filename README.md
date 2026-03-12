@@ -43,7 +43,7 @@ datasets:
     method: Supports ``OpenCV`` or ``BubbleSAM`` as input
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
-    # `composition_cols` used for step: l
+    # `composition_cols` used for step: analysis
     composition_cols:
       - "Dextran 500 kg/mol (wt%)"
       - "PEO 20 kg/mol (wt%)"
@@ -74,7 +74,7 @@ datasets:
         # for list of available checkpoints
         checkpoint_path: "facebook/sam2.1-hiera-large"
         device: "gpu" OR "cpu"
-    # below only when calling steps: analysis
+    # only include the content below when calling steps: analysis
     analysis:
       input_dir: path/to/parquet/files
       composition_csv: path/to/composition/information

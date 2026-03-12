@@ -24,10 +24,10 @@ import neat_ml.workflow.lib_workflow as wf
 )
 def test_as_steps_set_normalizes_and_expands(steps_str: str, expected: list[str]) -> None:
     """
-    _as_steps_set: normalizes case/whitespace, preserves order, expands exact 'all',
+    ``as_steps_set``: normalizes case/whitespace, preserves order, expands exact 'all',
     and passes unknown tokens through in lowercase.
     """
-    assert wf._as_steps_set(steps_str) == expected
+    assert wf.as_steps_set(steps_str) == expected
 
 def test_get_path_structure_builds_expected_paths(tmp_path: Path):
     """
@@ -535,12 +535,14 @@ def test_stage_analyze_features_raises_when_composition_csv_missing(
     assert "Composition CSV" in caplog.text
 
 
+@pytest.mark.parametrize("mode", ["OpenCV", "BubbleSAM"])
 def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
     caplog: pytest.LogCaptureFixture,
-    tmp_path: Path
+    tmp_path: Path,
+    mode,
 ):
     """
-    Input dir exists but contains no *_bubble_data.parquet files (mode='OpenCV').
+    Input dir exists but contains no parquet files.
     """
     caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "empty_in"
@@ -548,7 +550,7 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
 
     ds = {
         "id": "AN4",
-        "method": "OpenCV",
+        "method": mode,
         "time_label": "T01",
         "analysis": {
             "input_dir": input_dir,
@@ -559,31 +561,6 @@ def test_stage_analyze_features_raises_when_no_detection_outputs_opencv(
     wf.stage_analyze_features(ds, paths={})
     assert "No detection outputs matching" in caplog.text
 
-def test_stage_analyze_features_raises_when_no_detection_outputs_bubblesam(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path
-):
-    """
-    Input dir exists but contains no *_masks_filtered.parquet.gzip files (mode='BubbleSAM').
-    """
-    caplog.set_level(logging.WARNING)
-
-    input_dir = tmp_path / "empty_in_bs"
-    input_dir.mkdir()
-
-    ds = {
-        "id": "AN5",
-        "method": "BubbleSAM",
-        "time_label": "T01",
-        "analysis":
-            {
-                "input_dir": input_dir,
-                "graph_method": "knn",
-                "graph_param": 1
-            },
-        }
-    wf.stage_analyze_features(ds, paths={})
-    assert "No detection outputs matching" in caplog.text
 
 def test_stage_analyze_features_logs_when_input_dir_falsy_string(
     caplog: pytest.LogCaptureFixture,
