@@ -10,7 +10,7 @@ from neat_ml.analysis.data_analysis import full_analysis
 
 
 __all__ = [
-    "_as_steps_set",
+    "as_steps_set",
     "get_path_structure",
     "run_detection",
     "stage_detect",
@@ -20,7 +20,7 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-def _as_steps_set(steps_str: str) -> list[str]:
+def as_steps_set(steps_str: str) -> list[str]:
     """
     Normalize a comma list to canonical step names.
 
