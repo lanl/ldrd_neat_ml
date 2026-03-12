@@ -328,9 +328,9 @@ def calculate_graph_metrics(
             # gather point pairs from tree with radius param
             pairs = list(tree.query_pairs(r=param))
             # find difference between pairs of points
-            diff = np.diff(points[pairs])
+            diff = np.diff(points[pairs], axis=1)
             # calculate the euclidian distance between pairs of points 
-            dist = np.linalg.norm(diff, axis=1)
+            dist = np.linalg.norm(diff, axis=2)
             # add point, distance pairs to graph edges
             graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
         # alternatively calculate the graph using the KDTree
@@ -347,12 +347,13 @@ def calculate_graph_metrics(
             # knn array so that we can group the nodes with each of their
             # nearest neighbors
             node_idx = np.broadcast_to(idxs[:, [0]], idxs[:, 1:].shape)
-            # group the node, neighbor pairs with their respective
-            # distances and remove non-unique pairs
-            pairs_idx = np.column_stack(
-                (node_idx.ravel(), idxs[:, 1:].ravel(), dists[:, 1:].ravel())
-            )
-            unique_pairs = np.unique(np.sort(pairs_idx, axis=1), axis=0)  
+            # group the node, neighbor pairs and sort them by value
+            # then stack the sorted pairs with their respective distances
+            # and find the unique node-edge pairs in the array
+            pairs_idx = np.column_stack((node_idx.ravel(), idxs[:, 1:].ravel()))
+            sorted_pairs = np.sort(pairs_idx, axis=1)
+            pairs_dists = np.column_stack((sorted_pairs, dists[:, 1:].ravel()))
+            unique_pairs = np.unique(pairs_dists, axis=0)
             # add all the edges to the graph
             new_edges = (
                 (
@@ -377,8 +378,8 @@ def calculate_graph_metrics(
             # and calculate the euclidean distance between the points
             point_pairs = np.column_stack((tri_sim.ravel(), tri_sim_shift.ravel()))
             unique_pairs = np.unique(np.sort(point_pairs, axis=1), axis=0)
-            diff = np.diff(points[unique_pairs])
-            dist = np.linalg.norm(diff, axis=1)
+            diff = np.diff(points[unique_pairs], axis=1)
+            dist = np.linalg.norm(diff, axis=2)
             # add new edges to the graph
             new_edges = (
                 (
@@ -560,7 +561,7 @@ def calculate_summary_statistics(
         Carry-over columns are included without aggregation.
     """
     # check that any of the grouping columns exist in df
-    valid_cols = list(set(group_cols).intersection(df.columns)) 
+    valid_cols = pd.Index(group_cols).intersection(df.columns, sort=False).to_list()
     if not valid_cols:
         raise ValueError(f"None of the grouping columns {group_cols} exist.")
 
