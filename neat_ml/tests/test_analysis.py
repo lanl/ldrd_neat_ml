@@ -23,7 +23,7 @@ from pandas.testing import assert_frame_equal
 )
 def test_calculate_nnd_stats(pts, expected):
 
-    actual = da.calculate_nnd_stats(pts)
+    actual = da._calculate_nnd_stats(pts)
     actual = pd.DataFrame(actual, index=[0])
     expected = pd.DataFrame(expected, index=[0])
     assert_frame_equal(actual, expected)
@@ -53,7 +53,7 @@ def test_calculate_voronoi_stats(pts, exp):
     if isinstance(pts, int):
         rng = np.random.default_rng(seed=0)
         pts = rng.random((pts, 2))
-    actual = da.calculate_voronoi_stats(pts)
+    actual = da._calculate_voronoi_stats(pts)
     exp_out = pd.DataFrame([exp], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
     # account for floating point precision errors with absolute tolerance
@@ -102,7 +102,7 @@ def test_calculate_graph_metrics(method, param, expected):
     rng = np.random.default_rng(0)
     pts = rng.integers(2, 2000, (10,2)) * 0.5
     areas = rng.integers(1, 1000, 10).astype(float)
-    actual = da.calculate_graph_metrics(pts, areas, method=method, param=param)
+    actual = da._calculate_graph_metrics(pts, areas, method=method, param=param)
     exp_out = pd.DataFrame([expected], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
     assert_frame_equal(actual_out, exp_out)
@@ -111,7 +111,7 @@ def test_calculate_graph_metrics(method, param, expected):
 def test_extract_blob_properties(make_dummy_blobs):
     df, expected_centres, expected_areas, expected_radii = make_dummy_blobs
     actual_centres, actual_areas, actual_radii, (actual_w, actual_h) = (
-        da.extract_blob_properties(
+        da._extract_blob_properties(
             df,
             center_col="center",
             area_col="area",
@@ -128,7 +128,7 @@ def test_extract_blob_properties(make_dummy_blobs):
 def test_calculate_all_spatial_metrics(make_dummy_blobs):
     df, _, areas, radii = make_dummy_blobs
 
-    actual = da.calculate_all_spatial_metrics(df,graph_method="delaunay")
+    actual = da._calculate_all_spatial_metrics(df,graph_method="delaunay")
 
     expected = {
         "num_blobs": 4,
@@ -164,7 +164,7 @@ def test_calculate_all_spatial_metrics(make_dummy_blobs):
     ids=["empty_df_with_required_cols", "missing_required_cols"],
 )
 def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
-    out = da.calculate_all_spatial_metrics(df_empty, graph_method="delaunay")
+    out = da._calculate_all_spatial_metrics(df_empty, graph_method="delaunay")
 
     assert out["num_blobs"] == 0
     assert out["total_blob_area"] == 0.0
@@ -234,7 +234,7 @@ def test_voronoi_qhull_error():
     # Three points at the exact same location
     dummy_points = np.array([1, 2, 3, 4])
     with pytest.warns(UserWarning, match="Voronoi calculation failed"):
-        actual = da.calculate_voronoi_stats(dummy_points)
+        actual = da._calculate_voronoi_stats(dummy_points)
         npt.assert_array_equal(list(actual.values()), [np.nan] * 4)
 
 @pytest.mark.parametrize("input_data, expected",
@@ -249,7 +249,7 @@ def test_calculate_graph_metrics_failures(square_points, input_data, expected):
         input_2 = input_2[:2]
     else:
         input_1 = input_2 = input_data
-    actual_none = da.calculate_graph_metrics(input_1, input_2, method="Delaunay")
+    actual_none = da._calculate_graph_metrics(input_1, input_2, method="Delaunay")
     assert actual_none["graph_num_nodes"] == expected
     assert np.isnan(actual_none["graph_avg_degree"])
 
@@ -262,7 +262,7 @@ def test_extract_blob_properties_failures(make_dummy_blobs, input_data):
         input_df = df.drop(columns=['center'])
     else:
         input_df = pd.DataFrame()
-    c, a, r, (w, h) = da.extract_blob_properties(
+    c, a, r, (w, h) = da._extract_blob_properties(
         input_df,
         center_col="center",
         area_col="area",
@@ -322,7 +322,7 @@ def test_calculate_summary_statistics():
         "exclude_metric": [1.0, 2.0, 3.0],
         "info": ["x", "x", "y"],
     })
-    actual = da.calculate_summary_statistics(
+    actual = da._calculate_summary_statistics(
         df,
         group_cols=["Group"],
         carry_over_cols=["info"],
@@ -333,7 +333,7 @@ def test_calculate_summary_statistics():
     assert "metric_median" in actual.columns
     assert "info" in actual.columns
     with pytest.raises(ValueError, match="None of the grouping columns"):
-        da.calculate_summary_statistics(df, ["BadCol"], [])
+        da._calculate_summary_statistics(df, ["BadCol"], [])
 
 
 def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
@@ -351,7 +351,7 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
         }
     )
 
-    out = da.calculate_summary_statistics(
+    out = da._calculate_summary_statistics(
         df,
         group_cols=["Group", "Label"],
         carry_over_cols=["Other"],
@@ -393,7 +393,7 @@ def test_process_parquet_files_errors(
     err_msg,
 ):
     with pytest.raises(err, match=err_msg):
-        da.process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
+        da._process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
 
 @pytest.mark.parametrize("mode, tiff_name", 
     [
@@ -465,10 +465,24 @@ def test_merge_composition_data_missing_cols_message():
         )
 
 
-def test_process_parquet_files_warns_and_continues_bubblesam(tmp_path: Path):
+@pytest.mark.parametrize("file_suff, method, n_value_errors, len_df",
+    [
+        ("masks_filtered", "BubbleSAM", 1, 1),
+        # should only throw a value error when
+        # bubblesam is missing area/bbox columns
+        ("bubble_data", "OpenCV", 0, 2),
+    ]
+)
+def test_process_parquet_files_warns_and_continues_bubblesam(
+    tmp_path: Path,
+    file_suff,
+    method,
+    n_value_errors,
+    len_df,
+):
     """
     test that ``process_parquet_files`` warns on unparseable filenames and
-    warns on loader failures (ValueError from _load_bubblesam_df), but still
+    warns on loader failures (ValueError from ``_load_df``), but still
     returns rows for the good files.
     """
     input_dir = tmp_path / "input"
@@ -477,48 +491,48 @@ def test_process_parquet_files_warns_and_continues_bubblesam(tmp_path: Path):
     # a file that contains all the necessary information for
     # returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
-        "1111-1111-1111-111111111111_masks_filtered.parquet.gzip")
+        f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
     pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
         input_dir / good
     )
     # a parquet file that is not in the correct format and
     # therefore is not readable by the ``_parqe_filename`` function
-    unparseable = "weird_masks_filtered.parquet.gzip"
+    unparseable = f"weird_{file_suff}.parquet.gzip"
     pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
         input_dir / unparseable
     )
     # a file that does not contain the appropriate columns
     # for calculating the output metrics
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
-        "2222-2222-2222-222222222222_masks_filtered.parquet.gzip")
+        f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
     pd.DataFrame({"wrong_col": [1]}).to_parquet(input_dir / badcontent)
     # a file that does not readable parquet data
     arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
-        "3333-3333-3333-333333333333_masks_filtered.parquet.gzip")
+        f"3333-3333-3333-333333333333_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_invalid, "w") as f:
         f.write("ArrowInvalid text file")
     # a file that is completely empty
     arrow_io = ("offset -1_center_A3_O_Ph_Raw_44444444-"
-        "4444-4444-4444-444444444444_masks_filtered.parquet.gzip")
+        f"4444-4444-4444-444444444444_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_io, "w") as f:
         pass
 
     with pytest.warns(UserWarning) as record:
-        df = da.process_parquet_files(input_dir, mode="BubbleSAM",graph_method="delaunay")
+        df = da._process_parquet_files(input_dir, mode=method, graph_method="delaunay")
 
     msgs = [str(w.message) for w in record.list]
     # four total error messages, three exceptions that raise
     # a UserWarning, and one UserWarning that is raised if the
     # input file cannot be parsed
     assert sum("ArrowInvalid" in m for m in msgs) == 2
-    assert sum("ValueError" in m for m in msgs) == 1
+    assert sum("ValueError" in m for m in msgs) == n_value_errors
     assert any("Could not parse metadata from filename" in m for m in msgs)
     assert any("Failed to load or parse" in m for m in msgs)
     assert any("Either the file is corrupted or this is not a parquet file." in m for m in msgs)
     assert any("Parquet file size is 0 bytes" in m for m in msgs)
 
     assert isinstance(df, pd.DataFrame)
-    assert len(df) == 1
+    assert len(df) == len_df
 
 def test_calculate_nnd_stats_warns_on_no_finite_distances():
     """
@@ -538,7 +552,7 @@ def test_calculate_nnd_stats_warns_on_no_finite_distances():
     with pytest.warns(
         UserWarning, match="NND calculation failed: No finite neighbor distances found"
     ):
-        res = da.calculate_nnd_stats(pts)
+        res = da._calculate_nnd_stats(pts)
 
     assert np.isnan(res["mean_nnd"]) and np.isnan(res["median_nnd"])
 
@@ -557,7 +571,7 @@ def test_calculate_graph_metrics_warns_on_exception():
     areas = np.ones(4)
 
     with pytest.warns(UserWarning, match="Graph construction"):
-        res = da.calculate_graph_metrics(pts, areas, method="delaunay")
+        res = da._calculate_graph_metrics(pts, areas, method="delaunay")
 
     assert res["graph_num_nodes"] == 4
     assert res["graph_num_edges"] == 0
@@ -568,4 +582,4 @@ def test_calculate_graph_metrics_warns_on_exception():
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):
     _, pts, areas, _ = make_dummy_blobs
     with pytest.raises(ValueError, match="Invalid input parameters"):
-        da.calculate_graph_metrics(pts, areas, method="bad")
+        da._calculate_graph_metrics(pts, areas, method="bad")

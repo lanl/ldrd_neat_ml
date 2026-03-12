@@ -4,7 +4,7 @@ import yaml
 from pathlib import Path
 import warnings
 
-from neat_ml.workflow.lib_workflow import (_as_steps_set,
+from neat_ml.workflow.lib_workflow import (as_steps_set,
                                            get_path_structure, 
                                            stage_detect,
                                            stage_analyze_features)

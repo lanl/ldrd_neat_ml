@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay, QhullError
 import logging
+from tqdm.auto import tqdm
 
 __all__: Sequence[str] = [
     "full_analysis"
@@ -109,12 +110,14 @@ def _load_df(parquet_path: Path, method: str) -> pd.DataFrame:
     Parameters
     ----------
     parquet_path : Path
-        The path to the `*_masks_filtered.parquet.gzip` file.
+        The path to the `parquet.gzip` file.
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame with 'center', 'area', 'radius', and 'bbox' columns.
+        A DataFrame with data from performing detection,
+        has 'center', 'area', 'radius', and 'bbox' columns
+        when method == bubblesam.
     """
     df = pd.read_parquet(parquet_path)
     if method.lower() == "bubblesam":
@@ -157,7 +160,7 @@ def _drop_invalid_phase_rows(
     df[phase_col] = df[phase_col].replace('', np.nan)
     return df.dropna(subset=[phase_col])
 
-def calculate_nnd_stats(
+def _calculate_nnd_stats(
     points: Optional[np.ndarray]
 ) -> dict[str, float]:
     """Computes mean and median Nearest-Neighbor Distances (NND) for points.
@@ -187,7 +190,7 @@ def calculate_nnd_stats(
 
     return {"mean_nnd": nnd.mean(), "median_nnd": np.median(nnd)}
 
-def calculate_voronoi_stats(
+def _calculate_voronoi_stats(
     points: Optional[np.ndarray]
 ) -> dict[str, float]:
     """
@@ -238,7 +241,7 @@ def calculate_voronoi_stats(
                     area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) -
                                         np.dot(y, np.roll(x, 1)))
                     if np.isfinite(area) and area > 1e-9:
-                        finite_areas.append(float(area))
+                        finite_areas.append(area)
 
         if not finite_areas:
             return stats
@@ -258,7 +261,7 @@ def calculate_voronoi_stats(
         warnings.warn(f"Voronoi calculation failed: {exc}")
         return stats
 
-def calculate_graph_metrics(
+def _calculate_graph_metrics(
     points: np.ndarray,
     areas: np.ndarray,
     *,
@@ -272,9 +275,9 @@ def calculate_graph_metrics(
 
     Parameters
     ----------
-    points : Optional[np.ndarray]
+    points : np.ndarray
         An (N, 2) array of node coordinates.
-    areas : Optional[np.ndarray]
+    areas : np.ndarray
         An (N,) array of node areas, used for Largest Connected
         Component (LCC) area statistics.
     method : str
@@ -420,7 +423,7 @@ def calculate_graph_metrics(
 
     return metrics
 
-def extract_blob_properties(
+def _extract_blob_properties(
     df: pd.DataFrame,
     *,
     center_col: str,
@@ -463,7 +466,7 @@ def extract_blob_properties(
 
     return centroids, areas, radii, (img_w, img_h)
 
-def calculate_all_spatial_metrics(
+def _calculate_all_spatial_metrics(
     df_blobs: pd.DataFrame,
     *,
     graph_method: str,
@@ -497,7 +500,7 @@ def calculate_all_spatial_metrics(
         "mean_blob_radius": np.nan,
         "median_blob_radius": np.nan,
     }
-    centroids, areas, radii, (w, h) = extract_blob_properties(
+    centroids, areas, radii, (w, h) = _extract_blob_properties(
         df_blobs,
         center_col="center",
         area_col="area",
@@ -521,16 +524,16 @@ def calculate_all_spatial_metrics(
     coverage = (100.0 * tba / img_area) if np.isfinite(img_area) and img_area > 0 else np.nan
     metrics["coverage_percentage"] = coverage
 
-    metrics.update(calculate_nnd_stats(centroids))
-    metrics.update(calculate_voronoi_stats(centroids))
+    metrics.update(_calculate_nnd_stats(centroids))
+    metrics.update(_calculate_voronoi_stats(centroids))
     metrics.update(
-        calculate_graph_metrics(
+        _calculate_graph_metrics(
             centroids, areas, method=graph_method, param=graph_param
         )
     )
     return metrics
 
-def calculate_summary_statistics(
+def _calculate_summary_statistics(
     df: pd.DataFrame,
     group_cols: list[str],
     carry_over_cols: list[str],
@@ -594,7 +597,7 @@ def calculate_summary_statistics(
 
     return grouped
 
-def process_parquet_files(
+def _process_parquet_files(
     input_dir: Path,
     *,
     mode: str,
@@ -638,7 +641,12 @@ def process_parquet_files(
     else:
         raise ValueError("Mode must be either 'OpenCV' or 'BubbleSAM'.")
 
-    for parquet_path in input_dir.rglob(glob_pattern):
+    all_parquets = list(input_dir.rglob(glob_pattern)) 
+    for parquet_path in tqdm(
+        all_parquets,
+        total=len(all_parquets),
+        desc="Processing Parquet Files"
+    ):
         metadata = _parse_filename(parquet_path.name, mode)
         if not metadata:
             warnings.warn(f"Could not parse metadata from filename: {parquet_path.name}")
@@ -652,7 +660,7 @@ def process_parquet_files(
                 f"Failed to load or parse {parquet_path}: {type(exc).__name__}({exc})"
             )
             continue
-        metrics = calculate_all_spatial_metrics(
+        metrics = _calculate_all_spatial_metrics(
             df_blobs, graph_method=graph_method, graph_param=graph_param
         )
         metrics["image_name"] =  parquet_path.name.replace("parquet.gzip", "tiff")
@@ -721,7 +729,7 @@ def full_analysis(
     """
     # iterate through all parquet files and return a dataframe
     # containing per image statistics
-    per_img_df = process_parquet_files(
+    per_img_df = _process_parquet_files(
         input_dir,
         mode=mode,
         graph_method=graph_method,
@@ -750,7 +758,7 @@ def full_analysis(
     final_group_cols = list(group_cols or ["Group", "Label", "Time", "Class"])
     final_carry_cols = list(carry_over_cols or [])
     # aggregate per image statistics 
-    agg_df = calculate_summary_statistics(
+    agg_df = _calculate_summary_statistics(
         per_img_df,
         group_cols=final_group_cols,
         carry_over_cols=final_carry_cols,
