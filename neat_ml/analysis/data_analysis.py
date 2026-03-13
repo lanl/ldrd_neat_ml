@@ -312,7 +312,7 @@ def _calculate_graph_metrics(
     # check if input method is valid
     if method not in ["knn", "delaunay", "radius"]:
         raise ValueError(
-            f"Invalid input parameters for `method`: {method} and/or `param`: {param}"
+            f"Invalid input parameters for `method`: {method}"
         )
     
     # initialize `networkx` graph, and add nodes from input data
@@ -440,7 +440,7 @@ def _extract_blob_properties(
     center_col : str
         Column name for blob centroids (x, y).
     area_col : str
-        Column name for blob areasl
+        Column name for blob areas
     radius_col : str
         Column name for blob radii.
     bbox_col : str
