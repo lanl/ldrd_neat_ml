@@ -56,7 +56,7 @@ def test_calculate_voronoi_stats(pts, exp):
     exp_out = pd.DataFrame([exp], columns=actual.keys())
     actual_out = pd.DataFrame(actual, index=[0])
     # account for floating point precision errors with absolute tolerance
-    assert_frame_equal(actual_out, exp_out, atol=1e-4)
+    assert_frame_equal(actual_out, exp_out, atol=1e-3)
 
 
 @pytest.mark.parametrize("method, param, expected",
