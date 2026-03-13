@@ -230,7 +230,7 @@ def test_voronoi_qhull_error():
     """
     Test that a warning is issued when Voronoi calculation fails.
     """
-    # Three points at the exact same location
+    # four colinear points
     dummy_points = np.array([1, 2, 3, 4])
     with pytest.warns(UserWarning, match="Voronoi calculation failed"):
         actual = da._calculate_voronoi_stats(dummy_points)
