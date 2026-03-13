@@ -40,8 +40,7 @@ def as_steps_set(steps_str: str) -> list[str]:
 
     out = []
     for s in raw:
-        sl = s.lower()
-        out.append(sl)
+        out.append(s.lower())
     return out
 
 def get_path_structure(

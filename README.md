@@ -28,9 +28,19 @@ This `yaml` input file is separate from the `yaml` files used by `SAM-2` to
 build the model architecture, e.g. `sam2.1-hiera-l.yaml`, but user provided
 mask parameters override the built-in parameters for the `SAM-2` model.
 
+When performing analysis/metric calculation of the resulting bubble detections,
+the `yaml` file provides the necessary paths for finding the detection parquet
+files; the composition csv file that stores information including
+phase separation ground-truth labels; the paths for storing per-image and
+aggregate metrics. Optionally, the user can also provide
+the column names on which to group the aggregate metrics during
+analysis, and a choice of method for calculating graph-based metrics of
+bubble connectivity (`knn`, `radius` or `delaunay`).
+
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
-and `neat_ml/data/bubblesam_detection_test.yaml`).
+`neat_ml/data/bubblesam_detection_test.yaml`, and 
+`neat_ml/data/opencv_analysis_test.yaml`).
 Input paths for `work` and `img_dir` parameters can be
 provided as either absolute or relative file paths.
 
@@ -153,6 +163,10 @@ python -c "import pooch; print(pooch.os_cache('test_images'))"
 
 This should process and detect bubbles from the image file `images_raw.tiff` and 
 place the outputs under ``roots:work`` filepath from the `.yaml` file
+
+For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also need to be added to the
+input `yaml` file (a description of which can also be found above). These steps process the output bubble
+detection data and save an `csv` file of aggregated metrics.
 
 For information relevant to running the workflow:  
 
