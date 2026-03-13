@@ -7,7 +7,6 @@ from neat_ml.analysis import data_analysis as da
 from pandas.testing import assert_frame_equal
 
 
-
 @pytest.mark.parametrize("pts, expected",
     [
         (
@@ -306,13 +305,6 @@ def test_filename_parsers(fname, expected, method):
     actual = da._parse_filename(fname, method)
     assert actual == expected
 
-def test_load_bubblesam_df_error(tmp_path: Path):
-    df_bad = pd.DataFrame({"wrong_col": [1]})
-    parquet_path = tmp_path / "bad.parquet.gzip"
-    df_bad.to_parquet(parquet_path)
-    with pytest.raises(ValueError, match="missing 'area' or 'bbox'"):
-        da._load_df(parquet_path, "bubblesam")
-
 def test_calculate_summary_statistics():
     df = pd.DataFrame({
         "Group": ["A", "A", "B"],
@@ -502,7 +494,7 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
         input_dir / unparseable
     )
     # a file that does not contain the appropriate columns
-    # for calculating the output metrics
+    # for calculating the output metrics with method == bubblesam
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
         f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
     pd.DataFrame({"wrong_col": [1]}).to_parquet(input_dir / badcontent)
@@ -521,9 +513,8 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
         df = da._process_parquet_files(input_dir, mode=method, graph_method="delaunay")
 
     msgs = [str(w.message) for w in record.list]
-    # four total error messages, three exceptions that raise
-    # a UserWarning, and one UserWarning that is raised if the
-    # input file cannot be parsed
+    # check that the appropriate warnings are produced
+    # as a result of the various exceptions that can be raised
     assert sum("ArrowInvalid" in m for m in msgs) == 2
     assert sum("ValueError" in m for m in msgs) == n_value_errors
     assert any("Could not parse metadata from filename" in m for m in msgs)
