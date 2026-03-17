@@ -67,7 +67,7 @@ def test_save_predictions(tmp_path: Path):
     actual_labels = actual_df["Pred_Label"].to_numpy()
 
     pdt.assert_frame_equal(expected_df_subset, actual_df_subset)
-    npt.assert_allclose(expected_prob, actual_prob)
+    npt.assert_allclose(expected_prob, actual_prob)  # type: ignore[arg-type]
     npt.assert_array_equal(expected_labels, actual_labels)
 
 def test_run_inference_with_target(
