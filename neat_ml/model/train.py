@@ -90,7 +90,8 @@ def preprocess(
 
 
 def _build_pipeline(
-    scale_pos_weight: float
+    scale_pos_weight: float,
+    n_jobs: int,
 ) -> Pipeline:
     """
     Build a scikit-learn pipeline with an RF + XGB 
@@ -107,6 +108,9 @@ def _build_pipeline(
     scale_pos_weight : float
         The weight for the positive class, used by XGBoost
         to handle class imbalance.
+    n_jobs : int
+        The number of parallel processes to run when training
+        the classifier.
 
     Returns
     -------
@@ -117,7 +121,7 @@ def _build_pipeline(
         n_estimators=300,
         max_depth=None,
         class_weight="balanced",
-        n_jobs=-1,
+        n_jobs=n_jobs,
         random_state=RANDOM_STATE,
     )
 
@@ -130,14 +134,14 @@ def _build_pipeline(
         subsample=0.8,
         colsample_bytree=0.8,
         scale_pos_weight=scale_pos_weight,
-        n_jobs=-1,
+        n_jobs=n_jobs,
         random_state=RANDOM_STATE,
     )
 
     ensemble = VotingClassifier(
         estimators=[("rf", rf), ("xgb", xgb)],
         voting="soft",
-        n_jobs=-1,
+        n_jobs=n_jobs,
     )
 
     return Pipeline(
@@ -177,6 +181,7 @@ def train_with_validation(
     y_train: pd.Series,
     X_val: pd.DataFrame,
     y_val: pd.Series,
+    n_jobs: int = -1,
 ) -> Tuple[
     Pipeline,
     Dict[str, float],
@@ -204,6 +209,10 @@ def train_with_validation(
         The feature matrix for the validation set.
     y_val : pd.Series
         The target vector for the validation set.
+    n_jobs : int
+        The number of parallel processes to run
+        when training the classifier. Default = -1
+        aka use all available cores.
 
     Returns
     -------
@@ -231,7 +240,7 @@ def train_with_validation(
 
     for param_comb in product(*param_values):
         params = dict(zip(param_names, param_comb))
-        model = _build_pipeline(spw).set_params(**params)
+        model = _build_pipeline(spw, n_jobs).set_params(**params)
 
         model.fit(X_train, y_train)
         val_proba = model.predict_proba(X_val)[:, 1]
@@ -256,7 +265,8 @@ def train_with_validation(
     X_full = pd.concat([X_train, X_val], axis=0)
     y_full = pd.concat([y_train, y_val], axis=0)
     final_model = _build_pipeline(
-        _scale_pos_weight(y_full)
+        _scale_pos_weight(y_full),
+        n_jobs
         ).set_params(**best_params)
     final_model.fit(X_full, y_full)
 
