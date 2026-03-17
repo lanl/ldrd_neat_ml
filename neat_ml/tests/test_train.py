@@ -78,7 +78,7 @@ def test_scale_pos_weight():
 
 
 def test_build_pipeline():
-    actual_pipeline = _build_pipeline(scale_pos_weight=1.5)
+    actual_pipeline = _build_pipeline(scale_pos_weight=1.5, n_jobs=1)
     expected_steps = ["impute", "scale", "ensemble"]
 
     assert isinstance(actual_pipeline, Pipeline)
@@ -91,7 +91,7 @@ def test_train_with_validation(sample_data: pd.DataFrame):
     X_val, y_val = X.iloc[80:], y.iloc[80:]
 
     model, metrics, _, actual_val_proba = train_with_validation(
-        X_train, y_train, X_val, y_val
+        X_train, y_train, X_val, y_val, n_jobs=1
     )
 
     assert isinstance(model, Pipeline)
@@ -122,7 +122,7 @@ def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
     X_train, y_train = X.iloc[:80], y.iloc[:80]
     X_val, y_val = X.iloc[80:], y.iloc[80:]
     expected_model, expected_metrics, expected_params, _ = train_with_validation(
-        X_train, y_train, X_val, y_val
+        X_train, y_train, X_val, y_val, n_jobs=1
     )
 
     features = list(X.columns)
