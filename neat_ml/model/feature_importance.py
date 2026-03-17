@@ -108,8 +108,8 @@ def _run_ebm(
     imp = imp.sort_values(ascending=False)
     plot_top = min(top, len(imp))
     imp.to_csv(out_dir / "ebm_importance.csv")
-    plt.barh(np.arange(plot_top), imp.values[:plot_top])
-    plt.yticks(np.arange(plot_top), imp.index[:plot_top])
+    plt.barh(np.arange(plot_top), imp.values[:plot_top])  # type: ignore[arg-type]
+    plt.yticks(np.arange(plot_top), imp.index[:plot_top])  # type: ignore[arg-type]
     plt.tight_layout()
     plt.savefig(out_dir / "ebm_importance.png", dpi=300)
     plt.close()
