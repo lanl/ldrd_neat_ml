@@ -9,6 +9,7 @@ import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay, QhullError
 import logging
 from tqdm.auto import tqdm
+from pyarrow.lib import ArrowInvalid
 
 __all__: Sequence[str] = [
     "full_analysis"
@@ -392,7 +393,7 @@ def _calculate_graph_metrics(
                 ) for n in range(len(unique_pairs))
             )
             graph.add_edges_from(new_edges)
-    except Exception as exc:
+    except (QhullError, ValueError) as exc:
         warnings.warn(f"Graph construction ({method}) failed: {exc}")
     
     # index graph-based features
@@ -655,7 +656,7 @@ def _process_parquet_files(
             metadata["Time"] = time_label
         try:
             df_blobs = _load_df(parquet_path, mode)
-        except Exception as exc:
+        except (ValueError, ArrowInvalid) as exc:
             warnings.warn(
                 f"Failed to load or parse {parquet_path}: {type(exc).__name__}({exc})"
             )
