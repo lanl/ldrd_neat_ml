@@ -548,21 +548,33 @@ def test_calculate_nnd_stats_warns_on_no_finite_distances():
     assert np.isnan(res["mean_nnd"]) and np.isnan(res["median_nnd"])
 
 
-def test_calculate_graph_metrics_warns_on_exception():
+@pytest.mark.parametrize("method, param, err",
+    [
+        ("delaunay", None, "value"),
+        ("knn", 1, "value"),
+        ("radius", 30, "value"),
+        ("delaunay", None, "qhull"),
+    ]
+)
+def test_calculate_graph_metrics_warns_on_exception(method, param, err):
     """
     Cause a graph-construction failure and ensure it warns but still returns
     sensible metrics (nodes present, no edges, multiple components).
     """
-    pts = np.array([
-        [np.nan, np.nan],
-        [1, 1],
-        [2, 2],
-        [3, 3]
-    ])
-    areas = np.ones(4)
+    if err == "value":
+        pts = np.array([
+            [np.nan, np.nan],
+            [1, 1],
+            [2, 2],
+            [3, 3]
+        ])
+        areas = np.ones(4)
+    else:
+        pts = np.array([(0,0), (1,1), (2,2), (3,3)])
+        areas = np.array([10, 20, 30, 40])
 
     with pytest.warns(UserWarning, match="Graph construction"):
-        res = da._calculate_graph_metrics(pts, areas, method="delaunay")
+        res = da._calculate_graph_metrics(pts, areas, method=method, param=param)
 
     assert res["graph_num_nodes"] == 4
     assert res["graph_num_edges"] == 0
