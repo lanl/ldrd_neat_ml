@@ -12,18 +12,11 @@ from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV, PredefinedSplit
+import logging
 
-RANDOM_STATE: int = 42
+logger = logging.getLogger(__name__)
 
-_PARAM_GRID: Dict[str, List[int | float | None]] = {
-    # Random‑Forest
-    "ensemble__rf__n_estimators": [500],
-    "ensemble__rf__max_depth": [None],
-    # XGBoost
-    "ensemble__xgb__n_estimators": [10, 20, 50, 100, 200, 400],
-    "ensemble__xgb__learning_rate": [0.05, 0.1],
-    "ensemble__xgb__max_depth": [3, 4, 5, 8, 10, 20],
-}
 
 __all__ = [
     "preprocess",
@@ -89,70 +82,6 @@ def preprocess(
     return X_imp, y
 
 
-def _build_pipeline(
-    scale_pos_weight: float,
-    n_jobs: int,
-) -> Pipeline:
-    """
-    Build a scikit-learn pipeline with an RF + XGB 
-    soft-voting ensemble.
-
-    The pipeline consists of three steps:
-    1. Median imputation for missing values.
-    2. Feature scaling using StandardScaler.
-    3. A soft-voting ensemble of RandomForestClassifier
-       and XGBClassifier.
-
-    Parameters
-    ----------
-    scale_pos_weight : float
-        The weight for the positive class, used by XGBoost
-        to handle class imbalance.
-    n_jobs : int
-        The number of parallel processes to run when training
-        the classifier.
-
-    Returns
-    -------
-    Pipeline
-        The configured scikit-learn pipeline.
-    """
-    rf = RandomForestClassifier(
-        n_estimators=300,
-        max_depth=None,
-        class_weight="balanced",
-        n_jobs=n_jobs,
-        random_state=RANDOM_STATE,
-    )
-
-    xgb = XGBClassifier(
-        objective="binary:logistic",
-        eval_metric="logloss",
-        n_estimators=300,
-        learning_rate=0.1,
-        max_depth=4,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        scale_pos_weight=scale_pos_weight,
-        n_jobs=n_jobs,
-        random_state=RANDOM_STATE,
-    )
-
-    ensemble = VotingClassifier(
-        estimators=[("rf", rf), ("xgb", xgb)],
-        voting="soft",
-        n_jobs=n_jobs,
-    )
-
-    return Pipeline(
-        steps=[
-            ("impute", SimpleImputer(strategy="median")),
-            ("scale", StandardScaler()),
-            ("ensemble", ensemble),
-        ]
-    )
-
-
 def _scale_pos_weight(y: pd.Series) -> float:
     """
     Calculate the negative/positive class ratio 
@@ -182,6 +111,7 @@ def train_with_validation(
     X_val: pd.DataFrame,
     y_val: pd.Series,
     n_jobs: int = -1,
+    random_state: int = 42,
 ) -> Tuple[
     Pipeline,
     Dict[str, float],
@@ -213,6 +143,9 @@ def train_with_validation(
         The number of parallel processes to run
         when training the classifier. Default = -1
         aka use all available cores.
+    random_state: int
+        random seed variable for initializing
+        machine learning classifiers
 
     Returns
     -------
@@ -229,48 +162,74 @@ def train_with_validation(
           class on the validation set.
     """
     spw = _scale_pos_weight(y_train)
-    print(f"[INFO] scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
+    logger.info(f"scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
 
-    param_names = list(_PARAM_GRID.keys())
-    param_values = list(_PARAM_GRID.values())
-    best_auc = -np.inf
-    best_params: Dict[str, int | float | None] = {}
-    best_model: Pipeline | None = None
-    val_proba_best = None
+    rf = RandomForestClassifier(
+        max_depth=None,
+        class_weight="balanced",
+        n_jobs=n_jobs,
+        random_state=random_state,
+    )
 
-    for param_comb in product(*param_values):
-        params = dict(zip(param_names, param_comb))
-        model = _build_pipeline(spw, n_jobs).set_params(**params)
+    xgb = XGBClassifier(
+        objective="binary:logistic",
+        eval_metric="logloss",
+        subsample=0.8,
+        colsample_bytree=0.8,
+        scale_pos_weight=scale_pos_weight,
+        n_jobs=n_jobs,
+        random_state=random_state,
+    )
 
-        model.fit(X_train, y_train)
-        val_proba = model.predict_proba(X_val)[:, 1]
-        auc = roc_auc_score(y_val, val_proba)
-        print(f"[GRID] params={params}  |  val ROC-AUC={auc:.4f}")
+    ensemble = VotingClassifier(
+        estimators=[("rf", rf), ("xgb", xgb)],
+        voting="soft",
+        n_jobs=n_jobs,
+    )
 
-        if auc > best_auc:
-            best_auc = auc
-            best_params = params
-            best_model = model
-            val_proba_best = val_proba
+    pipeline = Pipeline(
+        steps=[
+            ("impute", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("ensemble", ensemble),
+        ]
+    )
 
-    assert best_model is not None, "No model was fitted!"
-    assert val_proba_best is not None, "Validation probabilities were not calculated!"
+    param_grid = {
+        # Random‑Forest
+        "ensemble__rf__n_estimators": [500],
+        "ensemble__rf__max_depth": [None],
+        # XGBoost
+        "ensemble__xgb__n_estimators": [10, 20, 50, 100, 200, 400],
+        "ensemble__xgb__learning_rate": [0.05, 0.1],
+        "ensemble__xgb__max_depth": [3, 4, 5, 8, 10, 20],
+    }
 
-    pr_auc = average_precision_score(y_val, val_proba_best)
-    metrics = {"val_roc_auc": best_auc, "val_pr_auc": pr_auc}
+    X = np.concatenate((X_train, X_val), axis=0)
+    y = np.concatenate((y_train, y_val), axis=0)
 
-    print(f"[BEST] val ROC-AUC={best_auc:.4f}  | val PR-AUC={pr_auc:.4f}")
-    print(f"[BEST] hyper-parameters: {best_params}")
+    test_fold = [-1] * len(X_train) + [0] * len(X_val)
+    ps = PredefinedSplit(test_fold)
 
-    X_full = pd.concat([X_train, X_val], axis=0)
-    y_full = pd.concat([y_train, y_val], axis=0)
-    final_model = _build_pipeline(
-        _scale_pos_weight(y_full),
-        n_jobs
-        ).set_params(**best_params)
-    final_model.fit(X_full, y_full)
+    
+    grid_search = GridSearchCV(
+        estimator=pipeline,
+        param_grid=param_grid,
+        cv=ps,
+        scoring="roc_auc",
+        n_jobs=n_jobs,
+    )
 
-    return final_model, metrics, best_params, val_proba_best
+    grid_search.fit(X_train, y_train)
+    final_model = grid_search.best_estimator_
+    val_proba = final_model.predict_proba(X_val)[:, 1]
+    pr_auc = average_precision_score(y_val, val_proba)
+    metrics = {"val_roc_auc": grid_search.best_score_, "val_pr_auc": pr_auc}
+    
+    log.info(f"[BEST] val ROC-AUC={best_auc:.4f}  | val PR-AUC={pr_auc:.4f}")
+    log.info(f"[BEST] hyper-parameters: {best_params}")
+
+    return final_model, metrics, grid_search.best_params_, val_proba
 
 
 def plot_roc(

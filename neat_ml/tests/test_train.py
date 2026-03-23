@@ -16,7 +16,6 @@ from pandas.api.types import is_integer_dtype
 from sklearn.pipeline import Pipeline
 
 from neat_ml.model.train import (
-    _build_pipeline,
     _scale_pos_weight,
     plot_roc,
     preprocess,
@@ -75,14 +74,6 @@ def test_scale_pos_weight():
 
     y_no_pos = pd.Series([0, 0, 0, 0])
     npt.assert_allclose(_scale_pos_weight(y_no_pos), 1.0)
-
-
-def test_build_pipeline():
-    actual_pipeline = _build_pipeline(scale_pos_weight=1.5, n_jobs=1)
-    expected_steps = ["impute", "scale", "ensemble"]
-
-    assert isinstance(actual_pipeline, Pipeline)
-    npt.assert_equal(list(actual_pipeline.named_steps.keys()), expected_steps)
 
 
 def test_train_with_validation(sample_data: pd.DataFrame):
