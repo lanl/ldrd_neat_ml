@@ -130,7 +130,7 @@ def test_plot_feat_import_consensus_image(tmp_path: Path, stable_rc, baseline_di
     actual = tmp_path/"feat_imp_consensus.png"
 
     expected = baseline_dir / "feat_imp_consensus_expected.png"
-    result = compare_images(actual, expected, tol=1e-4) # type: ignore[call-overload]
+    result = compare_images(expected, actual, tol=1e-4) # type: ignore[call-overload]
     assert result is None
 
 def test_compare_methods_end_to_end(
@@ -167,7 +167,7 @@ def test_compare_methods_end_to_end(
     # by a floating point value big enough to make image comparison difficult.
     ebm_act = tmp_path / "ebm_importance.png"
     ebm_exp = baseline_dir / "ebm_importance_expected.png"
-    result = compare_images(ebm_act, ebm_exp, tol=1e-4) # type: ignore[call-overload]
+    result = compare_images(ebm_exp, ebm_act, tol=1e-4) # type: ignore[call-overload]
     assert result is None
 
 
@@ -180,5 +180,5 @@ def test_plot_feature_importance_comparsion(tmp_path, baseline_dir):
     fi.plot_feature_importance_comparison(comp_df, tmp_path, top=3)
     output_img = tmp_path / "feature_importance_comparison.png"
     exp_img = baseline_dir / "feature_importance_comparison_expected.png"
-    result = compare_images(output_img, exp_img, tol=1e-4)
+    result = compare_images(exp_img, output_img, tol=1e-4)
     assert result is None

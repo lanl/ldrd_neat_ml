@@ -322,5 +322,9 @@ def test_plot_phase_diagram_model_predictions(
         output_path=out_png,
     )
 
-    rms = compare_images(baseline_png, out_png, tol=1e-4)
+    # loosened tolerance to account for cross-platform testing
+    # rms of approx. 0.006 when testing on linux results in
+    # a diff that is visually black, but contains subpixel level
+    # differences.
+    rms = compare_images(baseline_png, out_png, tol=7e-3)
     assert rms is None
