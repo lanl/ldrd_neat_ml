@@ -4,8 +4,11 @@ import joblib
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import logging
+from .train import preprocess, plot_roc
 
-from .train import preprocess
+logger = logging.getLogger(__name__)
+
 
 def save_predictions(
     df: pd.DataFrame, 
@@ -28,13 +31,14 @@ def save_predictions(
     df["Pred_Prob"] = y_prob
     df["Pred_Label"] = (y_prob >= 0.5).astype(int)
     df.to_csv(out_csv, index=False)
-    print(f"[INFO] Predictions saved -> {out_csv}")
+    logger.info(f"Predictions saved -> {out_csv}")
 
 def run_inference(
     model_in: Path,
     data_csv: Path,
     target: Optional[str],
     exclude_cols: list[str],
+    roc_png: Path,
     pred_csv: Path,
 ) -> None:
     """
@@ -53,16 +57,10 @@ def run_inference(
         non-empty, a ROC curve will be generated.
     exclude_cols : list[str]
         List of column names to drop from `data_csv` before preprocessing.
-    roc_out : Path
-        File path directory where the ROC curve image (PNG) will be saved.
     roc_png : Path
         File path where the ROC curve image (PNG) will be saved.
     pred_csv : Path
         File path where the output CSV of predictions will be written.
-
-    Returns
-    -------
-    None
     """
     bundle = joblib.load(model_in)
     model = bundle["model"]
@@ -71,10 +69,10 @@ def run_inference(
     df = pd.read_csv(data_csv)
     X, y = preprocess(df, target or "", exclude_cols)
 
-    for col in feats:
-        if col not in X.columns:
-            X[col] = np.nan
+    X = X.reindex(columns=list(set(X.columns) | set(feats)))
     X = X[feats] if feats else X
 
     y_prob = model.predict_proba(X)[:, 1]
     save_predictions(df, y_prob, pred_csv)
+    if target is not None:
+        plot_roc(y.to_list(), y_prob, str(roc_png), label="Testing")

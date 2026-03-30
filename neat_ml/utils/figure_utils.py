@@ -187,8 +187,6 @@ def plot_gmm_decision_regions(
     y_col: str,
     phase_col: str,
     ax: Axes,
-    xrange: list[int],
-    yrange: list[int],
     n_components: int,
     random_state: int,
     boundary_color: str,
@@ -196,6 +194,9 @@ def plot_gmm_decision_regions(
     decision_alpha: float,
     plot_regions: bool,
     region_colors: tuple[str, str] = ("lightsteelblue", "aquamarine"),
+    decision_boundary_width: int = 3,
+    xrange: Optional[list[int]]=None,
+    yrange: Optional[list[int]]=None,
 ) -> tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
     """
     Trains a GMM and creates contour traces for phase 
@@ -212,8 +213,8 @@ def plot_gmm_decision_regions(
         phase_col (str): Name of the column containing 
                          phase information.
         ax (Axes): matplotlib axis for plotting
-        xrange (list[int]): X-axis composition range.
-        yrange (list[int]): Y-axis composition range. 
+        xrange (list[int] | None): X-axis composition range.
+        yrange (list[int] | None): Y-axis composition range. 
         n_components (int): Number of GMM components.
         random_state (int): Seed for reproducibility.
         region_colors (tuple[str, str]): Colors for the 
@@ -222,6 +223,8 @@ def plot_gmm_decision_regions(
         resolution (int): Grid resolution for the contour plot.
         decision_alpha (float): Opacity of the filled regions.
         plot_regions (bool): Whether to plot the filled regions.
+        decision_boundary_width (int): width of line for plotting
+                                       decision boundary
 
     Returns:
     --------
@@ -231,6 +234,14 @@ def plot_gmm_decision_regions(
     """
     df_local, x_col = rename_df_columns(df, x_col)
     x_features = df_local[phase_col].to_numpy().reshape(-1, 1)
+    
+    # if not provided, calculate the x and y range of the plot
+    # based on the input dataframe
+    if xrange is None or yrange is None:
+        x_max = df_local[x_col].max() + 1
+        y_max = df_local[y_col].max() + 1
+        xrange = [0, int(x_max)]
+        yrange = [0, int(y_max)]
 
     gmm = GaussianMixture(n_components=n_components, random_state=random_state)
     raw_labels = gmm.fit_predict(x_features)
@@ -259,14 +270,14 @@ def plot_gmm_decision_regions(
         z,
         levels=[0.5],
         colors=boundary_color,
-        linewidths=3,
+        linewidths=decision_boundary_width,
     )
     proxy_artist = Line2D(
         [0], 
         [0], 
         label="Decision Boundary", 
         color=boundary_color, 
-        linewidth=3
+        linewidth=decision_boundary_width
     )
     ax.legend(handles=[proxy_artist])
 

@@ -1,6 +1,4 @@
-import os
-from itertools import product
-from typing import Dict, List, Sequence, Tuple
+from typing import Sequence
 
 import joblib
 import numpy as np
@@ -14,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +26,8 @@ __all__ = [
 def preprocess(
     df: pd.DataFrame,
     target: str,
-    exclude: Sequence[str] | None = None,
-) -> Tuple[pd.DataFrame, pd.Series]:
+    exclude: list[str] | None = None,
+) -> tuple[pd.DataFrame, pd.Series]:
     """
     Separate features and target, and preprocess 
     the data for modeling.
@@ -47,20 +46,19 @@ def preprocess(
         the target variable.
     target : str
         The name of the target column.
-    exclude : Sequence[str] | None, optional
-        A sequence of column names to exclude from 
+    exclude : list[str] | None, optional
+        A list of column names to exclude from 
         the feature set, by default None.
 
     Returns
     -------
-    Tuple[pd.DataFrame, pd.Series]
+    tuple[pd.DataFrame, pd.Series]
         A tuple containing the processed features 
         DataFrame (X) and the target Series (y).
     """
-    df = df.copy()
     y = pd.Series(dtype=int)
     mask = pd.Series(True, index=df.index)
-    cols_to_drop = list(exclude) if exclude else []
+    cols_to_drop = exclude if exclude else []
 
     if target:
         y = pd.to_numeric(df[target], errors="coerce")
@@ -71,7 +69,7 @@ def preprocess(
     X = df.loc[mask].drop(columns=cols_to_drop, errors="ignore")
     X = X.apply(pd.to_numeric, errors="coerce")
 
-    # Add this line to drop columns that are entirely NaN
+    # drop columns that are entirely NaN
     X = X.dropna(axis=1, how='all')
 
     X_imp = pd.DataFrame(
@@ -112,10 +110,11 @@ def train_with_validation(
     y_val: pd.Series,
     n_jobs: int = -1,
     random_state: int = 42,
-) -> Tuple[
+    ml_hyper_opt: bool = True,
+) -> tuple[
     Pipeline,
-    Dict[str, float],
-    Dict[str, int | float | None],
+    dict[str, float],
+    dict[str, int | float | None],
     np.ndarray,
 ]:
     """
@@ -146,11 +145,14 @@ def train_with_validation(
     random_state: int
         random seed variable for initializing
         machine learning classifiers
+    ml_hyper_opt: bool
+        whether or not to perform hyperparameter tuning
+        via exhaustive grid search.
 
     Returns
     -------
-    Tuple[Pipeline, Dict[str, float], 
-    Dict[str, int | float | None], np.ndarray]
+    tuple[Pipeline, dict[str, float], 
+    dict[str, int | float | None], np.ndarray]
         A tuple containing:
         - The final model pipeline, refit on 
           the combined train+validation data.
@@ -165,6 +167,7 @@ def train_with_validation(
     logger.info(f"scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
 
     rf = RandomForestClassifier(
+        n_estimators=500,
         max_depth=None,
         class_weight="balanced",
         n_jobs=n_jobs,
@@ -176,7 +179,7 @@ def train_with_validation(
         eval_metric="logloss",
         subsample=0.8,
         colsample_bytree=0.8,
-        scale_pos_weight=scale_pos_weight,
+        scale_pos_weight=spw,
         n_jobs=n_jobs,
         random_state=random_state,
     )
@@ -195,41 +198,44 @@ def train_with_validation(
         ]
     )
 
-    param_grid = {
-        # Random‑Forest
-        "ensemble__rf__n_estimators": [500],
-        "ensemble__rf__max_depth": [None],
-        # XGBoost
-        "ensemble__xgb__n_estimators": [10, 20, 50, 100, 200, 400],
-        "ensemble__xgb__learning_rate": [0.05, 0.1],
-        "ensemble__xgb__max_depth": [3, 4, 5, 8, 10, 20],
-    }
+    if ml_hyper_opt:
+        param_grid = {
+            # XGBoost
+            "ensemble__xgb__n_estimators": [10, 20, 50, 100, 200, 400],
+            "ensemble__xgb__learning_rate": [0.05, 0.1],
+            "ensemble__xgb__max_depth": [3, 4, 5, 8, 10, 20],
+        }
 
-    X = np.concatenate((X_train, X_val), axis=0)
-    y = np.concatenate((y_train, y_val), axis=0)
+        X = np.concatenate((X_train, X_val), axis=0)
+        y = np.concatenate((y_train, y_val), axis=0)
 
-    test_fold = [-1] * len(X_train) + [0] * len(X_val)
-    ps = PredefinedSplit(test_fold)
+        test_fold = [-1] * len(X_train) + [0] * len(X_val)
+        ps = PredefinedSplit(test_fold)
+        
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            cv=ps,
+            scoring="roc_auc",
+            n_jobs=n_jobs,
+        )
 
-    
-    grid_search = GridSearchCV(
-        estimator=pipeline,
-        param_grid=param_grid,
-        cv=ps,
-        scoring="roc_auc",
-        n_jobs=n_jobs,
-    )
+        grid_search.fit(X, y)
+        final_model = grid_search.best_estimator_
+        best_params = grid_search.best_params_
+    else:
+       final_model = pipeline.fit(X_train, y_train) 
+       best_params = pipeline.get_params()
 
-    grid_search.fit(X_train, y_train)
-    final_model = grid_search.best_estimator_
     val_proba = final_model.predict_proba(X_val)[:, 1]
     pr_auc = average_precision_score(y_val, val_proba)
-    metrics = {"val_roc_auc": grid_search.best_score_, "val_pr_auc": pr_auc}
+    best_score = roc_auc_score(y_val, val_proba)
+    metrics = {"val_roc_auc": best_score, "val_pr_auc": pr_auc}
     
-    log.info(f"[BEST] val ROC-AUC={best_auc:.4f}  | val PR-AUC={pr_auc:.4f}")
-    log.info(f"[BEST] hyper-parameters: {best_params}")
+    logger.info(f"[BEST] val ROC-AUC={best_score:.4f}  | val PR-AUC={pr_auc:.4f}")
+    logger.info(f"[BEST] hyper-parameters: {best_params}")
 
-    return final_model, metrics, grid_search.best_params_, val_proba
+    return final_model, metrics, best_params, val_proba
 
 
 def plot_roc(
@@ -247,9 +253,9 @@ def plot_roc(
 
     Parameters
     ----------
-    y_true : Sequence[int]
+    y_true : np.ndarray | Sequence[int]
         The true binary labels.
-    y_prob : Sequence[float]
+    y_prob : np.ndarray | Sequence[float]
         The predicted probabilities for the positive class.
     out_png : str
         The file path where the output PNG image will be saved.
@@ -259,24 +265,25 @@ def plot_roc(
     """
     fpr, tpr, _ = roc_curve(y_true, y_prob)
     aucv = roc_auc_score(y_true, y_prob)
-    plt.figure(figsize=(4, 4))
-    plt.plot(fpr, tpr, lw=2, label=f"{label} AUC={aucv:.3f}")
-    plt.plot([0, 1], [0, 1], "--", lw=1, color="grey")
-    plt.xlabel("False-Positive Rate")
-    plt.ylabel("True-Positive Rate")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=300)
+    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    ax.plot(fpr, tpr, lw=2, label=f"AUC={aucv:.3f}")
+    ax.plot([0, 1], [0, 1], "--", lw=1, color="grey")
+    ax.set_xlabel("False-Positive Rate")
+    ax.set_ylabel("True-Positive Rate")
+    ax.set_title(f"ROC Curve for {label} Dataset")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=300)
     plt.close()
-    print(f"[INFO] ROC curve saved -> {out_png}")
+    logger.info(f"ROC curve saved -> {out_png}")
 
 
 def save_model_bundle(
     model: Pipeline,
-    features: List[str],
-    metrics: Dict[str, float],
-    best_params: Dict[str, int | float | None],
-    path: str,
+    features: list[str],
+    metrics: dict[str, float],
+    best_params: dict[str, int | float | None],
+    path: Path,
 ) -> None:
     """
     Serialize and save the trained model and associated 
@@ -290,16 +297,16 @@ def save_model_bundle(
     ----------
     model : Pipeline
         The trained scikit-learn pipeline to be saved.
-    features : List[str]
+    features : list[str]
         The list of feature names used by the model.
-    metrics : Dict[str, float]
+    metrics : dict[str, float]
         A dictionary of performance metrics (e.g., {'val_roc_auc': 0.85}).
-    best_params : Dict[str, int | float | None]
+    best_params : dict[str, int | float | None]
         A dictionary of the best hyperparameters found during training.
-    path : str
+    path : Path
         The file path where the model bundle will be saved.
     """
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(
         {
             "model": model,
@@ -309,4 +316,4 @@ def save_model_bundle(
         },
         path,
     )
-    print(f"[INFO] Model bundle saved -> {path}")
+    logger.info(f"Model bundle saved -> {path}")
