@@ -38,7 +38,7 @@ jobs:
         brew update
         brew install libomp
     - name: Set Thread Limit for macOS
-      if: runner.os == "macOS"
+      if: runner.os == 'macOS'
       run: |
         echo "Limiting OpenMP to 1 thread for macOS performance"
         echo "OMP_NUM_THREADS=1" >> $GITHUB_ENV
