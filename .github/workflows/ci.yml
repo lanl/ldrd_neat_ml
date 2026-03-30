@@ -39,4 +39,4 @@ jobs:
         brew install libomp
     - name: test
       run: |
-        cd /tmp && python -m pytest --pyargs neat_ml --cov=neat_ml --cov-report=term-missing
+        cd /tmp && python -m pytest -s --pyargs neat_ml --cov=neat_ml --cov-report=term-missing
