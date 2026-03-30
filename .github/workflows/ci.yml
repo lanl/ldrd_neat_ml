@@ -32,6 +32,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ttf-mscorefonts-installer || true
         sudo fc-cache -f -v
+    - name: install openmp
+      run: |
+        brew update
+        brew install libomp
     - name: test
       run: |
         cd /tmp && python -m pytest --pyargs neat_ml --cov=neat_ml --cov-report=term-missing
