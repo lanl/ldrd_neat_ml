@@ -7,6 +7,11 @@ import pooch  # type: ignore[import-untyped]
 from matplotlib import rcParams
 from pathlib import Path
 import cv2
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+import joblib
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -150,3 +155,119 @@ def mock_dir(tmp_path_factory, make_dummy_blobs):
     comp_df.to_csv(comp_csv, index=False)
 
     return input_dir, output_dir, comp_csv
+
+
+@pytest.fixture(scope="session")
+def stable_rc():
+    STABLE_RC = {
+        "figure.figsize": (6.0, 4.0),
+        "figure.dpi": 100,
+        "savefig.dpi": 100,
+        "savefig.bbox": "standard",
+        "savefig.pad_inches": 0.0,
+        "font.family": ["DejaVu Sans"],
+        "font.size": 10.0,
+        "axes.titlesize": 12,
+        "axes.labelsize": 10,
+        "axes.linewidth": 1.0,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "path.simplify": False,
+        "text.antialiased": True,
+        "lines.antialiased": True,
+    }
+    return STABLE_RC
+
+
+@pytest.fixture(scope="session")
+def sample_phase_df(tmp_path_factory):
+    """
+    Generates a synthetic DataFrame with two distinct clusters of points,
+    representing two phases, to create a less complex and more realistic
+    phase diagram for visual testing.
+    """
+    tmp_csv_path = tmp_path_factory.mktemp("input_data")
+    rng = np.random.default_rng(seed=0)
+    n_per_phase = 25
+
+    mean0 = [3, 2]
+    cov0 = [[3, 0.5], [0.5, 2]]
+    coords0 = rng.multivariate_normal(mean0, cov0, n_per_phase)
+    df0 = pd.DataFrame(coords0, columns=["Dextran", "PEO"])
+    df0["TruePhase"] = 0
+
+    mean1 = [12, 6]
+    cov1 = [[4, -1], [-1, 3]]
+    coords1 = rng.multivariate_normal(mean1, cov1, n_per_phase)
+    df1 = pd.DataFrame(coords1, columns=["Dextran", "PEO"])
+    df1["TruePhase"] = 1
+    df = pd.concat([df0, df1], ignore_index=True)
+    df[["Dextran", "PEO"]] = df[["Dextran", "PEO"]].clip(lower=0)
+    df = df.sample(frac=1, random_state=rng).reset_index(drop=True)
+    flip = rng.random(len(df)) < 0.1
+    df["PredPhase"] = np.where(flip, 1 - df["TruePhase"], df["TruePhase"])
+    csv_out = tmp_csv_path / "input_data.csv"
+    df.to_csv(csv_out)
+    return csv_out
+
+
+@pytest.fixture(scope="session")
+def sample_data() -> pd.DataFrame:
+    """
+    Provides a sample DataFrame for consistent testing.
+    """
+    rng = np.random.default_rng(42)
+    data = {
+        "feature1": rng.random(100),
+        "feature2": rng.random(100) * 10,
+        "feature3": ["A"] * 50 + ["B"] * 50,
+        "exclude_col": np.arange(100),
+        "target": rng.integers(0, 2, 100),
+    }
+    df = pd.DataFrame(data)
+    df.loc[5, "feature1"] = np.nan
+    df.loc[10, "target"] = np.nan
+    return df
+
+
+@pytest.fixture(scope="session")
+def trained_model_bundle(tmp_path_factory):
+    """Creates and saves a dummy trained model bundle."""
+    tmp_model_path = tmp_path_factory.mktemp("model")
+    features = ["feat_a", "feat_b"]
+    model = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="median")),
+            ("scale", StandardScaler()),
+            ("clf", LogisticRegression(random_state=42)),
+        ]
+    )
+    rng = np.random.default_rng(7)
+    dummy_X = pd.DataFrame(rng.random((10, len(features))), columns=features)
+    dummy_y = pd.Series(rng.integers(0, 2, 10))
+    model.fit(dummy_X, dummy_y)
+
+    bundle = {"model": model, "features": features}
+    model_path = tmp_model_path / "model.joblib"
+    joblib.dump(bundle, model_path)
+    return model_path
+
+
+@pytest.fixture(scope="session")
+def sample_inference_data(tmp_path_factory):
+    """
+    Provides a sample CSV file for inference testing.
+    """
+    tmp_infer_path = tmp_path_factory.mktemp("infer")
+    rng = np.random.default_rng(123)
+    data = {
+        "feat_a": rng.random(50),
+        "feat_b": np.arange(50),
+        "id_col": [f"id_{i}" for i in range(50)],
+        "ground_truth": rng.integers(0, 2, 50),
+    }
+    df = pd.DataFrame(data)
+    csv_path = tmp_infer_path / "inference_data.csv"
+    df.to_csv(csv_path, index=False)
+    return csv_path
+

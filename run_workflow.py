@@ -61,38 +61,42 @@ def main(config_path: str, steps_str: str) -> None:
             paths = get_path_structure(roots, ds, steps)
             stage_analyze_features(ds, paths)
     
-    model_path: Optional[Path] = None
+    model_path = None
     train_list = [d for d in datasets if d.get("role") == "train"]
     val_list = [d for d in datasets if d.get("role") == "val"]
-    infer_list: list[Dict[str, Any]] = [d for d in datasets if d.get("role") == "infer"]
+    infer_list = [d for d in datasets if d.get("role") == "infer"]
 
     if "train" in steps:
         if not train_list:
             log.error("No role='train' dataset.")
             return
         if len(train_list) > 1:
-            log.warning("Multiple train datasets. Using the first.")
+            raise ValueError(
+                "Multiple train datasets provided, "
+                "only one can be used at a time."
         if len(val_list) > 1:
-            log.warning("Multiple val datasets. Using the first.")
+            raise ValueError(
+                "Multiple validation datasets provided, "
+                "only one can be used at a time."
+            )
 
-        train_ds: Dict[str, Any] = train_list[0]
-        val_ds: Dict[str, Any] = val_list[0]
+        train_ds = train_list[0]
+        val_ds = val_list[0]
 
-        train_paths: Dict[str, Path] = get_path_structure(roots, train_ds, steps=["train"])
-        val_paths: Optional[Dict[str, Path]] = (get_path_structure(roots, val_ds, steps=["train"]) if val_ds else None)
+        train_paths = get_path_structure(roots, train_ds, steps=["train"])
+        val_paths = (get_path_structure(roots, val_ds, steps=["train"]) if val_ds else None)
+        ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
 
-        model_path = stage_train_model(train_ds, train_paths, val_ds, val_paths)
+        model_path = stage_train_model(train_ds, train_paths, val_ds, val_paths, ml_hyper_opt)
 
     if model_path is None and any(s in steps for s in ("explain", "infer", "plot")):
-        model_path_str: Optional[str] = cfg.get("inference_model")
+        model_path_str = cfg.get("inference_model")
         if not model_path_str:
-            log.error("No model available. Train first or set 'inference_model' in YAML.")
-            return
+            raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
         model_path = Path(model_path_str).expanduser().resolve()
         if not model_path.exists():
-            log.error("Model not found: %s", model_path)
-            return
-        log.info("Using model from config: %s", model_path)
+            raise ValueError(f"Model not found at specified path: {model_path}")
+        log.info(f"Using model from config: {model_path}")
 
     if "explain" in steps and model_path:
         log.info("\n--- STAGE: EXPLAIN ---")

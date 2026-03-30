@@ -301,3 +301,26 @@ def test_plot_phase_diagram_error(
             xrange=[0, 20], yrange=[0, 20],
             binodal_curve = True
         )
+
+def test_plot_phase_diagram_model_predictions(
+    tmp_path, sample_phase_df, baseline_dir):
+    """
+    visual regression test of ``plot_phase_diagram`` when
+    provided model predictions for plotting ML decision
+    boundary
+    """
+    baseline_png = baseline_dir / "test_phase_diagram.png"
+    out_png = tmp_path / "phase.png"
+
+    lp.plot_phase_diagram(
+        sample_phase_df,
+        x_col="Dextran",
+        y_col="PEO",
+        phase_col="TruePhase",
+        pred_phase_col="PredPhase",
+        model_boundary=True,
+        output_path=out_png,
+    )
+
+    rms = compare_images(baseline_png, out_png, tol=1e-4)
+    assert rms is None
