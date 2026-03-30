@@ -23,6 +23,7 @@ from neat_ml.model.train import (
 
 
 def test_preprocess(sample_data: pd.DataFrame):
+    print("running ``test_preprocess``")
     actual_X, actual_y = preprocess(
         sample_data,
         target="target",
@@ -39,6 +40,7 @@ def test_preprocess(sample_data: pd.DataFrame):
     assert actual_y.dtype == int
 
 def test_preprocess_no_exclude(sample_data: pd.DataFrame):
+    print("running ``test_preprocess_no_exclude``")
     actual_X, _ = preprocess(sample_data, target="target")
     assert "exclude_col" in actual_X.columns
     assert "target" not in actual_X.columns
@@ -52,11 +54,13 @@ def test_preprocess_no_exclude(sample_data: pd.DataFrame):
     ]
 )
 def test_scale_pos_weight(y_in, exp):
+    print("running ``test_scale_pos_weight``")
     y_out = pd.Series(y_in)
     assert _scale_pos_weight(y_out) == exp
 
 
 def test_train_with_validation(sample_data: pd.DataFrame):
+    print("running ``test_train_with_validation``")
     X, y = preprocess(sample_data, target="target")
     # perfectly align all the feature data with the target
     X['feature1'] = np.where(
@@ -87,6 +91,7 @@ def test_train_with_validation(sample_data: pd.DataFrame):
 
 def test_plot_roc(tmp_path: Path, baseline_dir):
     
+    print("running ``test_plot_roc``")
     y_true = np.array([0, 0, 1, 1, 0, 1])
     y_prob = np.array([0.1, 0.4, 0.35, 0.8, 0.2, 0.6])
     expected_image_path = baseline_dir/"expected_train_roc.png"
@@ -96,6 +101,8 @@ def test_plot_roc(tmp_path: Path, baseline_dir):
     assert result is None
 
 def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
+    
+    print("running ``test_save_model_bundle``")
     X, y = preprocess(sample_data, target="target")
     X_train, y_train = X.iloc[:80], y.iloc[:80]
     X_val, y_val = X.iloc[80:], y.iloc[80:]
