@@ -62,6 +62,11 @@ jobs:
     - name: refresh font cache
       if: runner.os == 'Linux'
       run: sudo fc-cache -f -v
+        sudo fc-cache -f -v
+    - name: install openmp
+      run: |
+        brew update
+        brew install libomp
     - name: test
       run: |
         source "$GITHUB_WORKSPACE/.venv/bin/activate"
