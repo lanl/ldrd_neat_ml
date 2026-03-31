@@ -331,8 +331,11 @@ def plot_phase_diagram(
         Line2D([0], [0], marker="s", color="w",
                markerfacecolor="dodgerblue", markeredgecolor="black",
                markersize=20, label=f"Single-Phase ({plot_marker})"),
-        Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
     ]
+    if not model_boundary:
+        handles.append(
+            Line2D([0], [0], color="red", lw=3, label="Decision Boundary")
+        )
     
     # plot the binodal curve describing the behavior of aqueous two-phase systems
     # as described in Silverio et al., equation (1), [dx.doi.org/10.1021/je2012549] 

@@ -93,6 +93,9 @@ roots:
   # `results` key is required when performing `analysis`
   # or else path generation will fail and throw an error
   results: path/to/save/analysis/outputs
+  model: path/to/save/trained/model
+
+inference_model: path/to/saved/joblib/model/from/training (used when running inference separately)
 
 datasets:
   - id: name_of_save_folder
@@ -222,9 +225,9 @@ The lines contained there can also be added to those used for running `detection
 when running both steps with a single command (e.g. `--steps all`). The `analysis` step processes the output parquet files from
 bubble detection data, extracts features from the data, and saves CSV files containing per-image and aggregated metrics. 
 
-Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. 
+Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for saving the model, training/inference results can be set with `root: model` and `root: results` respectively, and `inference_model` can be set to explicitly provide the path to the trained model when performing inference separately from training. 
 
-The user can also determine whether or not to perform hyperparameter optimzation via exhaustive grid search by setting the `ml_hyper_opt` to True or False (the default is True if no parameter is specified.)
+The user can also determine whether or not to perform machine learning classifier hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt` to True or False (the default is True if no parameter is specified.)
 
 For information relevant to running the workflow:  
 

@@ -10,6 +10,7 @@ from sklearn.feature_selection import SelectKBest
 import shap
 from interpret.glassbox import ExplainableBoostingClassifier
 from lime.lime_tabular import LimeTabularExplainer
+from sklearn.pipeline import Pipeline
 
 
 __all__ = [
@@ -43,25 +44,27 @@ def _run_shap(
         and as the evaluation set whose SHAP values are summarized.
     out_dir : pathlib.Path
         Directory where the SHAP bar chart (shap_summary.png) will be saved.
-        The folder is assumed to exist.
     top : int, default 20
         Maximum number of features to display in the SHAP summary figure.
     n_jobs : int
-        number of parallel process to run for shap explainer. n_jobs=-1 uses
+        number of parallel processes to run for shap explainer. n_jobs=-1 uses
         all cores.
     rng : np.random.Generator | None
         pseudorandom number generator
 
     Returns
     -------
-    importance : pandas.Series
+    imp : pandas.Series
         Index = feature names, values = mean absolute SHAP value (descending).
-        Empty series if the optional *shap* dependency is missing.
     """
     explainer = shap.Explainer(
-        model.predict_proba, masker=X, algorithm="permutation", n_jobs=n_jobs
+        model.predict_proba,
+        masker=X.values,
+        algorithm="permutation",
+        n_jobs=n_jobs,
+        feature_names=X.columns.to_list(),
     )
-    vals = explainer(X).values
+    vals = explainer(X.values).values
     vals = vals[:, :, 1] if vals.ndim == 3 else vals
     imp = pd.Series(np.abs(vals).mean(0), index=X.columns).sort_values(ascending=False)
 
@@ -85,8 +88,10 @@ def _run_ebm(
 
     Parameters
     ----------
-    X, y : pd.DataFrame, pd.Series
+    X : pd.DataFrame
         Input training data for ExplainableBoostingClassifier.
+    y : pd.Series
+        Training targets
     out_dir : Path
         Folder for saving the EBM bar chart and CSV.
     top : int, default 20
@@ -96,13 +101,14 @@ def _run_ebm(
 
     Returns
     -------
-    pd.Series
-        Importance values (descending). Empty if interpret not installed.
+    imp : pd.Series
+        Importance values (descending).
     """
     ebm = ExplainableBoostingClassifier(
         interactions=0,
         random_state=random_state,
-    ).fit(X, y)
+        feature_names=X.columns.to_list()
+    ).fit(X.values, y)
 
     data = ebm.explain_global().data()
     names = np.asarray(data["names"])
@@ -122,7 +128,8 @@ def _run_ebm(
     return imp
 
 def _run_lime(
-    model, X: pd.DataFrame, 
+    model: Pipeline,
+    X: pd.DataFrame, 
     n_samples: int = 100,
     *,
     random_state: int = 42,
@@ -132,7 +139,7 @@ def _run_lime(
 
     Parameters
     ----------
-    model : Any
+    model : Pipeline
         Fitted classifier with a probability interface compatible with LIME
         (predict_proba returning an n_samples x 2 array for binary tasks).
     X : pandas.DataFrame
@@ -145,10 +152,8 @@ def _run_lime(
 
     Returns
     -------
-    importance : pandas.Series
+    pandas.Series
         Index = feature names, values = mean absolute LIME weight (descending).
-        Empty series if the optional lime dependency is missing.
-
     """
     rng = np.random.default_rng(random_state)
 
@@ -187,7 +192,10 @@ def get_k_best_scores(
 
     Parameters
     ----------
-    X, y : training data.
+    X : pd.DataFrame
+        dataframe containing training data
+    y : pd.Series
+        pandas series containing training targets
     k : int
         Number of top features each filter should select (used during fitting).
     metrics : Sequence
@@ -215,9 +223,9 @@ def feature_importance_consensus(
 
     Parameters
     ----------
-    pos_class_feat_imps : sequence of NumPy arrays
+    pos_class_feat_imps : Sequence[np.ndarray]
         Each array holds importances for one model.
-    feature_names : 1-D array-like of str
+    feature_names : np.ndarray[str]
         Feature name for each index.
     top_feat_count : int
         Top-k features extracted from every importance vector.
@@ -290,7 +298,7 @@ def plot_feat_import_consensus(
     print(f"Consensus plot saved -> {out_dir}")
 
 def compare_methods(
-    model,
+    model: Pipeline,
     X: pd.DataFrame,
     y: pd.Series,
     out_dir: Path,
@@ -306,10 +314,12 @@ def compare_methods(
 
     Parameters
     ----------
-    model
+    model: Pipeline
         Fitted scikit-learn classifier with predict_proba.
-    X, y : pd.DataFrame, pd.Series
-        Data used for explanations.
+    X : pd.DataFrame
+        training data for performing feature importance explanation
+    y : pd.Series
+        training data targets
     out_dir : Path
         Folder in which all artifacts will be written.
     top : int, default 20
@@ -325,12 +335,9 @@ def compare_methods(
 
     feats = sorted(set(shap_imp.index) | set(ebm_imp.index) | set(lime_imp.index))
     comp = pd.DataFrame(index=feats)
-    if not shap_imp.empty:
-        comp["SHAP"] = shap_imp
-    if not ebm_imp.empty:
-        comp["EBM"] = ebm_imp
-    if not lime_imp.empty:
-        comp["LIME"] = lime_imp
+    comp["SHAP"] = shap_imp
+    comp["EBM"] = ebm_imp
+    comp["LIME"] = lime_imp
     comp = comp.fillna(0)
 
     comp["mean_rank"] = comp.rank(ascending=False, method="average").mean(axis=1)
@@ -340,19 +347,18 @@ def compare_methods(
     
     plot_feature_importance_comparison(comp, out_dir, top)
 
-    if not comp.empty:
-        ranked_names, ranked_counts, n_models = feature_importance_consensus(
-            [comp[c].to_numpy(dtype=float) for c in ["SHAP", "EBM", "LIME"] if c in comp],
-            comp.index.values.astype(str),
-            top_feat_count=top,
-        )
-        plot_feat_import_consensus(
-            ranked_names,
-            ranked_counts,
-            n_models,
-            top,
-            out_dir,
-        )
+    ranked_names, ranked_counts, n_models = feature_importance_consensus(
+        [comp[c].to_numpy(dtype=float) for c in ["SHAP", "EBM", "LIME"] if c in comp],
+        comp.index.values.astype(str),
+        top_feat_count=top,
+    )
+    plot_feat_import_consensus(
+        ranked_names,
+        ranked_counts,
+        n_models,
+        top,
+        out_dir,
+    )
 
 def plot_feature_importance_comparison(
     comp: pd.DataFrame,
