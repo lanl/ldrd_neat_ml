@@ -3,11 +3,15 @@ import logging
 import yaml
 from pathlib import Path
 import warnings
+from typing import Any, Optional
 
 from neat_ml.workflow.lib_workflow import (as_steps_set,
                                            get_path_structure, 
                                            stage_detect,
-                                           stage_analyze_features)
+                                           stage_analyze_features,
+                                           stage_train_model,
+                                           stage_run_inference_and_plot,
+                                           stage_explain)
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +61,65 @@ def main(config_path: str, steps_str: str) -> None:
             paths = get_path_structure(roots, ds, steps)
             stage_analyze_features(ds, paths)
     
+    model_path = roots.get("model", "")
+    train_list = [d for d in datasets if d.get("role") == "train"]
+    val_list = [d for d in datasets if d.get("role") == "val"]
+    infer_list = [d for d in datasets if d.get("role") == "infer"]
+
+    if "train" in steps:
+        if not train_list:
+            raise ValueError("No role='train' dataset.")
+        if len(train_list) > 1:
+            raise ValueError(
+                "Multiple train datasets provided, "
+                "only one can be used at a time."
+            )
+        if len(val_list) > 1:
+            raise ValueError(
+                "Multiple validation datasets provided, "
+                "only one can be used at a time."
+            )
+
+        train_ds = train_list[0]
+        val_ds = val_list[0]
+        train_id = train_ds.get("id")
+        trained_model = Path(model_path) / f"{train_id}_model.joblib"
+        if not trained_model.exists():
+            train_paths = get_path_structure(roots, train_ds, steps=["train"])
+            val_paths = (
+                get_path_structure(
+                    roots, val_ds, steps=["train"]) if val_ds else None
+            )
+            ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
+
+            model_path = stage_train_model(
+                train_ds, train_paths, val_ds, val_paths, ml_hyper_opt=ml_hyper_opt
+            )
+        else:
+            model_path = trained_model
+            log.info(f"Trained model already exists: {model_path}, skipping training...")
+
+    if model_path == "" and any(s in steps for s in ("explain", "infer", "plot")):
+        model_path_str = cfg.get("inference_model")
+        if not model_path_str:
+            raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
+        model_path = Path(model_path_str).expanduser().resolve()
+        if not model_path.exists():
+            raise ValueError(f"Model not found at specified path: {model_path}")
+        log.info(f"Using model from config: {model_path}")
+
+    if "explain" in steps and model_path:
+        log.info("\n--- STAGE: EXPLAIN ---")
+        train_ds = train_list[0] if train_list else datasets[0]
+        explain_paths = get_path_structure(roots, train_ds, ["train"])
+        stage_explain(train_ds, explain_paths, model_path)
+
+    if any(s in steps for s in ("infer", "plot")) and model_path:
+        log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
+        for ds in infer_list:
+            infer_paths = get_path_structure(roots, ds, steps)
+            stage_run_inference_and_plot(ds, infer_paths, model_path, steps)
+    
     log.info("Workflow finished.")
 
 if __name__ == "__main__":
@@ -76,8 +139,8 @@ if __name__ == "__main__":
         default="all",
         help=(
             "Comma-separated list of steps to run or 'all'. Defaults to 'all'.\n"
-            "Available steps: detect,analysis\n"
-            "Example: --steps \"detect,analysis\""
+            "Available steps: detect, analysis, train, explain, infer, plot.\n"
+            "Example: --steps \"detect,analysis,train,explain,infer,plot.\""
         )
     )
     args = parser.parse_args()

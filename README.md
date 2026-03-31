@@ -47,6 +47,10 @@ provided as either absolute or relative file paths.
 ```yaml
 roots:
   work: path/to/save/output
+  model: path/to/save/trained/model
+  results: path/to/save/training/results
+
+inference_model: path/to/saved/joblib/model/from/training (used when running inference separately)
 
 datasets:
   - id: name_of_save_folder
@@ -57,6 +61,8 @@ datasets:
     composition_cols:
       - "Dextran 500 kg/mol (wt%)"
       - "PEO 20 kg/mol (wt%)"
+    role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model)
+    ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier)
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -146,7 +152,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect,analysis`
+`python run_workflow.py --config <YAML file> --steps detect,analysis,train,infer,explain,plot`
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -167,6 +173,10 @@ place the outputs under ``roots:work`` filepath from the `.yaml` file
 For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also need to be added to the
 input `yaml` file (a description of which can also be found above). These steps process the output bubble
 detection data and save an `csv` file of aggregated metrics.
+
+Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for saving the model, training/inference results can be set with `root: model` and `root: results` respectively, and `inference_model` can be set to explicitly provide the path to the trained model when performing inference separately from training. 
+
+The user can also determine whether or not to perform machine learning classifier hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt` to True or False (the default is True if no parameter is specified.)
 
 For information relevant to running the workflow:  
 

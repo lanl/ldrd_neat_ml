@@ -222,10 +222,12 @@ def plot_phase_diagram(
     y_col: str,
     phase_col: str,
     output_path: Path,
-    xrange: list[int],
-    yrange: list[int],
+    xrange: Optional[list[int]]=None,
+    yrange: Optional[list[int]]=None,
     json_path: Optional[Path]=None,
     binodal_curve: bool=False,
+    model_boundary: bool=False,
+    pred_phase_col: Optional[str]=None,
 ) -> None:
     """
     Generate and save a phase diagram plot from composition data.
@@ -242,9 +244,9 @@ def plot_phase_diagram(
         Column name for y-axis values.
     phase_col : str
         Column name for phase labels.
-    xrange : list[int]
+    xrange : Optional[list[int]]
         Two-element list [min, max] for x-axis range.
-    yrange : list[int]
+    yrange : Optional[list[int]]
         Two-element list [min, max] for y-axis range.
     output_path : Path
         Path to save the output plot image.
@@ -252,12 +254,18 @@ def plot_phase_diagram(
         Option to plot the binodal curve of fit for
         describing two-phase aqueous sytems as taken
         from Silverio et al.
+    model_boundary: bool
+        option to plot the phase boundary as determined
+        by the trained ML model.
+    pred_phase_col: str
+        with ``model_boundary``, the dataframe column
+        containing the model-predicted phase labels
     """
     df = pd.read_csv(file_path)
 
     fig, ax = plt.subplots(figsize=(12, 12), dpi=300)
 
-    figure_utils.plot_gmm_decision_regions(
+    _, _, boundary_exp = figure_utils.plot_gmm_decision_regions(
         df,
         x_col,
         y_col,
@@ -274,11 +282,39 @@ def plot_phase_diagram(
         region_colors=("lightsteelblue", "aquamarine"),
     )
 
+    boundary_pred = None
+    if model_boundary and pred_phase_col is not None:
+        _, _, boundary_pred = figure_utils.plot_gmm_decision_regions(
+            df,
+            x_col,
+            y_col,
+            pred_phase_col,
+            ax=ax,
+            xrange=xrange,
+            yrange=yrange,
+            n_components=2,
+            random_state=42,
+            boundary_color="blue",
+            resolution=200,
+            decision_alpha=1,
+            plot_regions=False,
+            region_colors=("lightsteelblue", "aquamarine"),
+            decision_boundary_width=2,
+        )
+            
+    # if provided, use the ML predictions for plotting
+    if pred_phase_col is not None:
+        comp_phase_col = pred_phase_col
+        plot_marker = "Model"
+    else:
+        comp_phase_col = phase_col
+        plot_marker = "Experiment"
+
     figure_utils.plot_gmm_composition_phase(
         df,
         x_col,
         y_col,
-        phase_col,
+        comp_phase_col,
         ax=ax,
         point_cmap=("#FF8C00", "dodgerblue"),
     )
@@ -291,16 +327,19 @@ def plot_phase_diagram(
               label="Single-Phase (Experiment)"),
         Line2D([0], [0], marker="^", color="w",
                markerfacecolor="#FF8C00", markeredgecolor="black",
-               markersize=20, label="Two-Phase (Experiment)"),
+               markersize=20, label=f"Two-Phase ({plot_marker})"),
         Line2D([0], [0], marker="s", color="w",
                markerfacecolor="dodgerblue", markeredgecolor="black",
-               markersize=20, label="Single-Phase (Experiment)"),
-        Line2D([0], [0], color="red", lw=3, label="Decision Boundary"),
+               markersize=20, label=f"Single-Phase ({plot_marker})"),
     ]
+    if not model_boundary:
+        handles.append(
+            Line2D([0], [0], color="red", lw=3, label="Decision Boundary")
+        )
     
     # plot the binodal curve describing the behavior of aqueous two-phase systems
     # as described in Silverio et al., equation (1), [dx.doi.org/10.1021/je2012549] 
-    if binodal_curve:
+    if binodal_curve and xrange is not None and yrange is not None:
         # require ``json_path`` when ``binodal_curve == True``
         if json_path is None:
             raise ValueError("Must provide ``json_path`` when plotting ``binodal_curve``.")
@@ -323,6 +362,18 @@ def plot_phase_diagram(
         handles.append(
             Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio et al.)")
         )
+    
+    if model_boundary:
+        if boundary_exp is not None:
+            handles.append(Line2D([],[],color="red",lw=3,
+                    label="Decision Boundary (Experiment)"
+                )
+            )
+        if boundary_pred is not None:
+            handles.append(Line2D([],[],color="blue",lw=3,
+                    label="Decision Boundary (Model)"
+                )
+            )
 
     ax.legend(
         handles=handles, 
