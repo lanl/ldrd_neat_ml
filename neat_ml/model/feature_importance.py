@@ -11,6 +11,9 @@ import shap
 from interpret.glassbox import ExplainableBoostingClassifier
 from lime.lime_tabular import LimeTabularExplainer
 from sklearn.pipeline import Pipeline
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 __all__ = [
@@ -295,7 +298,7 @@ def plot_feat_import_consensus(
     fig.tight_layout()
     fig.savefig(out_dir / "feat_imp_consensus.png", dpi=300)
     plt.close()
-    print(f"Consensus plot saved -> {out_dir}")
+    logger.info(f"Consensus plot saved -> {out_dir}")
 
 def compare_methods(
     model: Pipeline,
