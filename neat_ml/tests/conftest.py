@@ -270,4 +270,3 @@ def sample_inference_data(tmp_path_factory):
     csv_path = tmp_infer_path / "inference_data.csv"
     df.to_csv(csv_path, index=False)
     return csv_path
-

@@ -104,7 +104,7 @@ def get_path_structure(
             paths["composition_csv"] = Path(comp_choice)
 
     if any(s in steps_set for s in {"train", "infer", "explain"}):
-        infer_dir: Path = results_root / f"infer_{ds_id}"
+        infer_dir = results_root / f"infer_{ds_id}"
         paths["model_dir"] = model_root
         paths["explain_dir"] = results_root / ds_id / "explain"
         paths["pred_csv"] = infer_dir / "pred.csv"
@@ -337,8 +337,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
 def stage_train_model(
     train_ds: dict[str, Any],
     train_paths: dict[str, Path],
-    val_ds: Optional[dict[str, Any]],
-    val_paths: Optional[dict[str, Path]],
+    val_ds: dict[str, Any],
+    val_paths: dict[str, Path],
     target: str = "Phase_Separation",
     ml_hyper_opt: bool = True,
 ) -> Path:
@@ -351,12 +351,12 @@ def stage_train_model(
         Training dataset config holding 'composition_cols' etc.
     train_paths : dict[str, Path]
         Paths for training; needs 'agg_csv' and 'model_dir'.
-    val_ds : Optional[dict[str, Any]]
+    val_ds : dict[str, Any]
         Validation dataset config used for model selection.
-    val_paths : Optional[dict[str, Path]]
+    val_paths : dict[str, Path]
         Paths for validation; needs 'agg_csv'.
     target : str
-        name of the target variable to train ML model
+        name of the target variable for training the ML model
     ml_hyper_opt: bool
         whether or not to perform hyperparameter optimization
         of the ML model via exhaustive grid search
@@ -404,27 +404,24 @@ def stage_train_model(
     model_dir.mkdir(parents=True, exist_ok=True)
     model_path = model_dir / f"{ds_id}_model.joblib"
     # check to see if the model path already exists, if so, skip re-training
-    if not model_path.exists():
-        model, metrics, best_params, val_proba = train_with_validation(
-            X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt
-        )
-        save_model_bundle(
-            model=model,
-            features=list(common_cols),
-            metrics=metrics,
-            best_params=best_params,
-            path=model_path,
-        )
-        roc_png = model_dir / f"{ds_id}_val_roc.png"
-        plot_roc(y_true=y_val.to_numpy(), y_prob=val_proba, out_png=str(roc_png))
-        roc_metric = metrics.get("val_roc_auc", np.nan)
-        pr_metric = metrics.get("val_pr_auc", np.nan)
-        log.info(
-            f"--> Model saved: {model_path} | ROC: {roc_png} | " 
-            f"AUC={roc_metric:.3f} | PR-AUC={pr_metric:.3f}"
-        )
-    else:
-        log.info("Trained model already exists, skipping...")
+    model, metrics, best_params, val_proba = train_with_validation(
+        X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt
+    )
+    save_model_bundle(
+        model=model,
+        features=list(common_cols),
+        metrics=metrics,
+        best_params=best_params,
+        path=model_path,
+    )
+    roc_png = model_dir / f"{ds_id}_val_roc.png"
+    plot_roc(y_true=y_val.to_numpy(), y_prob=val_proba, out_png=str(roc_png))
+    roc_metric = metrics.get("val_roc_auc", np.nan)
+    pr_metric = metrics.get("val_pr_auc", np.nan)
+    log.info(
+        f"--> Model saved: {model_path} | ROC: {roc_png} | " 
+        f"AUC={roc_metric:.3f} | PR-AUC={pr_metric:.3f}"
+    )
 
     return model_path
 
@@ -511,7 +508,7 @@ def stage_run_inference_and_plot(
         A dictionary of file paths for data and results.
     model_path : Path
         The path to the trained model file.
-    steps : List[str]
+    steps : list[str]
         A list of active workflow steps to determine 
         whether to run inference, plotting, or both.
     target : str
@@ -523,7 +520,7 @@ def stage_run_inference_and_plot(
     exclude_cols = ["Group", "Label", "Time", "Class", "Offset"] + composition_cols
 
     if "infer" in steps:
-        log.info("Running inference on %s", ds_id)
+        log.info(f"Running inference on {ds_id}")
         run_inference(
             model_in=model_path,
             data_csv=paths["agg_csv"],

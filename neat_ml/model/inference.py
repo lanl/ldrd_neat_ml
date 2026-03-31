@@ -27,10 +27,10 @@ def save_predictions(
     out_csv : Path
         Destination CSV path.
     """
-    df = df.copy()
-    df["Pred_Prob"] = y_prob
-    df["Pred_Label"] = (y_prob >= 0.5).astype(int)
-    df.to_csv(out_csv, index=False)
+    df_out = df.copy()
+    df_out["Pred_Prob"] = y_prob
+    df_out["Pred_Label"] = (y_prob >= 0.5).astype(int)
+    df_out.to_csv(out_csv, index=False)
     logger.info(f"Predictions saved -> {out_csv}")
 
 def run_inference(

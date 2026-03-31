@@ -46,7 +46,7 @@ def preprocess(
         the target variable.
     target : str
         The name of the target column.
-    exclude : list[str] | None, optional
+    exclude : list[str] | None
         A list of column names to exclude from 
         the feature set, by default None.
 
@@ -209,8 +209,8 @@ def train_with_validation(
         X = np.concatenate((X_train, X_val), axis=0)
         y = np.concatenate((y_train, y_val), axis=0)
 
-        test_fold = [-1] * len(X_train) + [0] * len(X_val)
-        ps = PredefinedSplit(test_fold)
+        train_val_split = [-1] * len(X_train) + [0] * len(X_val)
+        ps = PredefinedSplit(train_val_split)
         
         grid_search = GridSearchCV(
             estimator=pipeline,

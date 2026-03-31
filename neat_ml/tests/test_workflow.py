@@ -8,8 +8,6 @@ import pandas as pd
 from numpy.testing import assert_allclose
 import re
 import numpy as np
-import joblib
-from joblib import load as joblib_load
 
 import neat_ml.workflow.lib_workflow as wf
 
@@ -632,18 +630,23 @@ def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_
     assert paths["pred_csv"] == results_root / "infer_DS2" / "pred.csv"
     assert paths["phase_dir"] == results_root / "infer_DS2" / "phase_plots"
 
-@pytest.mark.parametrize("val_ds, err_msg",
+@pytest.mark.parametrize("val_ds, val_paths, err_msg",
     [
-        (None, r"requires a validation dataset config \(val_ds\)\."),
-        ({"id": "VAL"}, r"requires validation paths \(val_paths\)\."),
+        (None, {"agg_csv": Path("val.csv")}, r"requires a validation dataset config \(val_ds\)\."),
+        ({"id": "VAL"}, None, r"requires validation paths \(val_paths\)\."),
     ]
 )
-def test_stage_train_model_requires_validation_args(tmp_path: Path, val_ds, err_msg):
+def test_stage_train_model_requires_validation_args(tmp_path: Path, val_ds, val_paths, err_msg):
     train_ds = {"id": "TR1"}
     train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
 
     with pytest.raises(ValueError, match=err_msg):
-        wf.stage_train_model(train_ds, train_paths, val_ds=val_ds, val_paths=None)
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds=val_ds,
+            val_paths=val_paths
+        )
 
 
 def test_stage_train_model_missing_train_csv_raises(tmp_path: Path, sample_data):
@@ -730,37 +733,6 @@ def test_stage_train_model_column_mismatch(
     )
     assert "Feature mismatch" in caplog.text
 
-
-def test_stage_train_model_exists(
-    tmp_path: Path,
-    sample_data,
-    trained_model_bundle,
-    caplog,
-):
-    caplog.set_level(logging.INFO)
-    train_ds = {"id": "TR5"}
-    # load and save the model name with the required prefix
-    saved_model = joblib_load(trained_model_bundle)
-    joblib.dump(
-        saved_model,
-        trained_model_bundle.parent / "TR5_model.joblib"
-    )
-    train_paths = {
-        "agg_csv": tmp_path / "train.csv",
-        "model_dir": trained_model_bundle.parent
-    }
-    val_paths = {"agg_csv": tmp_path / "val.csv"}
-    sample_data.to_csv(val_paths["agg_csv"], index=False)
-    sample_data.to_csv(train_paths["agg_csv"], index=False)
-
-    wf.stage_train_model(
-        train_ds,
-        train_paths,
-        val_ds={"id": "VAL"},
-        val_paths=val_paths,
-        target="target"
-    )
-    assert "Trained model already exists" in caplog.text
 
 def test_stage_train_model_happy_path_saves_bundle_and_roc(
     tmp_path: Path,
