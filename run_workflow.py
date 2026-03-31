@@ -61,7 +61,7 @@ def main(config_path: str, steps_str: str) -> None:
             paths = get_path_structure(roots, ds, steps)
             stage_analyze_features(ds, paths)
     
-    model_path = cfg.get("model", "")
+    model_path = roots.get("model", "")
     train_list = [d for d in datasets if d.get("role") == "train"]
     val_list = [d for d in datasets if d.get("role") == "val"]
     infer_list = [d for d in datasets if d.get("role") == "infer"]
@@ -96,7 +96,8 @@ def main(config_path: str, steps_str: str) -> None:
                 train_ds, train_paths, val_ds, val_paths, ml_hyper_opt=ml_hyper_opt
             )
         else:
-            log.info(f"Trained model already exists: {trained_model}, skipping training...")
+            model_path = trained_model
+            log.info(f"Trained model already exists: {model_path}, skipping training...")
 
     if model_path == "" and any(s in steps for s in ("explain", "infer", "plot")):
         model_path_str = cfg.get("inference_model")
@@ -138,8 +139,8 @@ if __name__ == "__main__":
         default="all",
         help=(
             "Comma-separated list of steps to run or 'all'. Defaults to 'all'.\n"
-            "Available steps: Steps: detect, analysis, train, explain, infer, plot.\n"
-            "Example: --steps \"Steps: detect,analysis,train,explain,infer,plot.\""
+            "Available steps: detect, analysis, train, explain, infer, plot.\n"
+            "Example: --steps \"detect,analysis,train,explain,infer,plot.\""
         )
     )
     args = parser.parse_args()

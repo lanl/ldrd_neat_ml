@@ -409,7 +409,7 @@ def stage_train_model(
     )
     save_model_bundle(
         model=model,
-        features=list(common_cols),
+        features=common_cols,
         metrics=metrics,
         best_params=best_params,
         path=model_path,
@@ -467,13 +467,12 @@ def stage_explain(
         exclude=exclude_cols
     )
 
-    log.info("Loading trained model bundle from {model_path}...")
+    log.info(f"Loading trained model bundle from {model_path}...")
     model_bundle = joblib_load(model_path)
     model = model_bundle['model']
 
-    if 'features' in model_bundle and model_bundle['features'] is not None:
-        log.info(f"Aligning data to the {len(model_bundle['features'])} features the model was trained on.")
-        X = X[model_bundle['features']]
+    log.info(f"Aligning data to the {len(model_bundle['features'])} features the model was trained on.")
+    X = X[model_bundle['features']]
 
     log.info("Running feature importance comparison methods...")
     explain_dir = paths["explain_dir"]
