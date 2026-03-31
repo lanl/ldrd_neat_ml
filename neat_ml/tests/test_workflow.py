@@ -734,7 +734,7 @@ def test_stage_train_model_missing_train_csv_raises(tmp_path: Path, sample_data)
     sample_data.to_csv(val_path)
 
     with pytest.raises(FileNotFoundError,
-        match=re.escape(f"Train aggregate CSV not found: {missing}")
+        match=f"Train aggregate CSV not found: {missing}"
     ):
         wf.stage_train_model(
             train_ds,
@@ -752,7 +752,7 @@ def test_stage_train_model_missing_val_csv_raises(tmp_path: Path, sample_data):
 
     missing = tmp_path / "val.csv"
     with pytest.raises(FileNotFoundError,
-        match=re.escape(f"Validation aggregate CSV not found: {missing}")
+        match=f"Validation aggregate CSV not found: {missing}"
     ):
         wf.stage_train_model(
             train_ds,
@@ -918,7 +918,7 @@ def test_stage_run_inference_and_plot_plot_only_missing_pred_csv_raises(tmp_path
         "phase_dir": tmp_path / "phase",
     }
 
-    with pytest.raises(FileNotFoundError, match=re.escape(str(paths["pred_csv"]))):
+    with pytest.raises(FileNotFoundError, match=str(paths["pred_csv"])):
         wf.stage_run_inference_and_plot(
             ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"]
         )
