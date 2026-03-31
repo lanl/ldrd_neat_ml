@@ -73,6 +73,7 @@ def main(config_path: str, steps_str: str) -> None:
             raise ValueError(
                 "Multiple train datasets provided, "
                 "only one can be used at a time."
+            )
         if len(val_list) > 1:
             raise ValueError(
                 "Multiple validation datasets provided, "
@@ -85,10 +86,15 @@ def main(config_path: str, steps_str: str) -> None:
         trained_model = Path(model_path) / f"{train_id}_model.joblib"
         if not trained_model.exists()
             train_paths = get_path_structure(roots, train_ds, steps=["train"])
-            val_paths = (get_path_structure(roots, val_ds, steps=["train"]) if val_ds else None)
+            val_paths = (
+                get_path_structure(
+                    roots, val_ds, steps=["train"]) if val_ds else None
+            )
             ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
 
-            model_path = stage_train_model(train_ds, train_paths, val_ds, val_paths, ml_hyper_opt)
+            model_path = stage_train_model(
+                train_ds, train_paths, val_ds, val_paths, ml_hyper_opt=ml_hyper_opt
+            )
         else:
             log.info(f"Trained model already exists: {trained_model}, skipping training...")
 

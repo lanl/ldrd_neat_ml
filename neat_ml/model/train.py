@@ -163,6 +163,7 @@ def train_with_validation(
         - The predicted probabilities for the positive
           class on the validation set.
     """
+    logger.info("Performing ML hyperparamter optimization...")
     spw = _scale_pos_weight(y_train)
     logger.info(f"scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
 
@@ -224,8 +225,9 @@ def train_with_validation(
         final_model = grid_search.best_estimator_
         best_params = grid_search.best_params_
     else:
-       final_model = pipeline.fit(X_train, y_train) 
-       best_params = pipeline.get_params()
+        logger.info("Skipping ML hyperparameter optimization...")
+        final_model = pipeline.fit(X_train, y_train) 
+        best_params = pipeline.get_params()
 
     val_proba = final_model.predict_proba(X_val)[:, 1]
     pr_auc = average_precision_score(y_val, val_proba)
