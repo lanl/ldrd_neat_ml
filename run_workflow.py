@@ -84,7 +84,7 @@ def main(config_path: str, steps_str: str) -> None:
         val_ds = val_list[0]
         train_id = train_ds.get("id")
         trained_model = Path(model_path) / f"{train_id}_model.joblib"
-        if not trained_model.exists()
+        if not trained_model.exists():
             train_paths = get_path_structure(roots, train_ds, steps=["train"])
             val_paths = (
                 get_path_structure(
