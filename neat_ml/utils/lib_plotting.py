@@ -13,6 +13,7 @@ import warnings
 import math
 import logging
 from matplotlib import rcParams
+import seaborn as sns
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -632,3 +633,45 @@ def plot_figures(
         output_path=mat_model_png,
         binodal_curve=True,
     )
+
+
+def plot_seaborn_pairplot(
+    input_df: pd.DataFrame,
+    label_col: str,
+    plot_cols: Optional[list[str]],
+    out_path: Path,    
+):
+    """
+    Plot a seaborn pairplot of input features from a pandas dataframe
+
+    Parameters:
+    -----------
+    input_df: pd.DataFrame
+        A pandas dataframe containing feature columns
+        and rows of data points for plotting
+    label_col: str
+        The row of the dataframe for plotting the data points
+        by their class label. Provided to seaborn as `hue`.
+    plot_cols: list[str]
+        User provided feature columns to include in the plot.
+        If no columns provided, all features will be used in
+        the pairplot.
+    out_path: Path
+        Path for saving the pairplot
+    """
+    # check that the appropriate columns contained within `input_df`
+    if plot_cols is not None:
+        check_cols = [label_col] + plot_cols
+    else:
+        check_cols = [label_col]
+    if not set(check_cols).issubset(input_df.columns):
+        raise ValueError("Required columns are not present in ``input_df``")
+    
+    # slice the input dataframe based on user defined feature columns
+    if plot_cols:
+        input_df = input_df[check_cols]
+
+    # plot the seaborn pairplot
+    pairplot = sns.pairplot(input_df, hue=label_col)
+    out_path.mkdir(parents=True, exist_ok=True)
+    pairplot.savefig(out_path / "pairplot.png")

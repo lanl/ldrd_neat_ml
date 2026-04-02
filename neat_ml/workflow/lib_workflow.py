@@ -14,7 +14,7 @@ from neat_ml.model.train import (preprocess as ml_preprocess,
                                  plot_roc)
 from neat_ml.model.inference import run_inference
 from neat_ml.model.feature_importance import compare_methods
-from neat_ml.utils.lib_plotting import plot_phase_diagram
+from neat_ml.utils.lib_plotting import plot_phase_diagram, plot_seaborn_pairplot
 
 
 __all__ = [
@@ -100,6 +100,7 @@ def get_path_structure(
         paths["per_csv"] = Path(a_cfg.get("per_image_csv", default_per))
         paths["agg_csv"] = Path(a_cfg.get("aggregate_csv", default_agg))
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
+        paths["save_dir"] = results_root / ds_id
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)
 
@@ -110,6 +111,7 @@ def get_path_structure(
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
         paths["roc_png"] = infer_dir / "roc.png"
+        paths["infer_dir"] = infer_dir
 
     return paths
 
@@ -231,7 +233,11 @@ def stage_detect(
     else:
         raise ValueError(f"Unknown detection method '{method}' for dataset '{ds_id}'.")
         
-def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
+def stage_analyze_features(
+    dataset_config: dict[str, Any],
+    paths: dict[str, Path],
+    plot_seaborn: bool = False,
+) -> None:
     """
     Run per-image and aggregate feature analysis for one dataset.
 
@@ -241,6 +247,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         Dataset config with optional 'analysis' block.
     paths : dict[str, Path]
         Paths built for active steps.
+    plot_seaborn : bool
+        option to plot seaborn pairplot
     """
     # gather dataset configuration settings
     ds_id = dataset_config.get("id", "unknown")
@@ -318,12 +326,23 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         )
     )
     
+    # TODO: determine which features to use in seaborn plot
+    plot_cols = [
+        "num_blobs",
+        "mean_blob_area",
+        "mean_nnd",
+        "graph_num_nodes",
+        "mean_voronoi_area",
+    ]
     full_analysis(
         input_dir=input_dir,
         per_image_csv=per_image_csv,
         aggregate_csv=aggregate_csv,
         mode=mode,
         graph_method=graph_method,
+        paths=paths,
+        plot_seaborn=plot_seaborn,
+        plot_cols=plot_cols,
         graph_param=graph_param,
         composition_csv=composition_csv,
         cols_to_add=cols_to_add,
@@ -491,6 +510,7 @@ def stage_run_inference_and_plot(
     model_path: Path,
     steps: list[str],
     target: str = "Phase_Separation",
+    plot_seaborn: bool = False,
 ) -> None:
     """
     Uses a trained model to make predictions on 
@@ -512,6 +532,8 @@ def stage_run_inference_and_plot(
         whether to run inference, plotting, or both.
     target : str
         The target dataframe column for performing inference
+    plot_seaborn : bool
+        Choice of whether or not to generate a seaborn pairplot
     """
     ds_id = infer_dataset_config['id']
     paths["pred_csv"].parent.mkdir(parents=True, exist_ok=True)
@@ -545,3 +567,20 @@ def stage_run_inference_and_plot(
             output_path=paths["phase_dir"] / "phase_diagram.png",
             model_boundary=True,
         )
+        # TODO: determine which features to use in seaborn plot
+        plot_cols = [
+            "median_nnd_std",
+            "graph_num_components_std",
+            "median_blob_area_min",
+            "graph_avg_neighbor_distance_median",
+            "median_blob_radius_min",
+            "num_blobs_std",
+        ]
+        if plot_seaborn:
+            input_df = pd.read_csv(paths["pred_csv"])
+            plot_seaborn_pairplot(
+                input_df=input_df,
+                label_col=target,
+                plot_cols=plot_cols,
+                out_path=paths["infer_dir"]
+            )

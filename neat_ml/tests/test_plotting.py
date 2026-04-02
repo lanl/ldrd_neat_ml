@@ -328,3 +328,40 @@ def test_plot_phase_diagram_model_predictions(
     # differences.
     rms = compare_images(baseline_png, out_png, tol=7e-3)
     assert rms is None
+
+def test_plot_seaborn_pairplot(
+    tmp_path,
+    sample_inference_data,
+    baseline_dir,
+):
+    """
+    test the ``plot_seaborn_pairplot`` generates an appropriate plot
+    """
+    input_df = pd.read_csv(sample_inference_data)
+    lp.plot_seaborn_pairplot(
+        input_df=input_df,
+        label_col="ground_truth",
+        plot_cols = ["feat_a", "feat_b"],
+        out_path = tmp_path,
+    )
+    baseline_png = baseline_dir / "expected_pairplot.png"
+    result = compare_images(tmp_path / "pairplot.png", baseline_png, tol=1e-4)
+    assert result is None
+
+
+def test_plot_seaborn_pairplot_assertion(
+    tmp_path,
+    sample_inference_data,
+    baseline_dir,
+):
+    """
+    test the ``plot_seaborn_pairplot`` generates an appropriate plot
+    """
+    input_df = pd.read_csv(sample_inference_data)
+    with pytest.raises(ValueError, match="Required columns are not present"):
+        lp.plot_seaborn_pairplot(
+            input_df=input_df,
+            label_col="ground_truth",
+            plot_cols = ["wrong_column"],
+            out_path = tmp_path,
+        )
