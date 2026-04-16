@@ -14,7 +14,7 @@ from neat_ml.model.train import (preprocess as ml_preprocess,
                                  plot_roc)
 from neat_ml.model.inference import run_inference
 from neat_ml.model.feature_importance import compare_methods
-from neat_ml.utils.lib_plotting import plot_phase_diagram, plot_seaborn_pairplot
+from neat_ml.utils.lib_plotting import plot_phase_diagram
 
 
 __all__ = [
@@ -236,7 +236,7 @@ def stage_detect(
 def stage_analyze_features(
     dataset_config: dict[str, Any],
     paths: dict[str, Path],
-    plot_seaborn: bool = False,
+    plot_features: bool = False,
 ) -> None:
     """
     Run per-image and aggregate feature analysis for one dataset.
@@ -247,8 +247,8 @@ def stage_analyze_features(
         Dataset config with optional 'analysis' block.
     paths : dict[str, Path]
         Paths built for active steps.
-    plot_seaborn : bool
-        option to plot seaborn pairplot
+    plot_features : bool
+        option to generate pairwise feature plots
     """
     # gather dataset configuration settings
     ds_id = dataset_config.get("id", "unknown")
@@ -326,14 +326,6 @@ def stage_analyze_features(
         )
     )
     
-    # TODO: determine which features to use in seaborn plot
-    plot_cols = [
-        "num_blobs",
-        "mean_blob_area",
-        "mean_nnd",
-        "graph_num_nodes",
-        "mean_voronoi_area",
-    ]
     full_analysis(
         input_dir=input_dir,
         per_image_csv=per_image_csv,
@@ -341,8 +333,8 @@ def stage_analyze_features(
         mode=mode,
         graph_method=graph_method,
         paths=paths,
-        plot_seaborn=plot_seaborn,
-        plot_cols=plot_cols,
+        plot_features=plot_features,
+        plot_cols=None,
         graph_param=graph_param,
         composition_csv=composition_csv,
         cols_to_add=cols_to_add,
@@ -510,7 +502,6 @@ def stage_run_inference_and_plot(
     model_path: Path,
     steps: list[str],
     target: str = "Phase_Separation",
-    plot_seaborn: bool = False,
 ) -> None:
     """
     Uses a trained model to make predictions on 
@@ -532,8 +523,6 @@ def stage_run_inference_and_plot(
         whether to run inference, plotting, or both.
     target : str
         The target dataframe column for performing inference
-    plot_seaborn : bool
-        Choice of whether or not to generate a seaborn pairplot
     """
     ds_id = infer_dataset_config['id']
     paths["pred_csv"].parent.mkdir(parents=True, exist_ok=True)
@@ -567,20 +556,3 @@ def stage_run_inference_and_plot(
             output_path=paths["phase_dir"] / "phase_diagram.png",
             model_boundary=True,
         )
-        # TODO: determine which features to use in seaborn plot
-        plot_cols = [
-            "median_nnd_std",
-            "graph_num_components_std",
-            "median_blob_area_min",
-            "graph_avg_neighbor_distance_median",
-            "median_blob_radius_min",
-            "num_blobs_std",
-        ]
-        if plot_seaborn:
-            input_df = pd.read_csv(paths["pred_csv"])
-            plot_seaborn_pairplot(
-                input_df=input_df,
-                label_col=target,
-                plot_cols=plot_cols,
-                out_path=paths["infer_dir"]
-            )
