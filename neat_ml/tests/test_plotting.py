@@ -328,3 +328,82 @@ def test_plot_phase_diagram_model_predictions(
     # differences.
     rms = compare_images(baseline_png, out_png, tol=7e-3)
     assert rms is None
+
+
+@pytest.mark.parametrize("input_csv_name, plot_cols, output_file_name, exp_img_file",
+    [
+        (
+            "sample_inference_data",
+            ["feat_a", "feat_b"],
+            ["hull_feat_a_vs_feat_b.png"],
+            ["pairwise_feature_plot_exp.png"],
+        ),
+        (
+            "sample_agg_df",
+            None,
+            [
+                "hull_graph_num_components_std_vs_median_blob_radius_min.png",
+                "hull_median_nnd_std_vs_graph_num_components_std.png",
+                "hull_median_nnd_std_vs_median_blob_radius_min.png",
+            ],
+            [
+                "hull_graph_exp_1.png",
+                "hull_graph_exp_2.png",
+                "hull_graph_exp_3.png",
+            ]
+        ),
+    ],
+)
+def test_generate_feature_scatterplots(
+    tmp_path,
+    baseline_dir,
+    input_csv_name,
+    plot_cols,
+    output_file_name,
+    exp_img_file,
+    request,
+):
+    """
+    test that ``generate_feature_scatterplots`` generates an
+    appropriate plot when provided plot column input and when
+    determining top features programmatically.
+    """
+    input_csv = request.getfixturevalue(input_csv_name)
+    input_df = pd.read_csv(input_csv)
+    lp.generate_feature_scatterplots(
+        input_df=input_df,
+        label_col="ground_truth",
+        plot_cols=plot_cols,
+        out_path=tmp_path,
+    )
+    for i in range(len(exp_img_file)):
+        baseline_png = baseline_dir / exp_img_file[i]
+        result = compare_images(tmp_path / output_file_name[i], baseline_png, tol=1e-4)
+        assert result is None
+
+
+@pytest.mark.parametrize("plot_cols, err_msg",
+    [
+        (["wrong_col1", "wrong_col2"], "Required columns are not present"),
+        (["wrong_col"], "Need at least two feature columns to generate pairwise scatterplots."),
+    ]
+)
+def test_generate_feature_scatterplots_assertions(
+    tmp_path,
+    sample_inference_data,
+    baseline_dir,
+    plot_cols, 
+    err_msg,
+):
+    """
+    test the ``generate_feature_scatterplots`` raises
+    the appropriate ValueError assertions
+    """
+    input_df = pd.read_csv(sample_inference_data)
+    with pytest.raises(ValueError, match=err_msg):
+        lp.generate_feature_scatterplots(
+            input_df=input_df,
+            label_col="ground_truth",
+            plot_cols = plot_cols,
+            out_path = tmp_path,
+        )

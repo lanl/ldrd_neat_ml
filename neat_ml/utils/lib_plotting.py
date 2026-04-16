@@ -13,6 +13,11 @@ import warnings
 import math
 import logging
 from matplotlib import rcParams
+from matplotlib.axes import Axes
+from scipy.spatial import ConvexHull
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import itertools
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -632,3 +637,255 @@ def plot_figures(
         output_path=mat_model_png,
         binodal_curve=True,
     )
+
+
+def _is_inside_hull(points: np.ndarray, hull: ConvexHull) -> np.ndarray:
+    """
+    Checks if points are inside a convex hull using its linear equations.
+    Equations are in the form: [normal_x, normal_y, offset]
+
+    Parameters:
+    -----------
+    points: np.ndarray
+        points to check if inside the convex hull 
+    hull: ConvexHull
+        the hull object containing the equations describing the
+        hyperplane of the convex hull
+
+    Returns:
+    --------
+    np.ndarray
+        the boolean array of whether a given point is within
+        the convex hull
+    """
+    # points: (N, 2), equations: (M, 3)
+    # Result of dot product is (N, M). Point is inside if all values <= 1e-12
+    return np.all(points @ hull.equations[:, :-1].T + hull.equations[:, -1] <= 1e-12, axis=1)
+
+
+def _get_hull_overlaps(
+    df: pd.DataFrame,
+    features: list[str],
+    label_col: str,
+) -> pd.DataFrame:
+    """
+    Calculate the number of points contained in the overlapping region
+    of the convex hulls of the input features.
+
+    Parameters:
+    -----------
+    df: pd.DataFrame
+        the input dataframe containing all of the feature values
+    features: list[str]
+        the feature names to compare
+    label_col: str 
+        the column name containing the ground-truth labels
+
+    Returns:
+    --------
+    results: pd.DataFrame
+        a dataframe containing a summary of the overlapping points
+        between the input feature pair
+    """
+    class_labels = df[label_col].dropna().unique()
+    results = []
+
+    for x_feat, y_feat in itertools.combinations(features, 2):
+        for class1, class2 in itertools.combinations(class_labels, 2):
+
+            pts1 = df[df[label_col] == class1][[x_feat, y_feat]].dropna().values
+            pts2 = df[df[label_col] == class2][[x_feat, y_feat]].dropna().values
+            
+            # get all points from both groups
+            all_points = np.vstack([pts1, pts2])
+            
+            if len(pts1) > 2 and len(pts2) > 2:
+                hull1 = ConvexHull(pts1)
+                hull2 = ConvexHull(pts2)
+                
+                # check which points are in hull overlap
+                in_hull1 = _is_inside_hull(all_points, hull1)
+                in_hull2 = _is_inside_hull(all_points, hull2)
+                in_both = in_hull1 & in_hull2
+                
+                overlap_count = np.sum(in_both)
+                
+                pts1_in_overlap = np.sum(_is_inside_hull(pts1, hull1) & _is_inside_hull(pts1, hull2))
+                pts2_in_overlap = np.sum(_is_inside_hull(pts2, hull1) & _is_inside_hull(pts2, hull2))
+                
+                results.append({
+                    'feature_x': x_feat,
+                    'feature_y': y_feat,
+                    'comparison': f"{class1} vs {class2}",
+                    'points_1_in_overlap': pts1_in_overlap,
+                    'points_2_in_overlap': pts2_in_overlap,
+                    'overlap_count': overlap_count
+                })
+
+    return pd.DataFrame(results)
+
+
+def _draw_hull(
+    x: np.ndarray,
+    y: np.ndarray,
+    color: str, 
+    ax: Axes
+) -> None:
+    """
+    Draw the convex hull of the given feature points
+    on the scatterplot of features
+    
+    Parameters:
+    -----------
+    x: np.ndarray
+        the scatterplot x coordinates
+    y: np.ndarray
+        the scatterplot y coordinates
+    color: str
+        the plot color to use for drawing the hull
+    ax: Axes
+        the figure axes for plotting
+    """
+    points = np.column_stack((x, y))
+    points = points[~np.isnan(points).any(axis=1)]
+    
+    if len(points) > 2:
+        hull = ConvexHull(points)
+        vertices = points[hull.vertices]
+        
+        vertices = np.vstack([vertices, vertices[0]])
+        
+        ax.fill(vertices[:, 0], vertices[:, 1], 
+                facecolor=color, alpha=0.15, edgecolor=color, linewidth=2)
+
+
+def generate_feature_scatterplots(
+    input_df: pd.DataFrame,
+    label_col: str,
+    out_path: Path,    
+    plot_cols: Optional[list[str]] = None,
+) -> None:
+    """
+    Plot pairwise feature scatterplots of input features
+    from a pandas dataframe with user provided feature names
+    or by determining the top-3 most separated feature pairs
+    within the top-10 features from the FIC plot.
+
+    Parameters:
+    -----------
+    input_df: pd.DataFrame
+        A pandas dataframe containing feature columns
+        and rows of data points for plotting
+    label_col: str
+        The row of the dataframe for plotting the data points
+        by their class label.
+    out_path: Path
+        Path for saving the pairplot
+    plot_cols: list[str] | None
+        User provided feature columns to include in the plot.
+        If no columns provided, the top n features from the FIC
+        plot will be used to generate pairwise feature scatterplots
+        by finding the top-3 most separated features in terms of the
+        distance between their centroids
+    """
+    # the top 10 features from the feature importance
+    # consensus plot resulting from training the ML
+    # classifier on the PEO10k/Dex10k composition.
+    # as shown in the Manuscript figure S1.
+    top_n_feats = [
+        "median_nnd_std",
+        "graph_num_components_std",
+        "median_blob_area_min",
+        "graph_avg_neighbor_distance_median",
+        "median_blob_radius_min",
+        "median_nnd_max",
+        "num_blobs_std",
+        "graph_num_nodes_std",
+        "mean_blob_radius_min",
+        "median_voronoi_area_min",
+    ]
+    # corresponding descriptions in plain english of the
+    # code variable/feature names above.
+    top_n_feat_names = [
+        "standard deviation of the median nearest neighbor distances",
+        "standard deviation of the graph component counts",
+        "minimum of the median blob areas",
+        "median of the average graph neighbor distances",
+        "minimum of the median blob radii",
+        "maximum of the median nearest neighbor distances",
+        "standard deviation of the number of blobs",
+        "standard deviation of the number of graph nodes",
+        "minimum of the mean blob radii",
+        "minimum of the median voronoi areas",
+    ]
+    # check that the appropriate columns contained within `input_df`
+    if plot_cols is not None:
+        if len(plot_cols) < 2:
+            raise ValueError(
+                "Need at least two feature columns to generate pairwise scatterplots."
+            )
+        check_cols = [label_col] + plot_cols
+        plot_feats = plot_cols
+    else:
+        check_cols = [label_col] + top_n_feats
+        plot_feats = top_n_feats
+    if not set(check_cols).issubset(input_df.columns):
+        raise ValueError("Required columns are not present in ``input_df``")
+    
+    input_df = input_df[check_cols]
+    # get the top-n feature columns
+    agg_feats = input_df[plot_feats]
+    if plot_cols is None:
+        # normalize values with z-score
+        scaler = StandardScaler()
+        scaled_data = scaler.fit_transform(agg_feats)
+        scaled_df = pd.DataFrame(scaled_data, columns=agg_feats.columns)
+        # get the centroids of the feature columns
+        centroids = scaled_df.mean()
+        # compute the pairwise distances between the feature columns
+        dist_array = pdist(centroids.to_numpy().reshape(-1, 1))
+        output_df = pd.DataFrame(
+            squareform(dist_array),
+            index=centroids.index,
+            columns=centroids.index,
+        )
+        # find the top-n largest distances
+        all_pairs = output_df.unstack()
+        top_n_pairs = all_pairs[
+            all_pairs > 0].sort_values(ascending=False).head(10) # type: ignore[call-overload, index]
+        top_n_out = top_n_pairs.iloc[::2].head(2)
+        top_n_unique = list(top_n_out.index.to_series().explode().unique())
+        top_n_idx = [top_n_feats.index(x) for x in top_n_unique]
+        top_n_unique_names = [top_n_feat_names[i] for i in top_n_idx]
+    else:
+        top_n_unique = plot_cols
+        top_n_unique_names = plot_cols
+    input_df[label_col] = input_df[label_col].map({1: 'Two-Phase', 0: 'One-Phase'})
+    stats_df = _get_hull_overlaps(input_df, top_n_unique, label_col)
+    palette = ['#1f77b4', '#ff7f0e']
+
+    # iterate through every unique pair of features
+    for i, j in itertools.combinations(range(len(top_n_unique)), 2):
+        x_feat = top_n_unique[i]
+        y_feat = top_n_unique[j]
+        x_name = top_n_unique_names[i]
+        y_name = top_n_unique_names[j]
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+        for i, cat in enumerate(input_df[label_col].unique()):
+            subset = input_df[input_df[label_col] == cat].dropna(subset=[x_feat, y_feat])
+
+            if len(subset) > 2:
+                ax.scatter(subset[x_feat], subset[y_feat],
+                            color=palette[i], alpha=0.6, label=cat, s=20)
+
+                _draw_hull(subset[x_feat], subset[y_feat], color=palette[i], ax=ax)
+        overlap_count = stats_df[(stats_df["feature_x"] == x_feat) & (stats_df["feature_y"] == y_feat)]["overlap_count"].item()
+        ax.set_xlabel(x_name)
+        ax.set_ylabel(y_name)
+        ax.set_title(f"Feature Comparison Plot\n Number of Overlapping Points: {overlap_count}")
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        fig.tight_layout()
+        
+        plt.savefig(out_path / f"hull_{x_feat}_vs_{y_feat}.png", dpi=300)
+        plt.close()

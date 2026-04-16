@@ -100,6 +100,7 @@ def get_path_structure(
         paths["per_csv"] = Path(a_cfg.get("per_image_csv", default_per))
         paths["agg_csv"] = Path(a_cfg.get("aggregate_csv", default_agg))
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
+        paths["save_dir"] = results_root / ds_id
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)
 
@@ -110,6 +111,7 @@ def get_path_structure(
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
         paths["roc_png"] = infer_dir / "roc.png"
+        paths["infer_dir"] = infer_dir
 
     return paths
 
@@ -231,7 +233,11 @@ def stage_detect(
     else:
         raise ValueError(f"Unknown detection method '{method}' for dataset '{ds_id}'.")
         
-def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path]) -> None:
+def stage_analyze_features(
+    dataset_config: dict[str, Any],
+    paths: dict[str, Path],
+    plot_features: bool = False,
+) -> None:
     """
     Run per-image and aggregate feature analysis for one dataset.
 
@@ -241,6 +247,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         Dataset config with optional 'analysis' block.
     paths : dict[str, Path]
         Paths built for active steps.
+    plot_features : bool
+        option to generate pairwise feature plots
     """
     # gather dataset configuration settings
     ds_id = dataset_config.get("id", "unknown")
@@ -324,6 +332,9 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         aggregate_csv=aggregate_csv,
         mode=mode,
         graph_method=graph_method,
+        paths=paths,
+        plot_features=plot_features,
+        plot_cols=None,
         graph_param=graph_param,
         composition_csv=composition_csv,
         cols_to_add=cols_to_add,

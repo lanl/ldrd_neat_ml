@@ -422,6 +422,7 @@ def test_full_analysis_pipeline(
         aggregate_csv=aggregate_csv,
         mode=mode,
         graph_method="radius",
+        paths={"save_dir": output_dir},
         composition_csv=comp_csv,
         cols_to_add=["Phase_Separation", "Group"],
         time_label="1st",

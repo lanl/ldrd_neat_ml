@@ -9,6 +9,7 @@ import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay, QhullError
 import logging
 from tqdm.auto import tqdm
+from neat_ml.utils.lib_plotting import generate_feature_scatterplots 
 
 __all__: Sequence[str] = [
     "full_analysis"
@@ -680,6 +681,10 @@ def full_analysis(
     aggregate_csv: Path,
     mode: str,
     graph_method: str,
+    paths: dict,
+    target: str = "Phase_Separation",
+    plot_features: bool = False,
+    plot_cols: Optional[list[str]] = None,
     graph_param: int | float | None = None,
     composition_csv: Path | None = None,
     cols_to_add: Sequence[str] | None = None,
@@ -710,6 +715,14 @@ def full_analysis(
         The processing mode, either 'OpenCV' or 'BubbleSAM'.
     graph_method : str
         The graph topology method ('delaunay', 'radius', 'knn').
+    paths : dict
+        dict of file paths for saving outputs
+    target : str
+        target column containing ground-truth labels
+    plot_features : bool
+        choice to generate pairwise feature plots
+    plot_cols : list
+        list of feature columns to use for pairwise feature plots
     graph_param : Optional[int | float]
         Parameter for the graph construction method.
     composition_csv : Optional[Path]
@@ -771,3 +784,10 @@ def full_analysis(
     aggregate_csv.parent.mkdir(parents=True, exist_ok=True)
     agg_clean_df.to_csv(aggregate_csv, index=False)
     log.info(f"Aggregated metrics saved to: {aggregate_csv}")
+    
+    if plot_features:
+        generate_feature_scatterplots(
+            input_df=per_img_df,
+            label_col=target,
+            out_path=paths["save_dir"],
+        )
