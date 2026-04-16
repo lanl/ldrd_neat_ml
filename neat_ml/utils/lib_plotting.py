@@ -807,7 +807,7 @@ def generate_feature_scatterplots(
     # corresponding descriptions in plain english of the
     # code variable/feature names above.
     top_n_feat_names = [
-        "standard deviation of the nearest neighbor distances",
+        "standard deviation of the median nearest neighbor distances",
         "standard deviation of the graph component counts",
         "minimum of the median blob areas",
         "median of the average graph neighbor distances",

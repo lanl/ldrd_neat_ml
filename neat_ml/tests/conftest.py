@@ -279,19 +279,25 @@ def sample_agg_df(tmp_path_factory):
     """
     tmp_infer_path = tmp_path_factory.mktemp("infer")
     rng = np.random.default_rng(123)
+    ground_truth = rng.integers(0, 2, 50)
+    
+    uniform_features = rng.uniform(0, 100, 50)
+    feature_1 = rng.random(50)
+    feature_2 = rng.integers(0, 100, 50)
+    feature_3 = rng.integers(0, 100, 50)
     data = {
-        "median_nnd_std": rng.random(50),
-        "graph_num_components_std": rng.integers(0, 100, 50),
-        "median_blob_area_min": rng.integers(0, 1000, 50),
-        "graph_avg_neighbor_distance_median": rng.uniform(0, 500, 50),
-        "median_blob_radius_min": rng.integers(0, 100, 50),
-        "median_nnd_max": rng.uniform(0, 500, 50),
-        "num_blobs_std": rng.integers(0, 10, 50),
-        "graph_num_nodes_std": rng.integers(0, 10, 50),
-        "mean_blob_radius_min": rng.integers(0, 50, 50),
-        "median_voronoi_area_min": rng.uniform(0, 100, 50),
+        "median_nnd_std": feature_1,
+        "graph_num_components_std": feature_2,
+        "median_blob_area_min": feature_3,
+        "graph_avg_neighbor_distance_median": uniform_features,
+        "median_blob_radius_min": uniform_features,
+        "median_nnd_max": uniform_features,
+        "num_blobs_std": uniform_features,
+        "graph_num_nodes_std": uniform_features,
+        "mean_blob_radius_min": uniform_features,
+        "median_voronoi_area_min": uniform_features,
         "id_col": [f"id_{i}" for i in range(50)],
-        "ground_truth": rng.integers(0, 2, 50),
+        "ground_truth": ground_truth,
     }
     df = pd.DataFrame(data)
     csv_path = tmp_infer_path / "agg_data.csv"

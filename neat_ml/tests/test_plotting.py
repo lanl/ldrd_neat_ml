@@ -342,9 +342,9 @@ def test_plot_phase_diagram_model_predictions(
             "sample_agg_df",
             None,
             [
-                "hull_graph_num_components_std_vs_median_voronoi_area_min.png",
-                "hull_median_nnd_max_vs_graph_num_components_std.png",
-                "hull_median_nnd_max_vs_median_voronoi_area_min.png",
+                "hull_graph_num_components_std_vs_median_blob_radius_min.png",
+                "hull_median_nnd_std_vs_graph_num_components_std.png",
+                "hull_median_nnd_std_vs_median_blob_radius_min.png",
             ],
             [
                 "hull_graph_exp_1.png",
