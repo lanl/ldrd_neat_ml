@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from neat_ml.analysis import data_analysis as da
 from pandas.testing import assert_frame_equal
+import logging
 
 
 @pytest.mark.parametrize("pts, expected",
@@ -23,130 +24,186 @@ from pandas.testing import assert_frame_equal
 def test_calculate_nnd_stats(pts, expected):
 
     actual = da._calculate_nnd_stats(pts)
-    actual = pd.DataFrame(actual, index=[0])
-    expected = pd.DataFrame(expected, index=[0])
-    assert_frame_equal(actual, expected)
+    npt.assert_equal(actual, expected)
 
-@pytest.mark.parametrize("pts, exp",
+@pytest.mark.parametrize("pts, exp, warn_msg",
     [
         # case with sufficient data points to generate
         # voronoi regions
         (
-            30,
-            [
-                0.06852448822053991,
-                0.03603173278694283,
-                0.07712708084729489,
-                1.1255404140935472
-            ]
+            np.array(
+                [[1827.5,  601. ],
+                [1117. ,  792. ],
+                [1188.5, 1127.5],
+                [1189. , 1129. ],
+                [1347.5,  174. ],
+                [ 179.5, 1591. ],
+                [ 804. ,  963.5],
+                [1622. , 1698. ]]
+            ),
+            {
+                'mean_voronoi_area': 805822.2719470514,
+                'median_voronoi_area': 337884.2409091698,
+                'std_voronoi_area': 953547.7664847055,
+            },
+            None,
         ),
-        # case with insufficient data points to generate
-        # voronoi regions
+        # case with no finite areas found in voronoi
+        # regions
         (
-            3,
-            [np.nan] * 4,
+            np.array(
+                [[1924.5,  841. ],
+                [ 808.5,  485. ],
+                [ 306.5,  538. ],
+                [2083.5, 1221. ],
+                [ 344. ,  633.5],
+                [ 724.5, 1047.5]]
+            ),
+            {},
+            "No finite areas found in Voronoi regions",
         ),
     ]
 )
-def test_calculate_voronoi_stats(pts, exp):
-    if isinstance(pts, int):
-        rng = np.random.default_rng(seed=0)
-        pts = rng.random((pts, 2))
+def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
+    """
+    test that ``calculate_voronoi_stats`` returns array of
+    values from voronoi region calculation OR returns array of nan
+    and warns that no finite areas were found in voronoi regions
+    """
+    caplog.set_level(logging.WARNING)
     actual = da._calculate_voronoi_stats(pts)
-    exp_out = pd.DataFrame([exp], columns=actual.keys())
-    actual_out = pd.DataFrame(actual, index=[0])
-    # account for floating point precision errors with absolute tolerance
-    assert_frame_equal(actual_out, exp_out, atol=1e-3)
+    assert actual == exp
+    if warn_msg is not None:
+        assert warn_msg in caplog.text
 
 
-@pytest.mark.parametrize("method, param, expected",
+@pytest.mark.parametrize("method, r_param, k_param, pts, areas, expected",
     [
         (
+        # test case where there ARE enough points to perform
+        # triangulation
             "delaunay",
             None,
-            [10, 21, 4.2, 1.1661903789690602, 1, 1.0,
-            0.5566666666666666, 399.3586811589318, 510.1],
+            None,
+            None,
+            None,
+            [10, 21, 4.2, 1.1661903789690602,
+            0.5566666666666666, 399.3586811589318, 1, 1.0,510.1],
+        ),
+        (
+        # test case where there ARE NOT enough points to perform
+        # triangulation
+            "delaunay",
+            None,
+            None,
+            np.array([[1930. , 1947. ],
+                     [ 167.5, 1710. ]]),
+            np.array([475., 341.]),
+            [2, 0, 0.0, 0.0, 2, 0.5, 475.0],
         ),
         # a radius param that only generates a single edge
         (
             "radius",
             100,
-            [10, 1, 0.2, 0.4000000000000001, 9,
-            0.2, 0.0, 92.28488500290825, 793.0]
+            None,
+            None,
+            None,
+            [10, 1, 0.2, 0.4000000000000001,
+            0.0, 92.28488500290825, 9, 0.2, 793.0]
         ),
         # a radius param that generates multiple edges
         (
             "radius",
             200,
-            [10, 3, 0.6, 0.48989794855663565, 7, 0.2,
-            0.0, 128.97026785384764, 156.0]
+            None,
+            None,
+            None,
+            [10, 3, 0.6, 0.48989794855663565,
+            0.0, 128.97026785384764, 7, 0.2, 156.0]
         ),
         # test case where k=1 nearest neighbors
         (
             "knn", 
+            None,
             1,
-            [10, 6, 1.2, 0.4, 4, 0.4, 0.0, 217.84017139873353, 632.25]
+            None,
+            None,
+            [10, 6, 1.2, 0.4, 0.0, 217.84017139873353, 4, 0.4, 632.25]
         ),
         # test case where k=3 nearest neighbors (different size output tree)
         (
             "knn", 
+            None,
             3,
-            [10, 20, 4.0, 1.1832159566199232, 1, 1.0,
-            0.6066666666666667, 353.41649782593197, 510.1]
+            None,
+            None,
+            [10, 20, 4.0, 1.1832159566199232,
+            0.6066666666666667, 353.41649782593197, 1, 1.0, 510.1]
+        ),
+        (
+        # test case where the number of input points is less than the
+        # provided k value, such that the k value is modified to support
+        # the appropriate number of neighbors
+            "knn",
+            None,
+            3,
+            np.array([[1930. , 1947. ],
+                     [ 167.5, 1710. ]]),
+            np.array([475., 341.]),
+            [2, 1, 1.0, 0.0, 0.0, 1778.363081600605, 1, 1.0, 408.0],
         ),
     ]
 )
-def test_calculate_graph_metrics(method, param, expected):
-    # generate realistic "points" and "areas" inputs
-    rng = np.random.default_rng(0)
-    pts = rng.integers(2, 2000, (10,2)) * 0.5
-    areas = rng.integers(1, 1000, 10).astype(float)
-    actual = da._calculate_graph_metrics(pts, areas, method=method, param=param)
-    exp_out = pd.DataFrame([expected], columns=actual.keys())
-    actual_out = pd.DataFrame(actual, index=[0])
-    assert_frame_equal(actual_out, exp_out)
+def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected):
+    exp_cols = ['graph_num_nodes', 'graph_num_edges', 'graph_avg_degree',
+       'graph_degree_std', 'graph_avg_clustering',
+       'graph_avg_neighbor_distance', 'graph_num_components',
+       'graph_lcc_node_fraction', 'graph_avg_node_area_lcc']
+    if pts is None:
+        # generate realistic "points" and "areas" inputs
+        rng = np.random.default_rng(0)
+        pts = rng.integers(2, 2000, (10,2)) * 0.5
+        areas = rng.integers(1, 1000, 10).astype(float)
+    elif pts is not None and method == "delaunay":
+        # modify the expected columns to remove `graph_avg_clustering` and
+        # `graph_avg_neighbor_distance` (not calculated for delaunay method
+        # when not enough points for triangulation, stored as NaN by default
+        # values in ``calculate_all_spatial_metrics``)
+        exp_cols = [col for col in exp_cols 
+            if col not in ["graph_avg_clustering", "graph_avg_neighbor_distance"]]
+    actual = da._calculate_graph_metrics(pts, areas, method=method, k_param=k_param, r_param=r_param)
+    exp_out = dict(zip(exp_cols, expected)) 
+    assert actual == exp_out
     
 
 def test_extract_blob_properties(make_dummy_blobs):
-    df, expected_centres, expected_areas, expected_radii = make_dummy_blobs
-    actual_centres, actual_areas, actual_radii, (actual_w, actual_h) = (
+    df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs
+    actual_centers, actual_areas, actual_radii, (actual_w, actual_h) = (
         da._extract_blob_properties(
             df,
-            center_col="center",
+            center_cols=["center_x", "center_y"],
             area_col="area",
             radius_col="radius",
             bbox_col="bbox",
         )
     )
-
-    npt.assert_array_equal(actual_centres, expected_centres)
-    npt.assert_array_equal(actual_areas, expected_areas)
-    npt.assert_array_equal(actual_radii, expected_radii)
-    npt.assert_allclose((actual_w, actual_h), (100.0, 100.0))
+    expected_centers = np.stack([expected_center_x, expected_center_y], axis=1)
+    npt.assert_allclose(actual_centers, expected_centers)
+    npt.assert_allclose(actual_areas, expected_areas)
+    npt.assert_allclose(actual_radii, expected_radii)
+    npt.assert_allclose((actual_w, actual_h), (97.0, 90.0))
 
 def test_calculate_all_spatial_metrics(make_dummy_blobs):
-    df, _, areas, radii = make_dummy_blobs
+    df, _, _, areas, radii = make_dummy_blobs
 
-    actual = da._calculate_all_spatial_metrics(df,graph_method="delaunay")
+    actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay")
 
-    expected = {
-        "num_blobs": 4,
-        "mean_blob_area": areas.mean(),
-        "median_blob_area": np.median(areas),
-        "std_blob_area": areas.std(ddof=0),
-        "total_blob_area": areas.sum(),
-        "mean_blob_radius": radii.mean(),
-        "median_blob_radius": np.median(radii),
-        "coverage_percentage": 4.2,
-        "mean_nnd": 80.0,
-        "median_nnd": 80.0,
-        "graph_num_nodes": 4,
-        "graph_num_edges": 5,
-    }
-    actual_df = pd.DataFrame(actual, index=[0])
-    actual_df = actual_df[expected.keys()]
-    expected_df = pd.DataFrame(expected, index=[0])
-    assert_frame_equal(actual_df, expected_df)
+    # some sanity checks for outputs
+    assert len(actual) == 22
+    npt.assert_allclose(actual["mean_blob_area"], areas.mean())
+    assert actual["graph_num_nodes"] == 10
+    npt.assert_allclose(actual["graph_avg_neighbor_distance"], 29.450361365095052)
+    npt.assert_allclose(actual["mean_nnd"], 16.695406977528428)
 
 @pytest.mark.parametrize(
     "df_empty",
@@ -202,14 +259,17 @@ def test_load_bubblesam_df(tmp_path: Path):
     )
     parquet_path = tmp_path / "mock_masks_filtered.parquet.gzip"
     df_original.to_parquet(parquet_path)
-    actual_df = da._load_df(parquet_path, "bubblesam")
-    expected_center = ((20.0 + 60.0) / 2, (10.0 + 50.0) / 2)
+    actual_df = da._load_df(parquet_path, "BubbleSAM")
+    expected_center_x = (20.0 + 60.0) / 2
+    expected_center_y = (10.0 + 50.0) / 2
     expected_radius = np.sqrt(100.0 / np.pi)
 
-    actual_center = actual_df["center"].iloc[0]
+    actual_center_x = actual_df["center_x"].iloc[0]
+    actual_center_y = actual_df["center_y"].iloc[0]
     actual_radius = actual_df["radius"].iloc[0]
 
-    npt.assert_allclose(actual_center, expected_center)
+    npt.assert_allclose(actual_center_x, expected_center_x)
+    npt.assert_allclose(actual_center_y, expected_center_y)
     npt.assert_allclose(actual_radius, expected_radius)
 
 @pytest.mark.parametrize("row, exp",
@@ -226,50 +286,6 @@ def test_drop_invalid_phase_rows(row, exp):
     actual = da._drop_invalid_phase_rows(df, row)
     assert actual.shape == (exp, 2)
 
-def test_voronoi_qhull_error():
-    """
-    Test that a warning is issued when Voronoi calculation fails.
-    """
-    # four colinear points
-    dummy_points = np.array([1, 2, 3, 4])
-    with pytest.warns(UserWarning, match="Voronoi calculation failed"):
-        actual = da._calculate_voronoi_stats(dummy_points)
-        npt.assert_array_equal(list(actual.values()), [np.nan] * 4)
-
-@pytest.mark.parametrize("input_data, expected",
-    [
-        (None, 0),
-        ("points", 4)
-    ]
-)
-def test_calculate_graph_metrics_failures(square_points, input_data, expected):
-    if input_data is not None:
-        input_1, input_2 = square_points
-        input_2 = input_2[:2]
-    else:
-        input_1 = input_2 = input_data
-    actual_none = da._calculate_graph_metrics(input_1, input_2, method="Delaunay")
-    assert actual_none["graph_num_nodes"] == expected
-    assert np.isnan(actual_none["graph_avg_degree"])
-
-@pytest.mark.parametrize("input_data",
-    ["empty_df", "center"]
-)
-def test_extract_blob_properties_failures(make_dummy_blobs, input_data):
-    if input_data == "center":
-        df, _, _, _ = make_dummy_blobs
-        input_df = df.drop(columns=['center'])
-    else:
-        input_df = pd.DataFrame()
-    c, a, r, (w, h) = da._extract_blob_properties(
-        input_df,
-        center_col="center",
-        area_col="area",
-        radius_col="radius",
-        bbox_col="bbox",
-    )
-    assert all(x.size == 0 for x in (a, r, c))
-    assert np.isnan(w) and np.isnan(h)
 
 @pytest.mark.parametrize(
     "fname, expected, method",
@@ -422,6 +438,7 @@ def test_full_analysis_pipeline(
         aggregate_csv=aggregate_csv,
         mode=mode,
         graph_method="radius",
+        r_param=30,
         composition_csv=comp_csv,
         cols_to_add=["Phase_Separation", "Group"],
         time_label="1st",
@@ -434,12 +451,21 @@ def test_full_analysis_pipeline(
     df_agg = pd.read_csv(aggregate_csv)
     df_per = pd.read_csv(per_image_csv)
     assert df_per["image_name"].item() == tiff_name
-    assert df_agg.shape == (1, 98)
-    assert df_per.shape == (1, 30)
+    assert df_agg.shape == (1, 94)
+    assert df_per.shape == (1, 29)
     
     assert "Phase_Separation" in df_agg.columns
-    assert "Offset" in df_agg.columns
     npt.assert_array_equal(df_agg.columns[:5], group_cols)
+    # numerical checks on the per-image df
+    npt.assert_allclose(df_per["std_blob_area"], 101.57799958652464)
+    npt.assert_allclose(df_per["graph_degree_std"], 0.8717797887081347)
+    npt.assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
+    npt.assert_allclose(df_per["coverage_percentage"], 38.04123711340206)
+    # numerical checks on the aggregated df
+    npt.assert_allclose(df_agg["mean_blob_area_max"], 332.1)
+    npt.assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
+    npt.assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
+    npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
 
 def test_merge_composition_data_missing_cols_message():
     """Ensure clear error text when requested cols are missing in composition_df."""
@@ -473,7 +499,7 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
     len_df,
 ):
     """
-    test that ``process_parquet_files`` warns on unparseable filenames and
+    test that ``process_parquet_files`` warns on unparsable filenames and
     warns on loader failures (ValueError from ``_load_df``), but still
     returns rows for the good files.
     """
@@ -484,21 +510,31 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
     # returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
-    pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
+    pd.DataFrame(
+        {
+            "area": [10.0],
+            "bbox": [(0.0, 0.0, 10.0, 10.0)],
+            "center": [(5.0, 5.0)]
+        }).to_parquet(
         input_dir / good
     )
     # a parquet file that is not in the correct format and
-    # therefore is not readable by the ``_parqe_filename`` function
-    unparseable = f"weird_{file_suff}.parquet.gzip"
-    pd.DataFrame({"area": [10.0], "bbox": [(0.0, 0.0, 10.0, 10.0)]}).to_parquet(
-        input_dir / unparseable
+    # therefore is not readable by the ``_parse_filename`` function
+    unparsable = f"weird_{file_suff}.parquet.gzip"
+    pd.DataFrame(
+        {
+            "area": [10.0],
+            "bbox": [(0.0, 0.0, 10.0, 10.0)],
+            "center": [(5.0, 5.0)],
+        }).to_parquet(
+        input_dir / unparsable
     )
     # a file that does not contain the appropriate columns
     # for calculating the output metrics with method == bubblesam
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
         f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
-    pd.DataFrame({"wrong_col": [1]}).to_parquet(input_dir / badcontent)
-    # a file that does not readable parquet data
+    pd.DataFrame({"wrong_col": [1], "center": [(10.0, 10.0)]}).to_parquet(input_dir / badcontent)
+    # a file that does not contain readable parquet data
     arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
         f"3333-3333-3333-333333333333_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_invalid, "w") as f:
@@ -513,76 +549,47 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
         df = da._process_parquet_files(input_dir, mode=method, graph_method="delaunay")
 
     msgs = [str(w.message) for w in record.list]
+    all_msgs = "\n".join(msgs)
     # check that the appropriate warnings are produced
     # as a result of the various exceptions that can be raised
     assert sum("ArrowInvalid" in m for m in msgs) == 2
     assert sum("ValueError" in m for m in msgs) == n_value_errors
-    assert any("Could not parse metadata from filename" in m for m in msgs)
-    assert any("Failed to load or parse" in m for m in msgs)
-    assert any("Either the file is corrupted or this is not a parquet file." in m for m in msgs)
-    assert any("Parquet file size is 0 bytes" in m for m in msgs)
+    exp_msgs = [
+        "Could not parse metadata from filename",
+        "Failed to load or parse",
+        "Either the file is corrupted or this is not a parquet file.",
+        "Parquet file size is 0 bytes",
+    ]
+    for exp_msg in exp_msgs:
+        assert exp_msg in all_msgs
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) == len_df
 
-def test_calculate_nnd_stats_warns_on_no_finite_distances():
-    """
-    Force the 'No finite neighbor distances found.' by providing
-    extremely large value to ``calculate_nnd_stats`` and check that
-    return df contains nan values.
-    """
-    large_val = 1e308
-
-    # These points are finite, but the distance between them
-    # (2e308) cannot be represented and becomes 'inf'.
-    pts = np.array([
-        [large_val, large_val],
-        [-large_val, -large_val]
-    ])
-
-    with pytest.warns(
-        UserWarning, match="NND calculation failed: No finite neighbor distances found"
-    ):
-        res = da._calculate_nnd_stats(pts)
-
-    assert np.isnan(res["mean_nnd"]) and np.isnan(res["median_nnd"])
-
-
-@pytest.mark.parametrize("method, param, err",
-    [
-        ("delaunay", None, "value"),
-        ("knn", 1, "value"),
-        ("radius", 30, "value"),
-        ("delaunay", None, "qhull"),
-    ]
-)
-def test_calculate_graph_metrics_warns_on_exception(method, param, err):
-    """
-    Cause a graph-construction failure and ensure it warns but still returns
-    sensible metrics (nodes present, no edges, multiple components).
-    """
-    if err == "value":
-        pts = np.array([
-            [np.nan, np.nan],
-            [1, 1],
-            [2, 2],
-            [3, 3]
-        ])
-        areas = np.ones(4)
-    else:
-        pts = np.array([(0,0), (1,1), (2,2), (3,3)])
-        areas = np.array([10, 20, 30, 40])
-
-    with pytest.warns(UserWarning, match="Graph construction"):
-        res = da._calculate_graph_metrics(pts, areas, method=method, param=param)
-
-    assert res["graph_num_nodes"] == 4
-    assert res["graph_num_edges"] == 0
-    assert res["graph_num_components"] == 4
-    assert res["graph_avg_degree"] == 0.0
-
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):
-    _, pts, areas, _ = make_dummy_blobs
+    _, _, pts, areas, _ = make_dummy_blobs
     with pytest.raises(ValueError, match="Invalid input parameters"):
         da._calculate_graph_metrics(pts, areas, method="bad")
+
+
+@pytest.mark.parametrize("method, k_param, r_param, err_msg",
+    [
+        ("knn", 1.0, None, "`k_param` must be an integer value"),
+        ("knn", 0, None, "`k_param` must be a positive, non-zero integer"),
+        ("radius", None, "30", "`r_param` must be either an integer or floating point value"),
+        ("radius", None, 0, "`r_param` must be a positive, non-zero value"),
+    ]
+)
+def test_calculate_graph_metrics_bad_params(
+    make_dummy_blobs,
+    method,
+    k_param,
+    r_param,
+    err_msg,
+):
+    _, _, pts, areas, _ = make_dummy_blobs
+    with pytest.raises(ValueError, match=err_msg):
+        da._calculate_graph_metrics(
+            pts, areas, method=method, r_param=r_param, k_param=k_param
+        )
