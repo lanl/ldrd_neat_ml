@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Literal
 import pandas as pd
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
@@ -20,9 +20,12 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-def as_steps_set(steps_str: str) -> list[str]:
+def as_steps_set(
+    steps_str: Literal["detect", "analysis", "detect,analysis", "all"]
+) -> list[str]:
     """
-    Normalize a comma list to canonical step names.
+    Normalize a comma separated string of steps
+    to a list of canonical step names.
 
     Parameters
     ----------
@@ -46,7 +49,7 @@ def as_steps_set(steps_str: str) -> list[str]:
 def get_path_structure(
     roots: dict[str, str],
     dataset_config: dict[str, Any],
-    steps: Sequence[str]
+    steps: Sequence[Literal["detect", "analysis"]]
 ) -> dict[str, Path]:
     """
     Build only the paths needed by active steps.
@@ -74,14 +77,14 @@ def get_path_structure(
     steps_set = set(steps)
 
     base_proc = work_root / ds_id / method / class_label / time_label
-    results_root = Path(roots["results"])
 
     if method == 'OpenCV':
         paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
 
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
-    if any(s in steps_set for s in {"analysis"}):
+    if "analysis" in steps_set:
+        results_root = Path(roots["results"])
         a_cfg = dataset_config.get("analysis", {})
         default_per  = results_root / ds_id / "per_image.csv"
         default_agg = results_root / ds_id / "aggregate.csv"
@@ -270,12 +273,14 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     carry_over_cols = ["Phase_Separation"] + composition_cols
 
     graph_method = analysis_cfg.get("graph_method", dataset_config.get("graph_method"))
-    graph_param = analysis_cfg.get("graph_param", dataset_config.get("graph_param"))
+    k_param = analysis_cfg.get("k_param", dataset_config.get("k_param"))
+    r_param = analysis_cfg.get("r_param", dataset_config.get("r_param"))
     
     if graph_method is None:
         raise ValueError("Please provide `graph_method` input.")
-    if (graph_method.lower() in ["knn", "radius"]) and (graph_param is None):
-        raise ValueError(f"Graph method: {graph_method} requires `graph_param` input.")
+    if (graph_method.lower() == "knn" and k_param is None) or (graph_method.lower() == "radius" and r_param is None):
+        raise ValueError(
+            f"Graph method: {graph_method} requires appropriate param input (i.e. `k_param` or `r_param`).")
 
     method_key = mode.lower()
     expected_pattern = ("*_bubble_data.parquet.gzip" if method_key == "opencv"
@@ -304,7 +309,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         aggregate_csv=aggregate_csv,
         mode=mode,
         graph_method=graph_method,
-        graph_param=graph_param,
+        r_param=r_param,
+        k_param=k_param,
         composition_csv=composition_csv,
         cols_to_add=cols_to_add,
         group_cols=group_cols,
