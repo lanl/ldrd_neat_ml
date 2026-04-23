@@ -100,15 +100,29 @@ def image_with_circles_fixture(tmp_path_factory) -> Path:
 @pytest.fixture(scope="session")
 def make_dummy_blobs():
     """A tiny 4-blob square that is useful across multiple tests."""
-    centres = [(10.0, 10.0), (90.0, 10.0), (90.0, 90.0), (10.0, 90.0)]
-    areas   = [100.0, 120.0, 110.0,  90.0]
-    radii   = [5.0] * 4
-    bboxes  = [(0.0, 0.0, 100.0, 100.0)] * 4
+    rng = np.random.default_rng(1)
+    center_x = rng.integers(20, 100, 10)
+    center_y = rng.integers(20, 100, 10)
+    areas   = rng.integers(100, 500, 10)
+    radii   = rng.integers(0, 10, 10)
+    xmin = center_x - radii
+    ymin = center_y - radii
+    xmax = center_x + radii
+    ymax = center_y + radii
+
+    bboxes = np.column_stack((xmin, ymin, xmax, ymax))
+    bboxes = [tuple(row) for row in bboxes]
 
     df = pd.DataFrame(
-        {"center": centres, "area": areas, "radius": radii, "bbox": bboxes}
+        {
+            "center_x": center_x,
+            "center_y": center_y,
+            "area": areas,
+            "radius": radii,
+            "bbox": bboxes
+        }
     )
-    return df, np.asarray(centres, float), np.asarray(areas, float), np.asarray(radii, float)
+    return df, center_x, center_y, areas, radii
 
 @pytest.fixture(scope="session")
 def square_points():
@@ -130,14 +144,16 @@ def mock_dir(tmp_path_factory, make_dummy_blobs):
         "offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9"
         "-4b1c-b304-ea40e77f0780_bubble_data.parquet.gzip"
     )
-    df_ocv, _, _, _ = make_dummy_blobs
+    df_ocv, _, _, _, _ = make_dummy_blobs
+    # recapituale ``center`` tuple handling
+    df_ocv["center"] = list(zip(df_ocv["center_x"], df_ocv["center_y"]))
     df_ocv.to_parquet(input_dir / ocv_fname)
 
     bsam_fname = (
         "offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd-"
         "4285-824d-e82eafedce90_masks_filtered.parquet.gzip"
     )
-    df_bsam = pd.DataFrame({"area": [10.0], "bbox": [(0, 0, 10, 10)]})
+    df_bsam, _, _, _, _ = make_dummy_blobs
     df_bsam.to_parquet(input_dir / bsam_fname)
 
     comp_df = pd.DataFrame({

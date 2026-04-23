@@ -30,12 +30,15 @@ mask parameters override the built-in parameters for the `SAM-2` model.
 
 When performing analysis/metric calculation of the resulting bubble detections,
 the `yaml` file provides the necessary paths for finding the detection parquet
-files; the composition csv file that stores information including
-phase separation ground-truth labels; the paths for storing per-image and
-aggregate metrics. Optionally, the user can also provide
-the column names on which to group the aggregate metrics during
-analysis, and a choice of method for calculating graph-based metrics of
-bubble connectivity (`knn`, `radius` or `delaunay`).
+files; the user generated composition csv file that stores per-image sample
+information related to the experimental setup and data collection including
+phase separation ground-truth labels and composition weight percentages;
+the paths for storing per-image and aggregate metrics. The user also provides
+a choice of method for calculating graph-based metrics of bubble connectivity
+(`knn`, `radius` or `delaunay`). Optionally, the user can also provide the
+column names on which to group the aggregate metrics during analysis.
+The same per-image and aggregate metrics are calculated for both detection
+methods (OpenCV and BubbleSAM).
 
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
@@ -96,7 +99,8 @@ datasets:
         - Time
         - Class
       graph_method: radius OR knn OR delaunay
-      graph_param: optional param for radius and knn methods 
+      k_param: the number of neighbors to use (int; when using ``graph_method == knn``) 
+      r_param: the neighborhood radius in pixels (int, float; when using ``graph_method == radius``)
 ```
 
 ### To run the code on CHICOMA:  
