@@ -72,7 +72,7 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
     """
     caplog.set_level(logging.WARNING)
     actual = da._calculate_voronoi_stats(pts)
-    assert actual == exp
+    npt.assert_equal(actual, exp)
     if warn_msg is not None:
         assert warn_msg in caplog.text
 
