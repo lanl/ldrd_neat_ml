@@ -501,42 +501,27 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     assert_allclose(df_agg["coverage_percentage_max"], 38.04123711340206)
 
 
-def test_stage_analyze_features_warns_when_input_dir_path_missing(
-    tmp_path,
-    caplog: pytest.LogCaptureFixture,
-):
-    """
-    analysis.input_dir exists as a string but the path itself does not exist.
-    """
-
-    caplog.set_level(logging.WARNING)
-    missing_dir = tmp_path / "no_such_dir"
-    ds = {
-        "id": "AN2",
-        "method": "OpenCV",
-        "time_label": "T01",
-        "analysis": {
-            "input_dir": missing_dir,
-            "graph_method": "knn",
-            "graph_param": 1
-        },
-    }
-    wf.stage_analyze_features(ds, paths={})
-    assert "Analysis input_dir" in caplog.text
-
-
-@pytest.mark.parametrize("mode", ["OpenCV", "BubbleSAM"])
-def test_stage_analyze_features_warns_when_no_detection_outputs_opencv(
+@pytest.mark.parametrize("mode, input_exist, warn_msg",
+    [
+        ("OpenCV", True, "No detection outputs matching"),
+        ("BubbleSAM", True, "No detection outputs matching"),
+        ("OpenCV", False, "Analysis input_dir"),
+    ]
+)
+def test_stage_analyze_features_input_dir_warnings(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
     mode,
+    input_exist,
+    warn_msg,
 ):
     """
     Input dir exists but contains no parquet files.
     """
     caplog.set_level(logging.WARNING)
-    input_dir = tmp_path / "empty_in"
-    input_dir.mkdir()
+    input_dir = tmp_path / "input_dir"
+    if input_exist:
+        input_dir.mkdir()
 
     ds = {
         "id": "AN4",
@@ -549,7 +534,7 @@ def test_stage_analyze_features_warns_when_no_detection_outputs_opencv(
         },
     }
     wf.stage_analyze_features(ds, paths={})
-    assert "No detection outputs matching" in caplog.text
+    assert warn_msg in caplog.text
 
 
 @pytest.mark.parametrize("graph_method, graph_param, err_msg",
