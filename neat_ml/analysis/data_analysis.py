@@ -130,8 +130,7 @@ def _load_df(
     -------
     pd.DataFrame
         A DataFrame with data from performing detection,
-        has 'center', 'area', 'radius', and 'bbox' columns
-        when method == bubblesam.
+        has 'center_x', 'center_y', 'area', 'radius', and 'bbox' columns.
     """
     df = pd.read_parquet(parquet_path)
     if method.lower() == "bubblesam":
@@ -176,7 +175,9 @@ def _drop_invalid_phase_rows(
     df : pd.DataFrame
         The input DataFrame to be filtered.
     phase_col : str
-        The name of the column to check for valid phase data.
+        The name of the column storing the phase separation status
+        label (0 for single-phase or 1 for two-phase) corresponding to
+        the data row entry.
 
     Returns
     -------
@@ -189,19 +190,20 @@ def _drop_invalid_phase_rows(
     return df.dropna(subset=[phase_col])
 
 def _calculate_nnd_stats(
-    points: Optional[np.ndarray]
+    points: np.ndarray
 ) -> dict[str, float]:
     """Computes mean and median Nearest-Neighbor Distances (NND) for points.
 
     Parameters
     ----------
-    points : Optional[np.ndarray]
+    points : np.ndarray
         An (N, 2) array of (x, y) coordinates. 
 
     Returns
     -------
     dict[str, float]
-        A dictionary with 'mean_nnd' and 'median_nnd'.
+        A dictionary with 'mean_nnd' and 'median_nnd'. Values are NaN
+        if the calculation is not possible.
     """
     # construct the KDTree
     tree = KDTree(points)
@@ -214,18 +216,17 @@ def _calculate_nnd_stats(
     return {"mean_nnd": nnd.mean(), "median_nnd": np.median(nnd)}
 
 def _calculate_voronoi_stats(
-    points: Optional[np.ndarray]
+    points: np.ndarray
 ) -> dict[str, float]:
     """
     Computes statistics from the areas of finite Voronoi cells.
 
-    This function calculates the mean, median, standard deviation, and
-    coefficient of variation for the areas of Voronoi cells that are
-    fully contained within the point set.
+    This function calculates the mean, median, and standard deviation of
+    the areas of Voronoi cells that are fully contained within the point set.
 
     Parameters
     ----------
-    points : Optional[np.ndarray]
+    points : np.ndarray
         An (N, 2) array of (x, y) coordinates. Requires at least 4 points
         for a stable Voronoi tessellation.
 
@@ -233,7 +234,7 @@ def _calculate_voronoi_stats(
     -------
     dict[str, float]
         A dictionary containing 'mean_voronoi_area', 'median_voronoi_area',
-        'std_voronoi_area', and 'cv_voronoi_area'. Values are NaN on failure.
+        'std_voronoi_area'. Values are NaN on failure.
     """
     vor = Voronoi(points) 
 
@@ -243,7 +244,7 @@ def _calculate_voronoi_stats(
         verts = vor.regions[region_id]
         # for all valid regions calculate the area of the region
         # using the shoelace formula, filtering out infinite area
-        # regions and extremely small regions.
+        # regions.
         if verts and all(v >= 0 for v in verts):
             poly = vor.vertices[verts]
             x, y = poly[:, 0], poly[:, 1]
@@ -256,7 +257,6 @@ def _calculate_voronoi_stats(
         return {} 
 
     # calculate statistics from finite areas
-    # `cv` -> coefficient of variation
     areas_arr = np.asarray(finite_areas)
     mean_area = areas_arr.mean()
     std_area = areas_arr.std(ddof=0)
@@ -271,7 +271,7 @@ def _calculate_graph_metrics(
     points: np.ndarray,
     areas: np.ndarray,
     *,
-    method: str,
+    method: Literal["delaunay", "knn", "radius"],
     r_param: Optional[Union[int, float]] = None,
     k_param: Optional[float] = None,
 ) -> dict[str, Any]:
@@ -287,7 +287,7 @@ def _calculate_graph_metrics(
     areas : np.ndarray
         An (N,) array of node areas, used for Largest Connected
         Component (LCC) area statistics.
-    method : str
+    method : Literal["delaunay", "knn", "radius"]
         The graph construction method: 'delaunay', 'radius', or 'knn'.
         Descriptions of each method and their relative merits are provided
         below:
@@ -322,7 +322,8 @@ def _calculate_graph_metrics(
     Returns
     -------
     dict[str, Any]
-        A dictionary of graph metrics.
+        A dictionary of graph metrics. Defaults to 0 for integer values and NaN for
+        floating point statistical measures if calculation is not possible.
     """
     metrics = {}
     metrics["graph_num_nodes"] = points.shape[0]
@@ -332,7 +333,7 @@ def _calculate_graph_metrics(
         raise ValueError(
             f"Invalid input parameters for `method`: {method}"
         )
-
+    
     # check that the input parameters for the graph are acceptable for each method
     if method == "knn":
         if not isinstance(k_param, int):
@@ -622,8 +623,7 @@ def _calculate_summary_statistics(
     # collect all remaining columns that contain numerical data
     df_num = df_out.select_dtypes(include="number")
 
-    # if no numerical columns exist, return a dataframe with just the
-    # user provided columns
+    # find the carry over columns in ``df``
     carry = list(set(carry_over_cols).intersection(df.columns))
 
     # initialize dictionary keys for aggregation

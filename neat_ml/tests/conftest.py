@@ -99,7 +99,11 @@ def image_with_circles_fixture(tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="session")
 def make_dummy_blobs():
-    """A tiny 4-blob square that is useful across multiple tests."""
+    """
+    Dataframe containing random values for the metrics of
+    10 ``blobs`` to recapitulate the values found in the
+    output parquet files from the blob detection step.
+    """
     rng = np.random.default_rng(1)
     center_x = rng.integers(20, 100, 10)
     center_y = rng.integers(20, 100, 10)

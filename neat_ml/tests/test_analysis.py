@@ -66,16 +66,14 @@ def test_calculate_nnd_stats(pts, expected):
 )
 def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
     """
-    test that ``calculate_voronoi_stats`` returns array of
-    values from voronoi region calculation OR returns array of nan
-    and warns that no finite areas were found in voronoi regions
+    test that ``calculate_voronoi_stats`` returns a dictionary of
+    key, value pairs from voronoi region calculation OR returns
+    an empty dict and warns that no finite areas were found in
+    voronoi regions
     """
     caplog.set_level(logging.WARNING)
     actual = da._calculate_voronoi_stats(pts)
-    assert actual.keys() == exp.keys()
-    npt.assert_allclose(
-        list(actual.values()), list(exp.values())
-    )
+    assert actual == pytest.approx(exp)
     if warn_msg is not None:
         assert warn_msg in caplog.text
 
@@ -175,8 +173,8 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
         exp_cols = [col for col in exp_cols 
             if col not in ["graph_avg_clustering", "graph_avg_neighbor_distance"]]
     actual = da._calculate_graph_metrics(pts, areas, method=method, k_param=k_param, r_param=r_param)
-    assert list(actual.keys()) == exp_cols
-    npt.assert_allclose(list(actual.values()), expected)
+    exp_out = {key: value for key, value in zip(exp_cols, expected)}
+    assert actual == pytest.approx(exp_out)
     
 
 def test_extract_blob_properties(make_dummy_blobs):
