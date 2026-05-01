@@ -178,7 +178,7 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
     
 
 def test_extract_blob_properties(make_dummy_blobs):
-    df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs
+    df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs()
     actual_centers, actual_areas, actual_radii, (actual_w, actual_h) = (
         da._extract_blob_properties(
             df,
@@ -195,7 +195,7 @@ def test_extract_blob_properties(make_dummy_blobs):
     npt.assert_allclose((actual_w, actual_h), (97.0, 90.0))
 
 def test_calculate_all_spatial_metrics(make_dummy_blobs):
-    df, _, _, areas, radii = make_dummy_blobs
+    df, _, _, areas, radii = make_dummy_blobs()
 
     actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay")
 
@@ -255,7 +255,7 @@ def test_load_bubblesam_df(tmp_path: Path):
     df_original = pd.DataFrame(
         {
             "area": [100.0],
-            "bbox": [(10.0, 20.0, 50.0, 60.0)],
+            "bbox": '[10.0, 20.0, 50.0, 60.0]',
         }
     )
     parquet_path = tmp_path / "mock_masks_filtered.parquet.gzip"
@@ -511,10 +511,14 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
     # returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
+    if method == "BubbleSAM":
+        bbox = str([0.0, 0.0, 10.0, 10.0])
+    elif method == "OpenCV":
+        bbox = [np.array([0.0, 0.0, 10.0, 10.0])] # type: ignore[assignment] 
     pd.DataFrame(
         {
             "area": [10.0],
-            "bbox": [(0.0, 0.0, 10.0, 10.0)],
+            "bbox": bbox,
             "center": [(5.0, 5.0)]
         }).to_parquet(
         input_dir / good
@@ -569,7 +573,7 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
 
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):
-    _, _, pts, areas, _ = make_dummy_blobs
+    _, _, pts, areas, _ = make_dummy_blobs()
     with pytest.raises(ValueError, match="Invalid input parameters"):
         da._calculate_graph_metrics(pts, areas, method="bad")
 
@@ -589,7 +593,7 @@ def test_calculate_graph_metrics_bad_params(
     r_param,
     err_msg,
 ):
-    _, _, pts, areas, _ = make_dummy_blobs
+    _, _, pts, areas, _ = make_dummy_blobs()
     with pytest.raises(ValueError, match=err_msg):
         da._calculate_graph_metrics(
             pts, areas, method=method, r_param=r_param, k_param=k_param
