@@ -10,6 +10,7 @@ from scipy.spatial import KDTree, Voronoi, Delaunay
 import logging
 from tqdm.auto import tqdm
 from pyarrow.lib import ArrowInvalid  # type: ignore[import-untyped]
+import ast
 
 __all__ = [
     "full_analysis"
@@ -134,8 +135,11 @@ def _load_df(
     """
     df = pd.read_parquet(parquet_path)
     if method.lower() == "bubblesam":
+        # ``bbox`` object is converted to a str before saving parquet
+        # in detection module, convert back to list for processing
         if {"area", "bbox"}.issubset(df.columns):
-            bbox_list = df["bbox"].tolist()
+            df["bbox"] = df["bbox"].apply(ast.literal_eval)
+            bbox_list = df["bbox"]
             cy = [(b[0] + b[2]) / 2 for b in bbox_list]
             cx = [(b[1] + b[3]) / 2 for b in bbox_list]
             out = pd.DataFrame({
