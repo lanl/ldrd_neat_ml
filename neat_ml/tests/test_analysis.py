@@ -512,9 +512,9 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
     if method == "BubbleSAM":
-        bbox = str([0.0, 0.0, 10.0, 10.0])
+        bbox = "[0.0, 0.0, 10.0, 10.0]"
     elif method == "OpenCV":
-        bbox = [np.array([0.0, 0.0, 10.0, 10.0])] # type: ignore[assignment] 
+        bbox = [[0.0, 0.0, 10.0, 10.0]] # type: ignore[assignment] 
     pd.DataFrame(
         {
             "area": [10.0],

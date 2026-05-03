@@ -118,8 +118,6 @@ def make_dummy_blobs():
         bboxes = np.column_stack((xmin, ymin, xmax, ymax)).tolist()
         if mode == "bubblesam":
             bboxes = [str(row) for row in bboxes]
-        elif mode == "opencv":
-            bboxes = [list(row) for row in bboxes]
 
         df = pd.DataFrame(
             {
