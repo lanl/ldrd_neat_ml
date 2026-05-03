@@ -14,7 +14,6 @@ __all__ = [
     "get_path_structure",
     "run_detection",
     "stage_detect",
-    "stage_detect",
     "stage_analyze_features"
 ]
 
@@ -30,12 +29,13 @@ def as_steps_set(
     Parameters
     ----------
     steps_str : str
-        Comma-separated steps; accepts 'detect', 'analysis'.
+        Comma-separated steps; accepts 'detect', 'analysis', 'all'.
+        'all' expands to full pipeline.
 
     Returns
     -------
     list[str]
-        Normalized steps. 'all' expands to full pipeline.
+        List of normalized steps.
     """
     raw = [s.strip() for s in steps_str.split(",") if s.strip()]
     if raw == ["all"]:
@@ -60,7 +60,7 @@ def get_path_structure(
         Root dirs (work).
     dataset_config : dict[str, Any]
         Dataset dict (id, method, class, time_label, detection).
-    steps : Sequence[str]
+    steps : Sequence[Literal["detect", "analysis"]]
         Selected steps (e.g., ['detect','analysis']).
 
     Returns
@@ -235,18 +235,17 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
 
     # get the user provided input path storing parquet files OR
     # the detection dir where parquets were saved after detection
-    input_dir_val = (
+    input_dir = (
         analysis_cfg.get("input_dir")
-        or (str(paths["det_dir"]) if "det_dir" in paths and paths["det_dir"] else None)
+        or (paths["det_dir"] if "det_dir" in paths and paths["det_dir"] else None)
     )
-    if not input_dir_val:
+    if not input_dir:
         log.warning(
             f"No analysis input_dir provided and det_dir unavailable. Skipping '{ds_id}'."
         )
         return
 
     # get paths for saving per image and aggregate csv files
-    input_dir = Path(input_dir_val)
     if not input_dir.exists():
         log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
         return
@@ -262,13 +261,11 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         Path(analysis_cfg["composition_csv"])
         if "composition_csv" in analysis_cfg else paths.get("composition_csv")
     )
-    if composition_csv and not Path(composition_csv).exists():
+    if composition_csv and not composition_csv.exists():
         log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
         return
 
-    group_cols = list(
-        analysis_cfg.get("group_cols", ["Group", "Label", "Time", "Class"])
-    )
+    group_cols = analysis_cfg.get("group_cols", ["Group", "Label", "Time", "Class"])
     cols_to_add = ["Group", "Phase_Separation"] + composition_cols
     carry_over_cols = ["Phase_Separation"] + composition_cols
 
@@ -278,9 +275,12 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     
     if graph_method is None:
         raise ValueError("Please provide `graph_method` input.")
-    if (graph_method.lower() == "knn" and k_param is None) or (graph_method.lower() == "radius" and r_param is None):
+    if ((graph_method.lower() == "knn" and k_param is None)
+        or (graph_method.lower() == "radius" and r_param is None)):
         raise ValueError(
-            f"Graph method: {graph_method} requires appropriate param input (i.e. `k_param` or `r_param`).")
+            (f"Graph method: {graph_method} requires appropriate"
+            "param input (i.e. `k_param` or `r_param`).")
+        )
 
     method_key = mode.lower()
     expected_pattern = ("*_bubble_data.parquet.gzip" if method_key == "opencv"
