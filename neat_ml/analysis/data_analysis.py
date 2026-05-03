@@ -135,19 +135,18 @@ def _load_df(
     """
     df = pd.read_parquet(parquet_path)
     if method.lower() == "bubblesam":
-        # ``bbox`` object is converted to a str before saving parquet
-        # in detection module, convert back to list for processing
         if {"area", "bbox"}.issubset(df.columns):
-            df["bbox"] = df["bbox"].apply(ast.literal_eval)
-            bbox_list = df["bbox"]
+            # ``bbox`` object is converted to a str before saving parquet
+            # in detection module, convert back to list for processing
+            bbox_list = df["bbox"].apply(ast.literal_eval)
             cy = [(b[0] + b[2]) / 2 for b in bbox_list]
             cx = [(b[1] + b[3]) / 2 for b in bbox_list]
             out = pd.DataFrame({
                 "center_x": cx, 
                 "center_y": cy,
-                "area":   df["area"].astype(float),
+                "area": df["area"].astype(float),
                 "radius": np.sqrt(df["area"].astype(float) / np.pi),
-                "bbox":   df["bbox"],
+                "bbox": bbox_list,
             })
             return out
         else:
@@ -316,7 +315,7 @@ def _calculate_graph_metrics(
                       the distance between any two nodes is greater than the radius
                       parameter. 
     r_param : Optional[Union[int, float]]
-        The radius for 'radius' graphs.
+        The radius (in pixels) for 'radius' graphs.
     k_param : Optional[float]
         The k value for 'knn' graphs. k is the maximum number of nearest
         neighbors to use when building the graph. k is overridden when it
@@ -513,7 +512,7 @@ def _calculate_all_spatial_metrics(
         The per-blob data table for a single image.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph construction method ('delaunay', 'radius', or 'knn').
-    k_param : Optional[Union[int, float]]
+    k_param : Optional[int]
         The k value for graph construction when method == "knn".
     r_param : Optional[Union[int, float]]
         The radius value for graph construction when method == "radius".
@@ -566,7 +565,7 @@ def _calculate_all_spatial_metrics(
     )
 
     tba = metrics["total_blob_area"]
-    coverage = (100.0 * tba / img_area)
+    coverage = 100.0 * tba / img_area
     metrics["coverage_percentage"] = coverage
     
     if centroids is not None:

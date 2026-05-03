@@ -170,7 +170,7 @@ place the outputs under ``roots:work`` filepath from the `.yaml` file
 
 For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also need to be added to the
 input `yaml` file (a description of which can also be found above). These steps process the output bubble
-detection data and save an `csv` file of aggregated metrics.
+detection data and save 'csv' files containing per-image and aggregated metrics.
 
 For information relevant to running the workflow:  
 
