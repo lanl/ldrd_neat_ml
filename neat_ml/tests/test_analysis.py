@@ -492,7 +492,7 @@ def test_merge_composition_data_missing_cols_message():
         ("bubble_data", "OpenCV", 0, 2),
     ]
 )
-def test_process_parquet_files_warns_and_continues_bubblesam(
+def test_process_parquet_files_warns_and_continues(
     tmp_path: Path,
     file_suff,
     method,
@@ -501,7 +501,7 @@ def test_process_parquet_files_warns_and_continues_bubblesam(
 ):
     """
     test that ``process_parquet_files`` warns on unparsable filenames and
-    warns on loader failures (ValueError from ``_load_df``), but still
+    loader failures (ValueError from ``_load_df``), but still
     returns rows for the good files.
     """
     input_dir = tmp_path / "input"

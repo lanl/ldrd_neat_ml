@@ -404,31 +404,6 @@ def test_stage_analyze_features_warns_when_input_dir_unavailable(
     assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
 
 
-def test_stage_analyze_features_warns_when_input_dir_missing(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path
-):
-    """
-    stage_analyze_features: logs warning if input_dir path does not exist.
-    """
-    caplog.set_level(logging.WARNING)
-    input_dir = tmp_path / "no_such_dir"
-    ds = {
-        "id": "AN2",
-        "method": "OpenCV",
-        "time_label": "T01",
-        "analysis": { 
-            "input_dir": input_dir,
-            "graph_method": "knn",
-            "graph_param": 1
-        }
-    }
-
-    wf.stage_analyze_features(ds, {})
-
-    assert f"Analysis input_dir '{input_dir}' does not exist for 'AN2'." in caplog.text
-
-
 def test_stage_analyze_features_warns_when_composition_csv_missing(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path

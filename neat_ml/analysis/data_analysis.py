@@ -276,7 +276,7 @@ def _calculate_graph_metrics(
     *,
     method: Literal["delaunay", "knn", "radius"],
     r_param: Optional[Union[int, float]] = None,
-    k_param: Optional[float] = None,
+    k_param: Optional[int] = None,
 ) -> dict[str, Any]:
     """Builds a spatial graph from points and calculates network metrics.
 
@@ -316,7 +316,7 @@ def _calculate_graph_metrics(
                       parameter. 
     r_param : Optional[Union[int, float]]
         The radius (in pixels) for 'radius' graphs.
-    k_param : Optional[float]
+    k_param : Optional[int]
         The k value for 'knn' graphs. k is the maximum number of nearest
         neighbors to use when building the graph. k is overridden when it
         exceeds the number of nodes for a given input to avoid empty dict
@@ -361,9 +361,9 @@ def _calculate_graph_metrics(
     if method == "radius":
         tree = KDTree(points)
         # gather point pairs from tree with radius param
-        pairs = list(tree.query_pairs(r=r_param))
+        pairs = tree.query_pairs(r=r_param, output_type='ndarray')
         # if pairs exist, find difference between pairs of points
-        if pairs:
+        if len(pairs) != 0:
             diff = np.diff(points[pairs], axis=1)
             # calculate the euclidean distance between pairs of points 
             dist = np.linalg.norm(diff, axis=2)
@@ -765,8 +765,8 @@ def full_analysis(
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph topology method ('delaunay', 'radius', 'knn').
     r_param : Optional[Union[int, float]]
-        The radius for 'radius' graphs.
-    k_param : Optional[float]
+        The radius (in pixels) for 'radius' graphs.
+    k_param : Optional[int]
         The k value for 'knn' graphs. k is the maximum number of nearest
         neighbors to use when building the graph. k is overridden when it
         exceeds the number of nodes for a given input to avoid empty dict
@@ -814,7 +814,7 @@ def full_analysis(
             per_img_df, comp_df, cols_to_add=cols_to_add, merge_key="UniqueID"
         )
 
-    # determine which df columns on which to aggregate statistics (user specified
+    # determine the df columns on which to aggregate statistics (user specified
     # or default) and which columns to preserve without aggregating
     final_group_cols = group_cols or ["Group", "Label", "Time", "Class"]
     final_carry_cols = carry_over_cols or []

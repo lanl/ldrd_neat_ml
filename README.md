@@ -35,10 +35,14 @@ information related to the experimental setup and data collection including
 phase separation ground-truth labels and composition weight percentages;
 the paths for storing per-image and aggregate metrics. The user also provides
 a choice of method for calculating graph-based metrics of bubble connectivity
-(`knn`, `radius` or `delaunay`). Optionally, the user can also provide the
-column names on which to group the aggregate metrics during analysis.
-The same per-image and aggregate metrics are calculated for both detection
-methods (OpenCV and BubbleSAM).
+(`knn`, `radius` or `delaunay`). With `graph_method == knn`, the user must provide
+a `k_param` integer value denoting the number of nearest neighbors to use for
+building the graph. With `graph_method == radius`, the user must provide an
+`r_param` integer or float value denoting the radius in pixels to search
+for neighboring nodes with which to build the graph. Optionally, the user
+can also provide the column names on which to group the aggregate metrics
+during analysis. The same per-image and aggregate metrics are calculated for
+both detection methods (OpenCV and BubbleSAM).
 
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
@@ -150,7 +154,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect,analysis`
+`python run_workflow.py --config <YAML file> --steps detect,analysis (i.e. all)` 
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
