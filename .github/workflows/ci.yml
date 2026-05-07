@@ -1,6 +1,8 @@
 name: Base CI
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
     branches: [ main, nidhin_train_inference_rebase ]
 
