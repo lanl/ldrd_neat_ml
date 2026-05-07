@@ -2,9 +2,9 @@ name: Base CI
 
 on:
   push:
-    branches: [ main, nidhin_data_analysis_backup ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, nidhin_data_analysis_backup ]
+    branches: [ main, nidhin_train_inference_rebase ]
 
 jobs:
   test:

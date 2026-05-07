@@ -110,6 +110,7 @@ def get_path_structure(
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
         paths["roc_png"] = infer_dir / "roc.png"
+        paths["pr_png"] = infer_dir / "pr_png"
 
     return paths
 
@@ -526,6 +527,7 @@ def stage_run_inference_and_plot(
             target=target,
             exclude_cols=exclude_cols,
             roc_png=paths["roc_png"],
+            pr_png=paths["pr_png"],
             pred_csv=paths["pred_csv"],
         )
 

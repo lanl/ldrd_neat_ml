@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import logging
-from .train import preprocess, plot_roc
+from .train import preprocess, plot_roc, plot_pr_curve
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ def run_inference(
     target: Optional[str],
     exclude_cols: list[str],
     roc_png: Path,
+    pr_png: Path,
     pred_csv: Path,
 ) -> None:
     """
@@ -59,6 +60,8 @@ def run_inference(
         List of column names to drop from `data_csv` before preprocessing.
     roc_png : Path
         File path where the ROC curve image (PNG) will be saved.
+    pr_png : Path
+        File path where the PR curve image (PNG) will be saved.
     pred_csv : Path
         File path where the output CSV of predictions will be written.
     """
@@ -76,3 +79,4 @@ def run_inference(
     save_predictions(df, y_prob, pred_csv)
     if target is not None:
         plot_roc(y.to_list(), y_prob, str(roc_png), label="Testing")
+        plot_pr_curve(y.to_list(), y_prob, str(pr_png))

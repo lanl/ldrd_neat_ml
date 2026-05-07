@@ -799,6 +799,7 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
         "pred_csv": out_dir / "pred.csv",
         "phase_dir": out_dir / "phase_plots",
         "roc_png": out_dir / "roc.png",
+        "pr_png": out_dir / "pr_curve.png",
     }
 
     wf.stage_run_inference_and_plot(
@@ -809,7 +810,9 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
         target="ground_truth",
 
     )
-    assert set(os.listdir(out_dir)).issubset(["phase_plots", "roc.png", "pred.csv"])
+    assert set(os.listdir(out_dir)).issubset(
+        ["phase_plots", "roc.png", "pred.csv", "pr_curve.png"]
+    )
     assert set(os.listdir(out_dir / "phase_plots")).issubset(["phase_diagram.png"])
 
 

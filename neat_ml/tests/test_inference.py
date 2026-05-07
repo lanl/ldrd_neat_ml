@@ -55,6 +55,7 @@ def test_run_inference(
         target=target,
         exclude_cols=["id_col"],
         roc_png=tmp_path/"roc.png",
+        pr_png=tmp_path / "pr_curve.png",
         pred_csv=actual_pred_csv_path,
     )
 
@@ -63,6 +64,7 @@ def test_run_inference(
     assert set(["Pred_Prob", "Pred_Label"]).issubset(actual_preds_df.columns)
     if target is not None:
         assert (tmp_path / "roc.png").exists()
+        assert (tmp_path / "pr_curve.png").exists()
 
 
 def test_run_inference_handles_missing_feature(
@@ -87,6 +89,7 @@ def test_run_inference_handles_missing_feature(
         target=None,
         exclude_cols=[],
         roc_png=tmp_path/"roc.png",
+        pr_png=tmp_path / "pr_curve.png",
         pred_csv=actual_pred_csv_path,
     )
 

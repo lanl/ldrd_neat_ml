@@ -6,7 +6,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
+from sklearn.metrics import (
+    average_precision_score,
+    roc_auc_score,
+    roc_curve,
+    precision_recall_curve
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
@@ -319,3 +324,41 @@ def save_model_bundle(
         path,
     )
     logger.info(f"Model bundle saved -> {path}")
+
+
+def plot_pr_curve(
+    y_true: np.ndarray | Sequence[int],
+    y_prob: np.ndarray | Sequence[float],
+    out_png: str,
+    label: str = "Testing",
+) -> None:
+    """
+    Generate and save a Precision Recall Curve.
+
+    Calculates and plots the Precision Recall curve and the
+    the Average Precision score, then saves the figure to a PNG file.
+
+    Parameters
+    ----------
+    y_true : np.ndarray | Sequence[int]
+        The true binary labels.
+    y_prob : np.ndarray | Sequence[float]
+        The predicted probabilities for the positive class.
+    out_png : str
+        The file path where the output PNG image will be saved.
+    label : str, optional
+        The label for the PR curve in the plot title, by 
+        default "Testing".
+    """
+    precision, recall, _ = precision_recall_curve(y_true, y_prob)
+    avg_precision = average_precision_score(y_true, y_prob)
+    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    ax.plot(recall, precision, lw=2, label=f"Average Precision={avg_precision:.3f}")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title(f"Precision Recall Curve ({label})")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=300)
+    plt.close()
+    logger.info(f"Precision-Recall curve saved -> {out_png}")
