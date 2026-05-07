@@ -133,8 +133,8 @@ def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
 def test_plot_pr_curve(tmp_path: Path, baseline_dir):
     y_true = np.array([0, 0, 1, 1, 0, 1])
     y_prob = np.array([0.1, 0.4, 0.35, 0.8, 0.2, 0.6])
-    expected_image_path = baseline_dir/"expected_pr_curve.png"
-    actual_image_path = tmp_path/"actual_pr_curve.png"
+    expected_image_path = baseline_dir / "expected_pr_curve.png"
+    actual_image_path = tmp_path / "actual_pr_curve.png"
     plot_pr_curve(y_true, y_prob, out_png=str(actual_image_path), label="Test")
     result = compare_images(expected_image_path, actual_image_path, tol=1e-4) # type: ignore[call-overload]
     assert result is None

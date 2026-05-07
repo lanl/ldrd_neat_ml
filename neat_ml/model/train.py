@@ -347,13 +347,13 @@ def plot_pr_curve(
     out_png : str
         The file path where the output PNG image will be saved.
     label : str, optional
-        The label for the PR curve in the plot legend, by 
+        The label for the PR curve in the plot title, by 
         default "Testing".
     """
     precision, recall, _ = precision_recall_curve(y_true, y_prob)
     avg_precision = average_precision_score(y_true, y_prob)
     fig, ax = plt.subplots(1, 1, figsize=(4, 4))
-    ax.plot(recall, precision, lw=2, label=f"avg_precision_score={avg_precision:.3f}")
+    ax.plot(recall, precision, lw=2, label=f"Average Precision={avg_precision:.3f}")
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     ax.set_title(f"Precision Recall Curve ({label})")
