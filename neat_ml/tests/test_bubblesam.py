@@ -156,7 +156,6 @@ def test_bubblesam_detection_generates_pngs(
     )
     saved_df = pd.read_parquet(
         out_dir / "circles_masks_filtered.parquet.gzip",
-        engine="fastparquet",
     )
     saved_df["bbox"] = saved_df["bbox"].apply(tuple)
     saved_df['contour'] = saved_df['contour'].apply(
@@ -318,3 +317,25 @@ def test_run_bubblesam_model_cfg_error():
     """
     with pytest.raises(ValueError, match="Must provide model configuration"):
         run_bubblesam(pd.DataFrame(), Path("output"), detection_cfg={})
+
+def test_bubblesam_contours():
+    """
+    test that running `analyze_and_filter_masks` generates a dataframe with
+    only a single contour per detection and without background areas
+    """
+    # create two segmentation maps, one that takes up the whole image (background)
+    # and one that has two segmented areas (one smaller than the other)
+    seg = np.ones((100, 100)).astype(bool)
+    seg2 = np.zeros((100, 100)).astype(bool)
+    seg2[50:60, 50:60] = True
+    seg2[40:45, 40:45] = True
+    input_df = pd.DataFrame({"segmentation": [seg, seg2]})
+    # call `analyze_and_filter_masks` to return filtered dataframe
+    # (the circularity of a perfect square is ~0.8, so lower the
+    # circularity threshold so that the background only gets filtered
+    # out by the bounding box area)
+    df = analyze_and_filter_masks(input_df, 25, 0.7, device="cpu")
+    # assert that there is only a single dataframe row after filtration
+    # corresponding to the larger of the two segmented areas from `seg2`
+    assert df.bbox.item() == (50, 50, 60, 60)
+    assert df.contour.item().shape == (36, 2)
