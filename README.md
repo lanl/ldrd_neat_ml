@@ -33,7 +33,11 @@ the `yaml` file provides the necessary paths for finding the detection parquet
 files; the user generated composition csv file that stores per-image sample
 information related to the experimental setup and data collection including
 phase separation ground-truth labels and composition weight percentages;
-the paths for storing per-image and aggregate metrics. The user also provides
+the paths for storing per-image and aggregate metrics. The composition csv
+must contain two required columns, 1. "Phase_Separation", which stores the user
+provided labels of phase separation status that are used for downstream tasks;
+2. "Group", which are unique labels that are used to aggregate per-image metrics
+across images that were taken from the same imaging well. The user also provides
 a choice of method for calculating graph-based metrics of bubble connectivity
 (`knn`, `radius` or `delaunay`). With `graph_method == knn`, the user must provide
 a `k_param` integer value denoting the number of nearest neighbors to use for

@@ -800,6 +800,7 @@ def full_analysis(
 
     # re-order df columns to put the file information first
     id_cols = ["image_name", "Offset", "Position", "Label", "Class", "Time", "UniqueID"]
+    id_cols = [c for c in id_cols if c in per_img_df.columns]
     ordered_cols = id_cols + [c for c in per_img_df.columns if c not in id_cols]
     per_img_df = per_img_df[ordered_cols]
     per_image_csv.parent.mkdir(parents=True, exist_ok=True)
