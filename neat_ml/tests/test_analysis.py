@@ -404,7 +404,8 @@ def test_process_parquet_files_errors(
     with pytest.raises(err, match=err_msg):
         da._process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
 
-@pytest.mark.parametrize("mode, tiff_name", 
+@pytest.mark.parametrize(
+    "mode, tiff_name, time_label, exp_agg_cols, exp_per_cols", 
     [
         (
             "OpenCV",
@@ -412,6 +413,7 @@ def test_process_parquet_files_errors(
                 'offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9'
                 '-4b1c-b304-ea40e77f0780_bubble_data.tiff'
             ),
+            "1st", 94, 29,
         ),
         (
             "BubbleSAM",
@@ -419,6 +421,15 @@ def test_process_parquet_files_errors(
                 'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
                 '-4285-824d-e82eafedce90_masks_filtered.tiff'
             ),
+            "1st", 94, 29,
+        ),
+        (
+            "BubbleSAM",
+            (
+                'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
+                '-4285-824d-e82eafedce90_masks_filtered.tiff'
+            ),
+            None, 93, 28
         )
 
     ]
@@ -427,11 +438,16 @@ def test_full_analysis_pipeline(
     mock_dir,
     mode,
     tiff_name,
+    time_label,
+    exp_agg_cols,
+    exp_per_cols,
 ):
     input_dir, output_dir, comp_csv = mock_dir
     per_image_csv = output_dir / f"per_image_{mode}.csv"
     aggregate_csv = output_dir / f"aggregate_{mode}.csv"
     group_cols = ["Group", "Label", "Time", "Class", "Offset"]
+    if time_label is None:
+        group_cols.remove("Time") 
 
     da.full_analysis(
         input_dir=input_dir,
@@ -442,7 +458,7 @@ def test_full_analysis_pipeline(
         r_param=30,
         composition_csv=comp_csv,
         cols_to_add=["Phase_Separation", "Group"],
-        time_label="1st",
+        time_label=time_label,
         group_cols=group_cols,
         carry_over_cols=["Phase_Separation"],
     )
@@ -452,11 +468,14 @@ def test_full_analysis_pipeline(
     df_agg = pd.read_csv(aggregate_csv)
     df_per = pd.read_csv(per_image_csv)
     assert df_per["image_name"].item() == tiff_name
-    assert df_agg.shape == (1, 94)
-    assert df_per.shape == (1, 29)
+    assert df_agg.shape == (1, exp_agg_cols)
+    assert df_per.shape == (1, exp_per_cols)
     
     assert "Phase_Separation" in df_agg.columns
-    npt.assert_array_equal(df_agg.columns[:5], group_cols)
+    time_value = df_per.get("Time")
+    time_value = time_value.item() if time_value is not None else time_value
+    assert time_label == time_value
+    npt.assert_array_equal(df_agg.columns[:len(group_cols)], group_cols)
     # numerical checks on the per-image df
     npt.assert_allclose(df_per["std_blob_area"], 101.57799958652464)
     npt.assert_allclose(df_per["graph_degree_std"], 0.8717797887081347)

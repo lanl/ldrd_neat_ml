@@ -30,7 +30,7 @@ def as_steps_set(
     ----------
     steps_str : str
         Comma-separated steps; accepts 'detect', 'analysis', 'all'.
-        'all' expands to full pipeline.
+        'all' expands to full pipeline (arguments are case sensitive).
 
     Returns
     -------
@@ -235,9 +235,10 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
 
     # get the user provided input path storing parquet files OR
     # the detection dir where parquets were saved after detection
+    analysis_input_dir = analysis_cfg.get("input_dir")
     input_dir = (
-        analysis_cfg.get("input_dir")
-        or (paths["det_dir"] if "det_dir" in paths and paths["det_dir"] else None)
+        Path(analysis_input_dir) if analysis_input_dir 
+        else (paths["det_dir"] if "det_dir" in paths and paths["det_dir"] else None)
     )
     if not input_dir:
         log.warning(
