@@ -146,7 +146,7 @@ def analyze_and_filter_masks(
         # Using a small margin (2 pixels) to be safe,
         # filter any segmentations with bounding boxes close to the size of the image
         # because SAM-2 can sometimes detect the image background itself.
-        bbox_area = np.prod(rp.bbox[2:])
+        bbox_area = (rp.bbox[2] - rp.bbox[0]) * (rp.bbox[3] - rp.bbox[1])
         max_allowed_area = (h - 2) * (w - 2)
         if (area >= area_threshold and circ >= circularity_threshold
             and bbox_area < max_allowed_area):
@@ -154,7 +154,7 @@ def analyze_and_filter_masks(
             contours, _ = cv2.findContours(binary_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
             # keep only the largest contour in each segmentation area
             # and reshape for plotting
-            max_contour = max(contours, key=cv2.contourArea).squeeze()
+            max_contour = max(contours, key=cv2.contourArea).squeeze(axis=1)
             radius = np.sqrt(area / np.pi)
             euler_number = rp.euler_number
             # output of cucim ``rp`` stores values as objects
