@@ -143,15 +143,16 @@ def _load_df(
         if {"area", "bbox"}.issubset(df.columns):
             # ``bbox`` object is converted to a str before saving parquet
             # in detection module, convert back to list for processing
-            bbox_list = df["bbox"].apply(ast.literal_eval)
-            cy = [(b[0] + b[2]) / 2 for b in bbox_list]
-            cx = [(b[1] + b[3]) / 2 for b in bbox_list]
+            bbox_col = df["bbox"].apply(ast.literal_eval)
+            bbox_arr = np.array(bbox_col.tolist())
+            cy = (bbox_arr[:, 0] + bbox_arr[:, 2]) / 2 
+            cx = (bbox_arr[:, 1] + bbox_arr[:, 3]) / 2 
             out = pd.DataFrame({
                 "center_x": cx, 
                 "center_y": cy,
                 "area": df["area"],
                 "radius": np.sqrt(df["area"] / np.pi),
-                "bbox": bbox_list,
+                "bbox": bbox_col,
             })
             return out
         else:
