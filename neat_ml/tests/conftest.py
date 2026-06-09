@@ -132,13 +132,6 @@ def make_dummy_blobs():
     return _make
 
 @pytest.fixture(scope="session")
-def square_points():
-    """Return four points forming a unit square plus helper arrays."""
-    pts = np.array([[0., 0.], [1., 0.], [1., 1.], [0., 1.]])
-    areas = np.full(4, 1.0)
-    return pts, areas
-
-@pytest.fixture(scope="session")
 def mock_dir(tmp_path_factory, make_dummy_blobs):
     """Creates a mock directory structure for end-to-end pipeline testing."""
     tmp_out_path = tmp_path_factory.mktemp("out")
@@ -173,3 +166,46 @@ def mock_dir(tmp_path_factory, make_dummy_blobs):
     comp_df.to_csv(comp_csv, index=False)
 
     return input_dir, output_dir, comp_csv
+
+
+@pytest.fixture(scope="session")
+def real_blobs():
+    """returns a dataframe of real blob data"""
+    blob_dict = {
+        'center_x': {
+            0: 2220.5,
+            1: 2120.5,
+            2: 2377.0,
+            3: 1998.5,
+            4: 2423.5
+        },
+        'center_y': {
+            0: 921.5,
+            1: 739.5,
+            2: 1098.5,
+            3: 745.5,
+            4: 719.5
+        },
+        'area': {
+            0: 2082.0,
+            1: 655.0,
+            2: 845.0,
+            3: 753.0,
+            4: 808.0
+        },
+        'radius': {
+            0: 25.743372,
+            1: 14.439286,
+            2: 16.400361,
+            3: 15.481839,
+            4: 16.037281
+        },
+        'bbox': {
+            0: [896, 2194, 947, 2247],
+            1: [725, 2106, 754, 2135],
+            2: [1082, 2361, 1115, 2393],
+            3: [730, 1983, 761, 2014],
+            4: [704, 2407, 735, 2440]
+        }
+    }
+    return pd.DataFrame(blob_dict)
