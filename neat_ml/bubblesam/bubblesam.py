@@ -277,6 +277,7 @@ def bubblesam_detection(
     save_filtered_df["contour"] = save_filtered_df["contour"].apply(list)
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
+        compression="gzip",
     )
 
     if debug:
