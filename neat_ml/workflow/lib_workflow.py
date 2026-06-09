@@ -30,21 +30,18 @@ def as_steps_set(
     ----------
     steps_str : str
         Comma-separated steps; accepts 'detect', 'analysis', 'all'.
-        'all' expands to full pipeline (arguments are case sensitive).
+        'all' expands to full pipeline.
 
     Returns
     -------
     list[str]
         List of normalized steps.
     """
-    raw = [s.strip() for s in steps_str.split(",") if s.strip()]
+    raw = [s.strip().lower() for s in steps_str.split(",") if s.strip()]
     if raw == ["all"]:
         return ["detect", "analysis"]
 
-    out = []
-    for s in raw:
-        out.append(s.lower())
-    return out
+    return raw
 
 def get_path_structure(
     roots: dict[str, str],

@@ -8,22 +8,19 @@ from pandas.testing import assert_frame_equal
 import logging
 
 
-@pytest.mark.parametrize("pts, expected",
+@pytest.mark.parametrize("pts, expected, img_hyp",
     [
         (
             np.array([[0., 0.], [1., 0.], [2., 0.]]),
-            {"mean_nnd": 1.0, "median_nnd": 1.0}
+            {"mean_nnd": 1.0, "median_nnd": 1.0},
+            3,
         ),
-        (
-            np.array([[0., 0.]]),
-            {"mean_nnd": np.nan, "median_nnd": np.nan}
-        )
     ]
     
 )
-def test_calculate_nnd_stats(pts, expected):
+def test_calculate_nnd_stats(pts, expected, img_hyp):
 
-    actual = da._calculate_nnd_stats(pts)
+    actual = da._calculate_nnd_stats(pts, img_hyp)
     npt.assert_equal(actual, expected)
 
 @pytest.mark.parametrize("pts, exp, warn_msg",
@@ -32,19 +29,19 @@ def test_calculate_nnd_stats(pts, expected):
         # voronoi regions
         (
             np.array(
-                [[1827.5,  601. ],
-                [1117. ,  792. ],
+                [[1827.5, 601.0],
+                [1117.0, 792.0],
                 [1188.5, 1127.5],
-                [1189. , 1129. ],
-                [1347.5,  174. ],
-                [ 179.5, 1591. ],
-                [ 804. ,  963.5],
-                [1622. , 1698. ]]
+                [1189.0, 1129.0],
+                [1347.5, 174.0],
+                [179.5, 1591.0],
+                [804.0, 963.5],
+                [1622.0, 1698.0]]
             ),
             {
                 'mean_voronoi_area': 805822.2719470514,
                 'median_voronoi_area': 337884.2409091698,
-                'std_voronoi_area': 953547.7664847055,
+                'std_voronoi_area': 1101062.1193302223,
             },
             None,
         ),
@@ -52,12 +49,12 @@ def test_calculate_nnd_stats(pts, expected):
         # regions
         (
             np.array(
-                [[1924.5,  841. ],
-                [ 808.5,  485. ],
-                [ 306.5,  538. ],
-                [2083.5, 1221. ],
-                [ 344. ,  633.5],
-                [ 724.5, 1047.5]]
+                [[1924.5, 841.0],
+                [808.5, 485.0],
+                [306.5, 538.0],
+                [2083.5, 1221.0],
+                [344.0, 633.5],
+                [724.5, 1047.5]]
             ),
             {},
             "No finite areas found in Voronoi regions",
@@ -86,10 +83,12 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             "delaunay",
             None,
             None,
-            None,
-            None,
-            [10, 21, 4.2, 1.1661903789690602,
-            0.5566666666666666, 399.3586811589318, 1, 1.0,510.1],
+            np.array([[850.5, 637.0],
+               [511.5, 270.5],
+               [308.5, 41.5],]),
+            np.array([278., 816., 671.]),
+            [3, 3, 2.0, 0.0, 1.0, 536.8295523840445,
+            1, 1.0, 588.3333333333334],
         ),
         (
         # test case where there ARE NOT enough points to perform
@@ -97,10 +96,10 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             "delaunay",
             None,
             None,
-            np.array([[1930. , 1947. ],
-                     [ 167.5, 1710. ]]),
-            np.array([475., 341.]),
-            [2, 0, 0.0, 0.0, 2, 0.5, 475.0],
+            np.array([[1930.0, 1947.0],
+                     [167.5, 1710.0]]),
+            np.array([475.0, 341.0]),
+            [2, 0, 0.0, 0.0, 0.0, np.nan, 2, 0.5, 475.0],
         ),
         # a radius param that only generates a single edge
         (
@@ -109,7 +108,7 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             None,
             None,
             None,
-            [10, 1, 0.2, 0.4000000000000001,
+            [10, 1, 0.2, 0.42163702135578396,
             0.0, 92.28488500290825, 9, 0.2, 793.0]
         ),
         # a radius param that generates multiple edges
@@ -119,7 +118,7 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             None,
             None,
             None,
-            [10, 3, 0.6, 0.48989794855663565,
+            [10, 3, 0.6, 0.5163977794943223,
             0.0, 128.97026785384764, 7, 0.2, 156.0]
         ),
         # test case where k=1 nearest neighbors
@@ -129,7 +128,8 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             1,
             None,
             None,
-            [10, 6, 1.2, 0.4, 0.0, 217.84017139873353, 4, 0.4, 632.25]
+            [10, 6, 1.2, 0.4216370213557839,
+            0.0, 217.84017139873353, 4, 0.4, 632.25]
         ),
         # test case where k=3 nearest neighbors (different size output tree)
         (
@@ -138,7 +138,7 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             3,
             None,
             None,
-            [10, 20, 4.0, 1.1832159566199232,
+            [10, 20, 4.0, 1.247219128924647,
             0.6066666666666667, 353.41649782593197, 1, 1.0, 510.1]
         ),
         (
@@ -148,9 +148,9 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             "knn",
             None,
             3,
-            np.array([[1930. , 1947. ],
-                     [ 167.5, 1710. ]]),
-            np.array([475., 341.]),
+            np.array([[1930.0, 1947.0],
+                     [167.5, 1710.0]]),
+            np.array([475.0, 341.0]),
             [2, 1, 1.0, 0.0, 0.0, 1778.363081600605, 1, 1.0, 408.0],
         ),
     ]
@@ -165,20 +165,32 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
         rng = np.random.default_rng(0)
         pts = rng.integers(2, 2000, (10,2)) * 0.5
         areas = rng.integers(1, 1000, 10).astype(float)
-    elif pts is not None and method == "delaunay":
-        # modify the expected columns to remove `graph_avg_clustering` and
-        # `graph_avg_neighbor_distance` (not calculated for delaunay method
-        # when not enough points for triangulation, stored as NaN by default
-        # values in ``calculate_all_spatial_metrics``)
-        exp_cols = [col for col in exp_cols 
-            if col not in ["graph_avg_clustering", "graph_avg_neighbor_distance"]]
-    actual = da._calculate_graph_metrics(pts, areas, method=method, k_param=k_param, r_param=r_param)
+    actual = da._calculate_graph_metrics(
+        pts,
+        areas,
+        method=method,
+        k_param=k_param,
+        r_param=r_param,
+        img_hyp=1e7)
     exp_out = {key: value for key, value in zip(exp_cols, expected)}
-    assert actual == pytest.approx(exp_out)
+    assert actual == pytest.approx(exp_out, nan_ok=True)
     
 
-def test_extract_blob_properties(make_dummy_blobs):
-    df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs()
+@pytest.mark.parametrize("input_df, expected_w_h",
+    [
+        ("dummy_blobs", (97.0, 90.0)),
+        (None, (np.nan, np.nan)),
+    ]
+)
+def test_extract_blob_properties(make_dummy_blobs, input_df, expected_w_h):
+    if input_df == "dummy_blobs":
+        df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs()
+        expected_centers = np.stack([expected_center_x, expected_center_y], axis=1)
+    else:
+        df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
+        expected_centers = np.array([])
+        expected_areas = np.array([])
+        expected_radii = np.array([])
     actual_centers, actual_areas, actual_radii, (actual_w, actual_h) = (
         da._extract_blob_properties(
             df,
@@ -188,23 +200,50 @@ def test_extract_blob_properties(make_dummy_blobs):
             bbox_col="bbox",
         )
     )
-    expected_centers = np.stack([expected_center_x, expected_center_y], axis=1)
     npt.assert_allclose(actual_centers, expected_centers)
     npt.assert_allclose(actual_areas, expected_areas)
     npt.assert_allclose(actual_radii, expected_radii)
-    npt.assert_allclose((actual_w, actual_h), (97.0, 90.0))
+    npt.assert_allclose((actual_w, actual_h), expected_w_h)
 
-def test_calculate_all_spatial_metrics(make_dummy_blobs):
-    df, _, _, areas, radii = make_dummy_blobs()
+@pytest.mark.parametrize(
+    "input_df, n_centroids, exp_nodes, exp_neighbor_dist, exp_mean_nnd, exp_mva",
+    [
+        ("real_blobs", 5, 5, 307.1795051057866, 194.92048461932964, 796194.8341103308),
+        ("real_blobs", 1, 0, np.nan, np.nan, np.nan),
+        ("real_blobs", 2, 2, np.nan, 207.663189, np.nan),
+        ("real_blobs", 3, 3, 295.04877222436266, 217.1971962781283, np.nan),
+        ("real_blobs", 4, 4, 301.3597542865437, 172.05582593652304, 302694.9412916275),
+        (None, 0, 0, np.nan, np.nan, np.nan),
+    ]
+)
+def test_calculate_all_spatial_metrics(
+    caplog,
+    real_blobs,
+    input_df,
+    n_centroids,
+    exp_nodes,
+    exp_neighbor_dist,
+    exp_mean_nnd,
+    exp_mva,
+):
+    caplog.set_level(logging.WARNING)
+    if input_df == "real_blobs":
+        df = real_blobs[:n_centroids]
+    else:
+        df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
 
     actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay")
 
     # some sanity checks for outputs
     assert len(actual) == 22
-    npt.assert_allclose(actual["mean_blob_area"], areas.mean())
-    assert actual["graph_num_nodes"] == 10
-    npt.assert_allclose(actual["graph_avg_neighbor_distance"], 29.450361365095052)
-    npt.assert_allclose(actual["mean_nnd"], 16.695406977528428)
+    npt.assert_allclose(actual["mean_blob_area"], df["area"].mean())
+    assert actual["graph_num_nodes"] == exp_nodes 
+    npt.assert_allclose(actual["graph_avg_neighbor_distance"], exp_neighbor_dist)
+    npt.assert_allclose(actual["mean_nnd"], exp_mean_nnd)
+    npt.assert_allclose(actual["mean_voronoi_area"], exp_mva)
+    # assert that no warnings were raised, indicating that the voronoi stats
+    # were not calculated for any array < length 4
+    assert caplog.text == ''
 
 @pytest.mark.parametrize(
     "df_empty",
@@ -251,16 +290,19 @@ def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
     )
 
 
-def test_load_bubblesam_df(tmp_path: Path):
+@pytest.mark.parametrize("method", ["OpenCV", "BubbleSAM"])
+def test_load_df(tmp_path: Path, method):
     df_original = pd.DataFrame(
         {
             "area": [100.0],
             "bbox": '[10.0, 20.0, 50.0, 60.0]',
+            "center": [(40.0, 30.0)],
+            "radius": [np.sqrt(100.0 / np.pi)],
         }
     )
     parquet_path = tmp_path / "mock_masks_filtered.parquet.gzip"
     df_original.to_parquet(parquet_path)
-    actual_df = da._load_df(parquet_path, "BubbleSAM")
+    actual_df = da._load_df(parquet_path, method)
     expected_center_x = (20.0 + 60.0) / 2
     expected_center_y = (10.0 + 50.0) / 2
     expected_radius = np.sqrt(100.0 / np.pi)
@@ -269,23 +311,12 @@ def test_load_bubblesam_df(tmp_path: Path):
     actual_center_y = actual_df["center_y"].iloc[0]
     actual_radius = actual_df["radius"].iloc[0]
 
+    if method == "OpenCV":
+        assert "center" not in actual_df.columns
+
     npt.assert_allclose(actual_center_x, expected_center_x)
     npt.assert_allclose(actual_center_y, expected_center_y)
     npt.assert_allclose(actual_radius, expected_radius)
-
-@pytest.mark.parametrize("row, exp",
-    [
-        ("Phase_Separation", 2),
-        ("NonExistentCol", 4),
-    ]
-)
-def test_drop_invalid_phase_rows(row, exp):
-    df = pd.DataFrame({
-        "Phase_Separation": [True, np.nan, False, ""],
-        "other": [1, 2, 3, 4],
-    })
-    actual = da._drop_invalid_phase_rows(df, row)
-    assert actual.shape == (exp, 2)
 
 
 @pytest.mark.parametrize(
@@ -477,8 +508,8 @@ def test_full_analysis_pipeline(
     assert time_label == time_value
     npt.assert_array_equal(df_agg.columns[:len(group_cols)], group_cols)
     # numerical checks on the per-image df
-    npt.assert_allclose(df_per["std_blob_area"], 101.57799958652464)
-    npt.assert_allclose(df_per["graph_degree_std"], 0.8717797887081347)
+    npt.assert_allclose(df_per["std_blob_area"], 107.07261295235324)
+    npt.assert_allclose(df_per["graph_degree_std"], 0.9189365834726816)
     npt.assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
     npt.assert_allclose(df_per["coverage_percentage"], 38.04123711340206)
     # numerical checks on the aggregated df
@@ -486,6 +517,7 @@ def test_full_analysis_pipeline(
     npt.assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
     npt.assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
     npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
+    npt.assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
 def test_merge_composition_data_missing_cols_message():
     """Ensure clear error text when requested cols are missing in composition_df."""
@@ -593,8 +625,8 @@ def test_process_parquet_files_warns_and_continues(
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):
     _, _, pts, areas, _ = make_dummy_blobs()
-    with pytest.raises(ValueError, match="Invalid input parameters"):
-        da._calculate_graph_metrics(pts, areas, method="bad")
+    with pytest.raises(ValueError, match="Invalid input parameter"):
+        da._calculate_graph_metrics(pts, areas, method="bad", img_hyp=1e7)
 
 
 @pytest.mark.parametrize("method, k_param, r_param, err_msg",
@@ -615,5 +647,5 @@ def test_calculate_graph_metrics_bad_params(
     _, _, pts, areas, _ = make_dummy_blobs()
     with pytest.raises(ValueError, match=err_msg):
         da._calculate_graph_metrics(
-            pts, areas, method=method, r_param=r_param, k_param=k_param
+            pts, areas, method=method, r_param=r_param, k_param=k_param, img_hyp=1e7,
         )

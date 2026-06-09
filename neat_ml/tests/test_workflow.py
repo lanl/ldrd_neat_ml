@@ -18,7 +18,7 @@ import neat_ml.workflow.lib_workflow as wf
         ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
         ("", []),  # empty input -> empty list
         (", ,", []),  # only commas/whitespace -> empty list
-        ("ALL", ["all"]),  # case-sensitive: 'ALL' does not expand
+        ("ALL", ["detect", "analysis"]),  # 'ALL' expands to full pipeline
         ("detect,", ["detect"]),  # trailing comma ignored
         ("X,DETECT", ["x", "detect"]),  # unknown steps pass through lowercased
     ],
@@ -467,13 +467,14 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     assert df_per.shape == (1, 29)
     assert df_agg.shape == (1, 91)
     # spot checks on ``df_per`` outputs
-    assert_allclose(df_per["std_blob_area"], 101.57799958652464)
-    assert_allclose(df_per["graph_degree_std"],  0.8944271909999159)
+    assert_allclose(df_per["std_blob_area"], 107.07261295235324)
+    assert_allclose(df_per["graph_degree_std"], 0.942809)
     assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
     # spot checks on ``df_agg`` outputs
     assert_allclose(df_agg["median_blob_area_max"], 358.0)
     assert_allclose(df_agg["graph_avg_clustering_median"], 0.8968253968253969)
     assert_allclose(df_agg["coverage_percentage_max"], 38.04123711340206)
+    assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
 
 @pytest.mark.parametrize("mode, input_exist, warn_msg",
