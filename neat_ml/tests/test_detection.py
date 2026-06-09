@@ -72,7 +72,7 @@ def test_detect_single_image_processed(tmp_path: Path, reference_images: tuple):
     num_blobs, median_r, bubble_data = _detect_single_image(img_path)
     assert num_blobs == 1735
     assert_allclose(median_r, 3.623063564300537)
-    assert bubble_data.shape == (1735, 5)
+    assert bubble_data.shape == (1735, 6)
 
 
 def test_run_opencv_out_dir_error():

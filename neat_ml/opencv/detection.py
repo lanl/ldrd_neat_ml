@@ -36,7 +36,8 @@ def _detect_single_image(
         bubble_data : pd.DataFrame
             DataFrame with one row per detected blob, each containing:
             - 'bubble_number' (int)
-            - 'center' (tuple[float, float])
+            - 'center_x' (float)
+            - 'center_y' (float)
             - 'radius' (float)
             - 'area' (float)
             - 'bbox' (tuple[int, int, int, int])
@@ -67,15 +68,16 @@ def _detect_single_image(
     keypoints = detector.detect(image)
 
     bubble_data = pd.DataFrame(index=range(len(keypoints)),
-        columns=["bubble_number", "center", "radius", "area", "bbox"]).fillna(np.nan)
-    bubble_data[['center', 'bbox']] = bubble_data[['center', 'bbox']].astype('object')
+        columns=["bubble_number", "center_x", "center_y", "radius", "area", "bbox"]).fillna(np.nan)
+    bubble_data[['bbox']] = bubble_data[['bbox']].astype('object')
     for idx, kp in enumerate(keypoints):
         cx, cy = kp.pt
         r = kp.size / 2.0
         bbox = (cx - r, cy - r, cx + r, cy + r)
         bubble_data_row = {
             "bubble_number": idx + 1,
-            "center": (cx, cy),
+            "center_x": cx,
+            "center_y": cy,
             "radius": r,
             "area": np.pi * r**2,
             "bbox": bbox,
