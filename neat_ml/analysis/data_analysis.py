@@ -166,35 +166,6 @@ def _load_df(
 
     return df
 
-def _drop_invalid_phase_rows(
-    df: pd.DataFrame, 
-    phase_col: Literal["Phase_Separation"]
-) -> pd.DataFrame:
-    """
-    Removes rows where the specified column denoting phase
-    separation status of the data point is NaN or empty. Used
-    for instances where a phase status label was not provided
-    for any of the per-image data entries that are used to
-    generate the aggregated dataset, such that every data point
-    to be used for subsequent downstream steps has a ground-truth
-    label. 
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The input DataFrame to be filtered.
-    phase_col : Literal["Phase_Separation"]
-        The name of the column storing the phase separation status
-        label (0 for single-phase or 1 for two-phase)
-
-    Returns
-    -------
-    pd.DataFrame
-        A filtered DataFrame with invalid rows removed.
-    """
-    if phase_col not in df.columns:
-        return df
-    return df.dropna(subset=[phase_col])
 
 def _calculate_nnd_stats(
     points: np.ndarray,
@@ -403,7 +374,7 @@ def _calculate_graph_metrics(
         # knn array so that we can group the nodes with each of their
         # nearest neighbors
         node_idx = np.broadcast_to(idxs[:, [0]], idxs[:, 1:].shape)
-        # group the node, neighbor pairs then stack the sorted
+        # group the node, neighbor pairs then stack
         # pairs with their respective distances
         pairs_idx = np.column_stack((node_idx.ravel(), idxs[:, 1:].ravel()))
         pairs_dists = np.column_stack((pairs_idx, dists[:, 1:].ravel()))
