@@ -86,7 +86,7 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             np.array([[850.5, 637.0],
                [511.5, 270.5],
                [308.5, 41.5],]),
-            np.array([278., 816., 671.]),
+            np.array([278.0, 816.0, 671.0]),
             [3, 3, 2.0, 0.0, 1.0, 536.8295523840445,
             1, 1.0, 588.3333333333334],
         ),
@@ -436,7 +436,7 @@ def test_process_parquet_files_errors(
         da._process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
 
 @pytest.mark.parametrize(
-    "mode, tiff_name, time_label, exp_agg_cols, exp_per_cols", 
+    "mode, tiff_name, time_label, phase_label, exp_agg_shape, exp_per_shape", 
     [
         (
             "OpenCV",
@@ -444,7 +444,7 @@ def test_process_parquet_files_errors(
                 'offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9'
                 '-4b1c-b304-ea40e77f0780_bubble_data.tiff'
             ),
-            "1st", 94, 29,
+            "1st", None, (1, 94), (1, 29),
         ),
         (
             "BubbleSAM",
@@ -452,7 +452,7 @@ def test_process_parquet_files_errors(
                 'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
                 '-4285-824d-e82eafedce90_masks_filtered.tiff'
             ),
-            "1st", 94, 29,
+            "1st", None, (1, 94), (1, 29),
         ),
         (
             "BubbleSAM",
@@ -460,9 +460,16 @@ def test_process_parquet_files_errors(
                 'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
                 '-4285-824d-e82eafedce90_masks_filtered.tiff'
             ),
-            None, 93, 28
+            None, None, (1, 93), (1, 28)
+        ),
+        (
+            "BubbleSAM",
+            (
+                'offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd'
+                '-4285-824d-e82eafedce90_masks_filtered.tiff'
+            ),
+            "1st", "NaN", (0, 94), (1, 29)
         )
-
     ]
 )
 def test_full_analysis_pipeline(
@@ -470,8 +477,9 @@ def test_full_analysis_pipeline(
     mode,
     tiff_name,
     time_label,
-    exp_agg_cols,
-    exp_per_cols,
+    phase_label,
+    exp_agg_shape,
+    exp_per_shape,
 ):
     input_dir, output_dir, comp_csv = mock_dir
     per_image_csv = output_dir / f"per_image_{mode}.csv"
@@ -479,6 +487,10 @@ def test_full_analysis_pipeline(
     group_cols = ["Group", "Label", "Time", "Class", "Offset"]
     if time_label is None:
         group_cols.remove("Time") 
+    if phase_label == "NaN":
+        comp_df = pd.read_csv(comp_csv)
+        comp_df["Phase_Separation"] = [np.nan, np.nan]
+        comp_df.to_csv(comp_csv, index=False)
 
     da.full_analysis(
         input_dir=input_dir,
@@ -499,8 +511,8 @@ def test_full_analysis_pipeline(
     df_agg = pd.read_csv(aggregate_csv)
     df_per = pd.read_csv(per_image_csv)
     assert df_per["image_name"].item() == tiff_name
-    assert df_agg.shape == (1, exp_agg_cols)
-    assert df_per.shape == (1, exp_per_cols)
+    assert df_agg.shape == exp_agg_shape
+    assert df_per.shape == exp_per_shape
     
     assert "Phase_Separation" in df_agg.columns
     time_value = df_per.get("Time")
@@ -513,11 +525,12 @@ def test_full_analysis_pipeline(
     npt.assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
     npt.assert_allclose(df_per["coverage_percentage"], 38.04123711340206)
     # numerical checks on the aggregated df
-    npt.assert_allclose(df_agg["mean_blob_area_max"], 332.1)
-    npt.assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
-    npt.assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
-    npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
-    npt.assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
+    if phase_label is None:
+        npt.assert_allclose(df_agg["mean_blob_area_max"], 332.1)
+        npt.assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
+        npt.assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
+        npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
+        npt.assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
 def test_merge_composition_data_missing_cols_message():
     """Ensure clear error text when requested cols are missing in composition_df."""
