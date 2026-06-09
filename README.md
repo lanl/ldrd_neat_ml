@@ -58,6 +58,8 @@ provided as either absolute or relative file paths.
 ```yaml
 roots:
   work: path/to/save/output
+  # include `results` when performing analysis step
+  results: path/to/save/analysis/outputs
 
 datasets:
   - id: name_of_save_folder

@@ -81,12 +81,15 @@ def get_path_structure(
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
     if "analysis" in steps_set:
-        results_root = Path(roots["results"])
         a_cfg = dataset_config.get("analysis", {})
-        default_per  = results_root / ds_id / "per_image.csv"
-        default_agg = results_root / ds_id / "aggregate.csv"
-        paths["per_csv"] = Path(a_cfg.get("per_image_csv", default_per))
-        paths["agg_csv"] = Path(a_cfg.get("aggregate_csv", default_agg))
+        per_img_path = a_cfg.get("per_image_csv")
+        agg_path = a_cfg.get("aggregate_csv")
+        if not (per_img_path or agg_path):
+            results_root = Path(roots["results"])
+            per_img_path = results_root / ds_id / "per_image.csv"
+            agg_path = results_root / ds_id / "aggregate.csv"
+        paths["per_csv"] = Path(per_img_path)
+        paths["agg_csv"] = Path(agg_path)
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)

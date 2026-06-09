@@ -53,6 +53,21 @@ def test_as_steps_set_normalizes_and_expands(
                 }
             },
             ["detect", "analysis"]
+        ),
+        (
+            {"work": ""},
+            {
+                "id": "DS1",
+                "method": "OpenCV",
+                "class": "pos",
+                "time_label": "T01",
+                "analysis": {
+                    "composition_csv": "comp.csv",
+                    "per_image_csv" : "per_img.csv",
+                    "aggregate_csv": "aggregate.csv",
+                }
+            },
+            ["detect", "analysis"]
         )
     ],
 )
@@ -63,7 +78,8 @@ def test_get_path_structure_builds_expected_paths(
     steps,
 ):
     """
-    get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
+    test that `get_path_structure` builds the appropriate paths
+    given the contents of the user input yaml file
     """
     roots = {k: tmp_path / v for k, v in roots.items()}
     paths = wf.get_path_structure(roots, ds, steps)  #type: ignore[arg-type]
@@ -74,8 +90,14 @@ def test_get_path_structure_builds_expected_paths(
 
     # Default analysis outputs
     if "analysis" in steps:
-        assert paths["per_csv"] == tmp_path / "results" / "DS1" / "per_image.csv"
-        assert paths["agg_csv"] == tmp_path / "results" / "DS1" / "aggregate.csv"
+        if roots.get("results"):
+            exp_per = tmp_path / "results" / "DS1" / "per_image.csv"
+            exp_agg = tmp_path / "results" / "DS1" / "aggregate.csv"
+        else:
+            exp_per = Path("per_img.csv")
+            exp_agg = Path("aggregate.csv")
+        assert paths["per_csv"] == exp_per 
+        assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
