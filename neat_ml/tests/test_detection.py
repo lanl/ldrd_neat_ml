@@ -73,6 +73,8 @@ def test_detect_single_image_processed(tmp_path: Path, reference_images: tuple):
     assert num_blobs == 1735
     assert_allclose(median_r, 3.623063564300537)
     assert bubble_data.shape == (1735, 6)
+    exp_cols = ["bubble_number", "center_x", "center_y", "radius", "area", "bbox"]
+    assert list(bubble_data.columns) == exp_cols 
 
 
 def test_run_opencv_out_dir_error():
