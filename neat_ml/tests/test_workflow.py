@@ -38,16 +38,12 @@ def test_as_steps_set_normalizes_and_expands(
     [
         (
             {"work": ""},
-            {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"},
+            {},
             ["detect"],
         ),
         (
             {"work": "", "results": "results"},
             {
-                "id": "DS1",
-                "method": "OpenCV",
-                "class": "pos",
-                "time_label": "T01",
                 "analysis": {
                     "composition_csv": "comp.csv"
                 }
@@ -57,10 +53,6 @@ def test_as_steps_set_normalizes_and_expands(
         (
             {"work": ""},
             {
-                "id": "DS1",
-                "method": "OpenCV",
-                "class": "pos",
-                "time_label": "T01",
                 "analysis": {
                     "composition_csv": "comp.csv",
                     "per_image_csv" : "per_img.csv",
@@ -68,7 +60,17 @@ def test_as_steps_set_normalizes_and_expands(
                 }
             },
             ["detect", "analysis"]
-        )
+        ),
+        (
+            {"work": "", "results": "results"},
+            {
+                "analysis": {
+                    "composition_csv": "comp.csv",
+                    "per_image_csv" : "per_img.csv",
+                }
+            },
+            ["detect", "analysis"]
+        ),
     ],
 )
 def test_get_path_structure_builds_expected_paths(
@@ -81,8 +83,10 @@ def test_get_path_structure_builds_expected_paths(
     test that `get_path_structure` builds the appropriate paths
     given the contents of the user input yaml file
     """
+    base_ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    base_ds.update(ds)
     roots = {k: tmp_path / v for k, v in roots.items()}
-    paths = wf.get_path_structure(roots, ds, steps)  #type: ignore[arg-type]
+    paths = wf.get_path_structure(roots, base_ds, steps)  #type: ignore[arg-type]
 
     base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
     assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
@@ -90,12 +94,13 @@ def test_get_path_structure_builds_expected_paths(
 
     # Default analysis outputs
     if "analysis" in steps:
-        if roots.get("results"):
-            exp_per = tmp_path / "results" / "DS1" / "per_image.csv"
-            exp_agg = tmp_path / "results" / "DS1" / "aggregate.csv"
-        else:
-            exp_per = Path("per_img.csv")
-            exp_agg = Path("aggregate.csv")
+        analysis_dirs = base_ds.get("analysis")
+        per_img_path = analysis_dirs.get("per_image_csv")  # type: ignore[union-attr]
+        agg_path = analysis_dirs.get("aggregate_csv")  # type: ignore[union-attr]
+        exp_per = (Path(per_img_path) if per_img_path is not None
+            else tmp_path / "results" / "DS1" / "per_image.csv")
+        exp_agg = (Path(agg_path) if agg_path is not None
+            else tmp_path / "results" / "DS1" / "aggregate.csv")
         assert paths["per_csv"] == exp_per 
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
