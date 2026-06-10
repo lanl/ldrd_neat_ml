@@ -84,10 +84,12 @@ def get_path_structure(
         a_cfg = dataset_config.get("analysis", {})
         per_img_path = a_cfg.get("per_image_csv")
         agg_path = a_cfg.get("aggregate_csv")
-        if not (per_img_path or agg_path):
-            results_root = Path(roots["results"])
-            per_img_path = results_root / ds_id / "per_image.csv"
-            agg_path = results_root / ds_id / "aggregate.csv"
+        # if either of the paths are missing from the analysis config
+        # assign the default dir to whichever paths are missing
+        if not (per_img_path and agg_path):
+            results_root = Path(roots.get("results"))  # type: ignore[arg-type]
+            per_img_path = per_img_path or results_root / ds_id / "per_image.csv"
+            agg_path = agg_path or results_root / ds_id / "aggregate.csv"
         paths["per_csv"] = Path(per_img_path)
         paths["agg_csv"] = Path(agg_path)
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")

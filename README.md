@@ -58,7 +58,9 @@ provided as either absolute or relative file paths.
 ```yaml
 roots:
   work: path/to/save/output
-  # include `results` when performing analysis step
+  # `results` key is required when providing explicit
+  # `analysis:per_image_csv` or `analysis:aggregate_csv` keys
+  # or else path generation will fail and throw an error
   results: path/to/save/analysis/outputs
 
 datasets:
