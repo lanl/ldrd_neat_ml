@@ -38,8 +38,19 @@ jobs:
         echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
         sudo apt-get update
         sudo apt-get install -y ttf-mscorefonts-installer || true
-        mkdir -p ~/.cache/msttcorefonts/
-        cp /usr/share/fonts/truetype/msttcorefonts/*.ttf ~/.cache/msttcorefonts/
+        # before making the user storage directory, check if the font(s) we need
+        # (i.e. `Arial.ttf` and `Arial_Bold.ttf`) exist/were successfully downloaded
+        # to the root directory to avoid loading an empty directory on a successful
+        # ``cache-hit``
+        if [[ ! -f "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf" || \
+            ! -f "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf" ]]; then
+            echo "Fonts not downloaded successfully."
+            exit 1
+        else
+            echo "Fonts downloaded successfully. Caching fonts..."
+            mkdir -p ~/.cache/msttcorefonts/
+            cp /usr/share/fonts/truetype/msttcorefonts/*.ttf ~/.cache/msttcorefonts/
+        fi
     - name: install fonts from cache
       if: runner.os == 'Linux' && steps.cache-fonts.outputs.cache-hit == 'true'
       run: |
