@@ -131,7 +131,9 @@ def analyze_and_filter_masks(
         if len(props_list) == 0:
             continue
 
-        rp = props_list[0]
+        # take the region properties from the segmentation map with the greatest area
+        rp_areas = [x.area for x in props_list]
+        rp = props_list[np.argmax(rp_areas)]
         area = rp.area
         perimeter = rp.perimeter
         if perimeter == 0:
@@ -141,19 +143,18 @@ def analyze_and_filter_masks(
         major_axis = rp.major_axis_length
         minor_axis = rp.minor_axis_length
         h, w = seg.shape[:2]
-        # Using a small margin (2 pixels) to be safe
+        # Using a small margin (2 pixels) to be safe,
+        # filter any segmentations with bounding boxes close to the size of the image
+        # because SAM-2 can sometimes detect the image background itself.
+        bbox_area = (rp.bbox[2] - rp.bbox[0]) * (rp.bbox[3] - rp.bbox[1])
         max_allowed_area = (h - 2) * (w - 2)
-        if area >= area_threshold and circ >= circularity_threshold:
+        if (area >= area_threshold and circ >= circularity_threshold
+            and bbox_area < max_allowed_area):
             binary_mask = seg.astype('uint8') * 255
             contours, _ = cv2.findContours(binary_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-            # reshape contours for plotting and remove any contours
-            # close to the size of the image because cv2.findContours
-            # can sometimes detect the image edge itself.
-            all_contours = [
-                c.reshape(-1, 2)[:, ::-1]
-                for c in contours
-                if cv2.contourArea(c) < max_allowed_area
-            ]
+            # keep only the largest contour in each segmentation area
+            # and reshape for plotting
+            max_contour = max(contours, key=cv2.contourArea).squeeze(axis=1)
             radius = np.sqrt(area / np.pi)
             euler_number = rp.euler_number
             # output of cucim ``rp`` stores values as objects
@@ -164,7 +165,7 @@ def analyze_and_filter_masks(
                 euler_number = euler_number.item()
             mask_info = {              
                 'bbox': rp.bbox,
-                'contour': all_contours,
+                'contour': max_contour,
                 'major_axis': major_axis,
                 'minor_axis': minor_axis,
                 'area': area,
@@ -202,7 +203,7 @@ def plot_filtered_masks(
     for idx, row in masks_summary_df.iterrows():
         contour = row['contour']
         bbox = row['bbox']
-        ax.plot(contour[0][:, 1], contour[0][:, 0], linewidth=1, color='blue')
+        ax.plot(contour[:, 0], contour[:, 1], linewidth=1, color='blue')
         min_row, min_col, max_row, max_col = bbox
         rect = Rectangle(
             (min_col, min_row),
@@ -271,15 +272,11 @@ def bubblesam_detection(
     )
    
     # save filtered dataframe as parquet file
-    # convert ``contours`` and ``bbox`` columns to list to save as parquet
+    # convert ``contour`` column to list to save as parquet
     save_filtered_df = filtered_df.copy()
-    save_filtered_df["bbox"] = save_filtered_df["bbox"].apply(list)
-    save_filtered_df["contour"] = save_filtered_df["contour"].apply(
-        lambda x: [arr.tolist() if isinstance(arr, np.ndarray) else arr for arr in x]
-    )
+    save_filtered_df["contour"] = save_filtered_df["contour"].apply(list)
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
-        engine="fastparquet",
         compression="gzip",
     )
 

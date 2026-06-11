@@ -24,7 +24,6 @@ dependencies = [
     'pyyaml',
     'pooch',
     'pyarrow',
-    'fastparquet',
     'torch',
     'torchvision',
     'huggingface_hub',
