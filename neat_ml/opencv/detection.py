@@ -40,7 +40,10 @@ def _detect_single_image(
             - 'center_y' (float)
             - 'radius' (float)
             - 'area' (float)
-            - 'bbox' (tuple[int, int, int, int])
+            - 'bbox_xmin' (float)
+            - 'bbox_ymin' (float)
+            - 'bbox_xmax' (float)
+            - 'bbox_ymax' (float)
     """
     image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
     if image is None:
