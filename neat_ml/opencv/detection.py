@@ -69,7 +69,6 @@ def _detect_single_image(
 
     bubble_data = pd.DataFrame(index=range(len(keypoints)),
         columns=["bubble_number", "center_x", "center_y", "radius", "area", "bbox"]).fillna(np.nan)
-    bubble_data[['bbox']] = bubble_data[['bbox']].astype('object')
     for idx, kp in enumerate(keypoints):
         cx, cy = kp.pt
         r = kp.size / 2.0
