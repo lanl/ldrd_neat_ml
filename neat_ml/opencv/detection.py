@@ -36,10 +36,14 @@ def _detect_single_image(
         bubble_data : pd.DataFrame
             DataFrame with one row per detected blob, each containing:
             - 'bubble_number' (int)
-            - 'center' (tuple[float, float])
+            - 'center_x' (float)
+            - 'center_y' (float)
             - 'radius' (float)
             - 'area' (float)
-            - 'bbox' (tuple[int, int, int, int])
+            - 'bbox_xmin' (float)
+            - 'bbox_ymin' (float)
+            - 'bbox_xmax' (float)
+            - 'bbox_ymax' (float)
     """
     image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # type: ignore[call-overload]
     if image is None:
@@ -67,18 +71,31 @@ def _detect_single_image(
     keypoints = detector.detect(image)
 
     bubble_data = pd.DataFrame(index=range(len(keypoints)),
-        columns=["bubble_number", "center", "radius", "area", "bbox"]).fillna(np.nan)
-    bubble_data[['center', 'bbox']] = bubble_data[['center', 'bbox']].astype('object')
+        columns=[
+            "bubble_number",
+            "center_x",
+            "center_y",
+            "radius",
+            "area",
+            "bbox_xmin",
+            "bbox_ymin",
+            "bbox_xmax",
+            "bbox_ymax",
+        ]
+    )
     for idx, kp in enumerate(keypoints):
         cx, cy = kp.pt
         r = kp.size / 2.0
-        bbox = (cx - r, cy - r, cx + r, cy + r)
         bubble_data_row = {
             "bubble_number": idx + 1,
-            "center": (cx, cy),
+            "center_x": cx,
+            "center_y": cy,
             "radius": r,
             "area": np.pi * r**2,
-            "bbox": bbox,
+            "bbox_xmin": cx - r,
+            "bbox_ymin": cy - r,
+            "bbox_xmax": cx + r,
+            "bbox_ymax": cy + r,
         }
         bubble_data.loc[idx] = pd.Series(bubble_data_row)
 
@@ -114,8 +131,9 @@ def _save_debug_overlay(
     overlay = image_rgb.copy()
 
     for index, bubble in bubble_data.iterrows():
-        bbox = bubble["bbox"]
-        x_min, y_min, x_max, y_max = map(int, bbox)
+        x_min, y_min, x_max, y_max = map(
+            int, bubble[["bbox_xmin", "bbox_ymin", "bbox_xmax", "bbox_ymax"]]
+        )
         cv2.rectangle(overlay, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 8))
