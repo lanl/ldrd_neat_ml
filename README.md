@@ -28,21 +28,50 @@ This `yaml` input file is separate from the `yaml` files used by `SAM-2` to
 build the model architecture, e.g. `sam2.1-hiera-l.yaml`, but user provided
 mask parameters override the built-in parameters for the `SAM-2` model.
 
+When performing analysis/metric calculation of the resulting bubble detections,
+the `yaml` file provides the necessary paths for finding the detection parquet
+files; the user generated composition csv file that stores per-image sample
+information related to the experimental setup and data collection including
+phase separation ground-truth labels and composition weight percentages;
+the paths for storing per-image and aggregate metrics. The composition csv
+must contain two required columns, 1. "Phase_Separation", which stores the user
+provided labels of phase separation status that are used for downstream tasks;
+2. "Group", which are unique labels that are used to aggregate per-image metrics
+across images that were taken from the same imaging well. The user also provides
+a choice of method for calculating graph-based metrics of bubble connectivity
+(`knn`, `radius` or `delaunay`). With `graph_method == knn`, the user must provide
+a `k_param` integer value denoting the number of nearest neighbors to use for
+building the graph. With `graph_method == radius`, the user must provide an
+`r_param` integer or float value denoting the radius in pixels to search
+for neighboring nodes with which to build the graph. Optionally, the user
+can also provide the column names on which to group the aggregate metrics
+during analysis. The same per-image and aggregate metrics are calculated for
+both detection methods (OpenCV and BubbleSAM).
+
 The `.yaml` file should follow the format below (examples
 can be found at `neat_ml/data/opencv_detection_test.yaml`
-and `neat_ml/data/bubblesam_detection_test.yaml`).
+`neat_ml/data/bubblesam_detection_test.yaml`, and 
+`neat_ml/data/opencv_analysis_test.yaml`).
 Input paths for `work` and `img_dir` parameters can be
 provided as either absolute or relative file paths.
 
 ```yaml
 roots:
   work: path/to/save/output
+  # `results` key is required when providing explicit
+  # `analysis:per_image_csv` or `analysis:aggregate_csv` keys
+  # or else path generation will fail and throw an error
+  results: path/to/save/analysis/outputs
 
 datasets:
   - id: name_of_save_folder
     method: Supports ``OpenCV`` or ``BubbleSAM`` as input
     class: subfolder_for_image_class
     time_label: subfolder_for_timestamp
+    # `composition_cols` used for step: analysis
+    composition_cols:
+      - "Dextran 500 kg/mol (wt%)"
+      - "PEO 20 kg/mol (wt%)"
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -70,6 +99,20 @@ datasets:
         # for list of available checkpoints
         checkpoint_path: "facebook/sam2.1-hiera-large"
         device: "gpu" OR "cpu"
+    # only include the content below when calling steps: analysis
+    analysis:
+      input_dir: path/to/parquet/files
+      composition_csv: path/to/composition/information
+      per_image_csv: path/to/save/per/image/csv
+      aggregate_csv: path/to/save/aggregate/csv 
+      group_cols:
+        - Group
+        - Label
+        - Time
+        - Class
+      graph_method: radius OR knn OR delaunay
+      k_param: the number of neighbors to use (int; when using ``graph_method == knn``) 
+      r_param: the neighborhood radius in pixels (int, float; when using ``graph_method == radius``)
 ```
 
 ### To run the code on CHICOMA:  
@@ -119,7 +162,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect`
+`python run_workflow.py --config <YAML file> --steps detect,analysis (i.e. all)` 
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -136,6 +179,10 @@ python -c "import pooch; print(pooch.os_cache('test_images'))"
 
 This should process and detect bubbles from the image file `images_raw.tiff` and 
 place the outputs under ``roots:work`` filepath from the `.yaml` file
+
+For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also need to be added to the
+input `yaml` file (a description of which can also be found above). These steps process the output bubble
+detection data and save 'csv' files containing per-image and aggregated metrics.
 
 For information relevant to running the workflow:  
 

@@ -6,23 +6,104 @@ import shutil
 import torch
 import pandas as pd
 from numpy.testing import assert_allclose
+from typing import Literal
 
 import neat_ml.workflow.lib_workflow as wf
 
-
-def test_get_path_structure_builds_expected_paths(tmp_path: Path):
+@pytest.mark.parametrize(
+    ("steps_str", "expected"),
+    [
+        ("all", ["detect", "analysis"]),  # expands to full pipeline
+        (" Detect ,  Analysis ", ["detect", "analysis"]),  # whitespace + case normalization
+        ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
+        ("", []),  # empty input -> empty list
+        (", ,", []),  # only commas/whitespace -> empty list
+        ("ALL", ["detect", "analysis"]),  # 'ALL' expands to full pipeline
+        ("detect,", ["detect"]),  # trailing comma ignored
+        ("X,DETECT", ["x", "detect"]),  # unknown steps pass through lowercased
+    ],
+)
+def test_as_steps_set_normalizes_and_expands(
+    steps_str: Literal['detect', 'analysis', 'detect,analysis', 'all'],
+    expected: list[str]
+) -> None:
     """
-    get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
+    ``as_steps_set``: normalizes case/whitespace, preserves order, expands exact 'all',
+    and passes unknown tokens through in lowercase.
     """
-    roots = {"work": str(tmp_path)}
-    ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    assert wf.as_steps_set(steps_str) == expected
 
-    paths = wf.get_path_structure(roots, ds)
+
+@pytest.mark.parametrize("roots, ds, steps",
+    [
+        (
+            {"work": ""},
+            {},
+            ["detect"],
+        ),
+        (
+            {"work": "", "results": "results"},
+            {
+                "analysis": {
+                    "composition_csv": "comp.csv"
+                }
+            },
+            ["detect", "analysis"]
+        ),
+        (
+            {"work": ""},
+            {
+                "analysis": {
+                    "composition_csv": "comp.csv",
+                    "per_image_csv" : "per_img.csv",
+                    "aggregate_csv": "aggregate.csv",
+                }
+            },
+            ["detect", "analysis"]
+        ),
+        (
+            {"work": "", "results": "results"},
+            {
+                "analysis": {
+                    "composition_csv": "comp.csv",
+                    "per_image_csv" : "per_img.csv",
+                }
+            },
+            ["detect", "analysis"]
+        ),
+    ],
+)
+def test_get_path_structure_builds_expected_paths(
+    tmp_path: Path,
+    roots,
+    ds,
+    steps,
+):
+    """
+    test that `get_path_structure` builds the appropriate paths
+    given the contents of the user input yaml file
+    """
+    base_ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    base_ds.update(ds)
+    roots = {k: tmp_path / v for k, v in roots.items()}
+    paths = wf.get_path_structure(roots, base_ds, steps)  #type: ignore[arg-type]
 
     base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
     assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
     assert paths["det_dir"] == base / "T01_Processed_OpenCV_With_Blob_Data"
 
+    # Default analysis outputs
+    if "analysis" in steps:
+        analysis_dirs = base_ds.get("analysis")
+        per_img_path = analysis_dirs.get("per_image_csv")  # type: ignore[union-attr]
+        agg_path = analysis_dirs.get("aggregate_csv")  # type: ignore[union-attr]
+        exp_per = (Path(per_img_path) if per_img_path is not None
+            else tmp_path / "results" / "DS1" / "per_image.csv")
+        exp_agg = (Path(agg_path) if agg_path is not None
+            else tmp_path / "results" / "DS1" / "aggregate.csv")
+        assert paths["per_csv"] == exp_per 
+        assert paths["agg_csv"] == exp_agg
+        assert paths["composition_csv"] == Path("comp.csv")
 
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
@@ -30,9 +111,10 @@ def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
     roots = {"result": str(tmp_path)}
     ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    steps = ['detect','analysis']
 
     with pytest.raises(KeyError, match="work"):
-        wf.get_path_structure(roots, ds)
+        wf.get_path_structure(roots, ds, steps)  # type: ignore[arg-type]
 
 @pytest.mark.parametrize("ds",
     [
@@ -334,3 +416,159 @@ def test_stage_detect_returns_empty_dataframe(
     
     df_out = wf.stage_detect(ds, paths)
     assert df_out.empty
+
+def test_stage_analyze_features_warns_when_input_dir_unavailable(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    stage_analyze_features: logs warning when neither
+    analysis.input_dir nor paths['det_dir'] is available.
+    """
+    caplog.set_level(logging.WARNING)
+    ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
+    wf.stage_analyze_features(ds, {})
+    assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
+
+
+def test_stage_analyze_features_warns_when_composition_csv_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path
+):
+    """
+    stage_analyze_features: logs warning if composition_csv is provided but does not exist.
+    """
+    caplog.set_level(logging.WARNING)
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    missing_csv = tmp_path / "missing.csv"
+
+    ds = {
+        "id": "AN3",
+        "method": "OpenCV",
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir, 
+            "composition_csv": missing_csv,
+            "graph_method": "knn",
+            "graph_param": 1
+            }
+         }
+    wf.stage_analyze_features(ds, {})
+
+    assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
+
+
+def test_stage_analyze_features_happy_path_calls_full_analysis(
+    tmp_path: Path,
+    mock_dir,
+):
+    """
+    stage_analyze_features: happy path creates output dirs
+    and calls full_analysis with expected args.
+    """
+    input_dir, output_dir, comp_csv = mock_dir
+    out_per = output_dir / "per_image.csv"
+    out_agg = output_dir / "aggregate.csv"
+    
+    ds = {
+        "id": "AN4",
+        "method": "OpenCV",
+        "time_label": "T99",
+        "composition_cols": ["PEG", "Dex"],
+        "graph_method": "knn",
+        "k_param": 7,
+        "analysis": {
+            "input_dir": input_dir,
+            "per_image_csv": out_per,
+            "aggregate_csv": out_agg,
+        },
+    }
+    roots = {"work": input_dir, "results": output_dir}
+    paths = wf.get_path_structure(roots, ds, ["analysis"])
+    wf.stage_analyze_features(ds, paths)
+
+    # assertions about the outputs from calling ``full_analysis``
+    df_per = pd.read_csv(out_per) 
+    df_agg = pd.read_csv(out_agg)
+    assert df_per.shape == (1, 29)
+    assert df_agg.shape == (1, 91)
+    # spot checks on ``df_per`` outputs
+    assert_allclose(df_per["std_blob_area"], 107.07261295235324)
+    assert_allclose(df_per["graph_degree_std"], 0.942809)
+    assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
+    # spot checks on ``df_agg`` outputs
+    assert_allclose(df_agg["median_blob_area_max"], 358.0)
+    assert_allclose(df_agg["graph_avg_clustering_median"], 0.8968253968253969)
+    assert_allclose(df_agg["coverage_percentage_max"], 38.04123711340206)
+    assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
+
+
+@pytest.mark.parametrize("mode, input_exist, warn_msg",
+    [
+        ("OpenCV", True, "No detection outputs matching"),
+        ("BubbleSAM", True, "No detection outputs matching"),
+        ("OpenCV", False, "Analysis input_dir"),
+    ]
+)
+def test_stage_analyze_features_input_dir_warnings(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    mode,
+    input_exist,
+    warn_msg,
+):
+    """
+    Input dir exists but contains no parquet files.
+    """
+    caplog.set_level(logging.WARNING)
+    input_dir = tmp_path / "input_dir"
+    if input_exist:
+        input_dir.mkdir()
+
+    ds = {
+        "id": "AN4",
+        "method": mode,
+        "time_label": "T01",
+        "analysis": {
+            "input_dir": input_dir,
+            "graph_method": "knn",
+            "k_param": 1
+        },
+    }
+    wf.stage_analyze_features(ds, paths={})
+    assert warn_msg in caplog.text
+
+
+@pytest.mark.parametrize("graph_method, graph_param, err_msg",
+    [
+        (None, None, "Please provide `graph_method` input."),
+        ("knn", None, "Graph method:"),
+        ("radius", None, "Graph method:"),
+    ]
+)
+def test_stage_analyze_features_no_graph_method_param_error(
+    tmp_path,
+    graph_method,
+    graph_param,
+    err_msg
+):
+    """
+    assert that a ValueError is raised when no ``graph_method`` is provided
+    OR when ``graph_method`` is "knn" or "radius" and the appropriate parameter is
+    not provided.
+    """
+    ds = {
+        "id": "AN5",
+        "method": "BubbleSAM",
+        "time_label": "T01",
+        "analysis":
+            {
+                "input_dir": tmp_path,
+                "graph_method": graph_method,
+                "k_param": graph_param,
+                "r_param": graph_param,
+            },
+        }
+    with pytest.raises(ValueError, match=err_msg):
+        wf.stage_analyze_features(ds, paths={})
