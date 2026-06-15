@@ -274,9 +274,13 @@ def bubblesam_detection(
     # save filtered dataframe as parquet file
     # convert ``contour`` column to list to save as parquet
     save_filtered_df = filtered_df.copy()
-    save_filtered_df["contour"] = save_filtered_df["contour"].apply(list)
+    save_filtered_df["bbox"] = save_filtered_df["bbox"].apply(list)
+    save_filtered_df["contour"] = save_filtered_df["contour"].apply(
+        lambda x: [arr.tolist() if isinstance(arr, np.ndarray) else arr for arr in x]
+    )
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
+        engine="fastparquet",
         compression="gzip",
     )
 

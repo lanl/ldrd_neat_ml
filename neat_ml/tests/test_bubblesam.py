@@ -156,6 +156,7 @@ def test_bubblesam_detection_generates_pngs(
     )
     saved_df = pd.read_parquet(
         out_dir / "circles_masks_filtered.parquet.gzip",
+        engine="fastparquet",
     )
     saved_df["bbox"] = saved_df["bbox"].apply(tuple)
     saved_df['contour'] = saved_df['contour'].apply(
@@ -318,17 +319,28 @@ def test_run_bubblesam_model_cfg_error():
     with pytest.raises(ValueError, match="Must provide model configuration"):
         run_bubblesam(pd.DataFrame(), Path("output"), detection_cfg={})
 
-def test_bubblesam_contours():
+@pytest.mark.parametrize("seg_params, exp_bbox",
+    [  
+        # a test case where the segmentation contains two disjoint areas
+        ([[50, 60], [40, 45]], (50, 50, 60, 60)),
+        # a test case where the segmentation contains a region that touches
+        # the image boundary at the bottom right corner
+        ([[90, 100]], (90, 90, 100, 100)),
+    ]
+)
+def test_bubblesam_contours(seg_params, exp_bbox):
     """
     test that running `analyze_and_filter_masks` generates a dataframe with
     only a single contour per detection and without background areas
     """
     # create two segmentation maps, one that takes up the whole image (background)
-    # and one that has two segmented areas (one smaller than the other)
+    # and one containing the segmentation map generated using the test case parameters
     seg = np.ones((100, 100)).astype(bool)
     seg2 = np.zeros((100, 100)).astype(bool)
-    seg2[50:60, 50:60] = True
-    seg2[40:45, 40:45] = True
+    for seg_param in seg_params:
+        start = seg_param[0]
+        end = seg_param[1]
+        seg2[start:end, start:end] = True
     input_df = pd.DataFrame({"segmentation": [seg, seg2]})
     # call `analyze_and_filter_masks` to return filtered dataframe
     # (the circularity of a perfect square is ~0.8, so lower the
@@ -336,6 +348,6 @@ def test_bubblesam_contours():
     # out by the bounding box area)
     df = analyze_and_filter_masks(input_df, 25, 0.7, device="cpu")
     # assert that there is only a single dataframe row after filtration
-    # corresponding to the larger of the two segmented areas from `seg2`
-    assert df.bbox.item() == (50, 50, 60, 60)
+    # corresponding to the appropriate segmentation map to keep from `seg2`
+    assert df.bbox.item() == exp_bbox
     assert df.contour.item().shape == (36, 2)
