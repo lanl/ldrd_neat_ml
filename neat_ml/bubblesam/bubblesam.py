@@ -272,7 +272,7 @@ def bubblesam_detection(
     )
    
     # save filtered dataframe as parquet file
-    # convert ``contour`` column to list to save as parquet
+    # convert ``contour`` and ``bbox`` columns to list to save as parquet
     save_filtered_df = filtered_df.copy()
     save_filtered_df["bbox"] = save_filtered_df["bbox"].apply(list)
     save_filtered_df["contour"] = save_filtered_df["contour"].apply(
