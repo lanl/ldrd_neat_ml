@@ -7,7 +7,7 @@ name = "neat_ml"
 version = "0.0.1.dev0"
 dependencies = [
     'numpy>=1.26.3,<=2.1.3',
-    'matplotlib',
+    'matplotlib<3.11.0',  # backwards incompatibility for image comparison tests (see issue #36)
     'xgboost',
     'pandas',
     'scikit-learn',
@@ -28,7 +28,8 @@ dependencies = [
     'torch',
     'torchvision',
     'huggingface_hub',
-    'sam-2 @ git+https://github.com/facebookresearch/sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4'
+    'sam-2 @ git+https://github.com/facebookresearch/sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4',
+    'packaging',
 ]
 [project.optional-dependencies]
 dev = ['mypy',
