@@ -25,7 +25,7 @@ __all__ = [
 
 def preprocess(
     df: pd.DataFrame,
-    target: str,
+    target: str | None = None,
     exclude: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
@@ -44,7 +44,7 @@ def preprocess(
     df : pd.DataFrame
         The input DataFrame containing features and 
         the target variable.
-    target : str
+    target : str | None
         The name of the target column.
     exclude : list[str] | None
         A list of column names to exclude from 

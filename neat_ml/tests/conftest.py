@@ -8,7 +8,7 @@ from matplotlib import rcParams
 from pathlib import Path
 import cv2
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 import joblib
@@ -239,7 +239,7 @@ def trained_model_bundle(tmp_path_factory):
         [
             ("impute", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
-            ("clf", LogisticRegression(random_state=42)),
+            ("clf", RandomForestClassifier(random_state=42)),
         ]
     )
     rng = np.random.default_rng(7)

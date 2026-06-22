@@ -154,6 +154,10 @@ To run the workflow with a given `.yaml` file:
 
 `python run_workflow.py --config <YAML file> --steps detect,analysis,train,infer,explain,plot`
 
+>[!NOTE]
+> When running the workflow on `MacOS` with `libomp` runtime, it may be necessary to explicitly set environment
+> variable `OMP_NUM_THREADS=1` to prevent oversubscription of CPU threads when performing parallel operations.
+
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
 1. download and install the project

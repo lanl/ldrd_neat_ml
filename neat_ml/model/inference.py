@@ -67,7 +67,7 @@ def run_inference(
     feats = bundle.get("features", [])
 
     df = pd.read_csv(data_csv)
-    X, y = preprocess(df, target or "", exclude_cols)
+    X, y = preprocess(df, target, exclude_cols)
 
     X = X.reindex(columns=list(set(X.columns) | set(feats)))
     X = X[feats] if feats else X

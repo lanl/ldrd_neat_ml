@@ -395,7 +395,7 @@ def stage_train_model(
     if len(common_cols) < len(X_tr.columns) or len(common_cols) < len(X_val.columns):
         log.warning(
             f"Feature mismatch: using {len(common_cols)}"
-            f"common features (train={X_tr.columns}, val={X_val.columns})."
+            f" common features (train={X_tr.columns}, val={X_val.columns})."
         )
     X_tr = X_tr[common_cols]
     X_val = X_val[common_cols]
@@ -490,7 +490,7 @@ def stage_run_inference_and_plot(
     paths: dict[str, Path],
     model_path: Path,
     steps: list[str],
-    target: str = "Phase_Separation",
+    target: str | None = None,
 ) -> None:
     """
     Uses a trained model to make predictions on 
@@ -510,7 +510,7 @@ def stage_run_inference_and_plot(
     steps : list[str]
         A list of active workflow steps to determine 
         whether to run inference, plotting, or both.
-    target : str
+    target : str | None
         The target dataframe column for performing inference
     """
     ds_id = infer_dataset_config['id']

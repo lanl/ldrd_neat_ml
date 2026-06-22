@@ -32,6 +32,7 @@ def main(config_path: str, steps_str: str) -> None:
         cfg = yaml.safe_load(fh)
 
     roots = cfg["roots"]
+    inference_model = cfg.get("inference_model")
     log.info(f"Running steps: {steps}")
     
     datasets = cfg.get("datasets", [])
@@ -61,7 +62,7 @@ def main(config_path: str, steps_str: str) -> None:
             paths = get_path_structure(roots, ds, steps)
             stage_analyze_features(ds, paths)
     
-    model_path = roots.get("model", "")
+    model_path = roots.get("model", inference_model)
     train_list = [d for d in datasets if d.get("role") == "train"]
     val_list = [d for d in datasets if d.get("role") == "val"]
     infer_list = [d for d in datasets if d.get("role") == "infer"]
@@ -69,6 +70,8 @@ def main(config_path: str, steps_str: str) -> None:
     if "train" in steps:
         if not train_list:
             raise ValueError("No role='train' dataset.")
+        if not val_list:
+            raise ValueError("No role='validate' dataset.")
         if len(train_list) > 1:
             raise ValueError(
                 "Multiple train datasets provided, "
@@ -99,27 +102,26 @@ def main(config_path: str, steps_str: str) -> None:
             model_path = trained_model
             log.info(f"Trained model already exists: {model_path}, skipping training...")
 
-    if model_path == "" and any(s in steps for s in ("explain", "infer", "plot")):
-        model_path_str = cfg.get("inference_model")
-        if not model_path_str:
-            raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
+    if model_path is not None and any(s in steps for s in ("explain", "infer", "plot")):
         model_path = Path(model_path_str).expanduser().resolve()
         if not model_path.exists():
             raise ValueError(f"Model not found at specified path: {model_path}")
         log.info(f"Using model from config: {model_path}")
+        
+        if "explain" in steps:
+            log.info("\n--- STAGE: EXPLAIN ---")
+            train_ds = train_list[0] if train_list else datasets[0]
+            explain_paths = get_path_structure(roots, train_ds, ["train"])
+            stage_explain(train_ds, explain_paths, model_path)
 
-    if "explain" in steps and model_path:
-        log.info("\n--- STAGE: EXPLAIN ---")
-        train_ds = train_list[0] if train_list else datasets[0]
-        explain_paths = get_path_structure(roots, train_ds, ["train"])
-        stage_explain(train_ds, explain_paths, model_path)
+        if any(s in steps for s in ("infer", "plot")):
+            log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
+            for ds in infer_list:
+                infer_paths = get_path_structure(roots, ds, steps)
+                stage_run_inference_and_plot(ds, infer_paths, model_path, steps)
+    else:
+        raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
 
-    if any(s in steps for s in ("infer", "plot")) and model_path:
-        log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
-        for ds in infer_list:
-            infer_paths = get_path_structure(roots, ds, steps)
-            stage_run_inference_and_plot(ds, infer_paths, model_path, steps)
-    
     log.info("Workflow finished.")
 
 if __name__ == "__main__":
