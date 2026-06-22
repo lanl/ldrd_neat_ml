@@ -156,12 +156,10 @@ def test_bubblesam_detection_generates_pngs(
     )
     saved_df = pd.read_parquet(
         out_dir / "circles_masks_filtered.parquet.gzip",
-        engine="fastparquet",
     )
-    saved_df["bbox"] = saved_df["bbox"].apply(tuple)
-    saved_df['contour'] = saved_df['contour'].apply(
-        lambda x: [np.array(arr, dtype='int32') for arr in x]
-    )
+    # because `contour` is saved as a list, ``read_parquet``
+    # loads it as a 1-d array, so need to reshape it back to 2-d
+    saved_df['contour'] = saved_df['contour'].apply(np.stack)
     assert_frame_equal(df, saved_df)
 
     actual_overlay  = out_dir / f"{stem}_with_mask.png"
