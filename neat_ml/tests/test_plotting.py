@@ -282,22 +282,30 @@ def test_wrappers_and_pipeline(
         assert result is None
 
 
-def test_plot_phase_diagram_error(
+@pytest.mark.parametrize("phase_col, err_msg",
+    [
+        (None, "At least one"),
+        ("Phase", "Must provide ``json_path``"),
+    ]
+)
+def test_plot_phase_diagram_errors(
     tmp_path: Path,
     baseline_dir: Path,
     synthetic_df: pd.DataFrame,
+    phase_col: str | None,
+    err_msg: str,
 ):
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
     out_png = tmp_path / "out" / "out.png"
 
-    with pytest.raises(ValueError, match="Must provide ``json_path``"): 
+    with pytest.raises(ValueError, match=err_msg): 
         lp.plot_phase_diagram(
             file_path=csv,
             output_path=out_png,
             x_col="Sodium Citrate (wt%)",
             y_col="PEO 8 kg/mol (wt%)",
-            phase_col="Phase",
+            phase_col=phase_col,
             xrange=[0, 20], yrange=[0, 20],
             binodal_curve = True
         )
