@@ -19,10 +19,6 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 
-def _std_agg(x):
-    return x.std(ddof=0)
-
-
 def _merge_composition_data(
     summary_df: pd.DataFrame,
     composition_df: pd.DataFrame,
@@ -617,9 +613,14 @@ def _calculate_summary_statistics(
     # find the carry over columns in ``df``
     carry = list(set(carry_over_cols).intersection(df.columns))
 
-    # initialize dictionary keys for aggregation
-    _std_agg.__name__ = "std"
-    agg_spec = {c: ["min", "max", "median", _std_agg] for c in df_num.columns}
+    # initialize dictionary keys for aggregation. pandas built in `std` function
+    # calculates standard deviation with `ddof=1`, which implies calculation of
+    # the sample standard deviation, but we want `ddof=0` for calculation of the
+    # population standard deviation when performing aggregation over all metrics.
+    # pandas < 3.X ignores provided callable functions, so to support multiple
+    # versions, use lambda function and change column name after calculation.
+    # TODO: replace "lambda" with `np.std` callable function when we require pandas >= 3.X
+    agg_spec = {c: ["min", "max", "median", lambda x: np.std(x)] for c in df_num.columns}
     agg_spec.update({c: ["first"] for c in df[carry].columns})
 
     grouped = df.groupby(
@@ -628,6 +629,8 @@ def _calculate_summary_statistics(
 
     grouped.columns = ['_'.join(filter(None, map(str, col))) for col in grouped.columns]
     grouped.rename(columns={f"{c}_first": c for c in df[carry].columns}, inplace=True)
+    # modify `std` column name from lambda fuction to allow for downstream feature analysis 
+    grouped.columns = grouped.columns.str.replace("<lambda_0>", "std")
 
     return grouped
 
