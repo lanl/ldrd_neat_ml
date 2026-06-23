@@ -4,7 +4,7 @@ import numpy.testing as npt
 import pandas as pd
 import pytest
 from neat_ml.analysis import data_analysis as da
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 import logging
 
 
@@ -189,8 +189,8 @@ def test_extract_blob_properties(make_dummy_blobs, input_df, expected_w_h):
     else:
         df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
         expected_centers = np.array([])
-        expected_areas = np.array([])
-        expected_radii = np.array([])
+        expected_areas = pd.Series()
+        expected_radii = pd.Series()
     actual_centers, actual_areas, actual_radii, (actual_w, actual_h) = (
         da._extract_blob_properties(
             df,
@@ -201,9 +201,15 @@ def test_extract_blob_properties(make_dummy_blobs, input_df, expected_w_h):
         )
     )
     npt.assert_allclose(actual_centers, expected_centers)
-    npt.assert_allclose(actual_areas, expected_areas)
-    npt.assert_allclose(actual_radii, expected_radii)
     npt.assert_allclose((actual_w, actual_h), expected_w_h)
+    if input_df is not None:
+        # compare outputs containing actual values
+        npt.assert_allclose(actual_areas, expected_areas)
+        npt.assert_allclose(actual_radii, expected_radii)
+    else:
+        # compare outputs containing empty data structures
+        assert_series_equal(actual_areas, expected_areas)
+        assert_series_equal(actual_radii, expected_radii)
 
 @pytest.mark.parametrize(
     "input_df, n_centroids, exp_nodes, exp_neighbor_dist, exp_mean_nnd, exp_mva",
@@ -332,7 +338,7 @@ def test_load_df(tmp_path: Path, method):
                 "Position": "bottom",
                 "Label": "A2"
             },
-            "opencv",
+            "OpenCV",
         ),
         (
             ("offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd"
@@ -344,9 +350,9 @@ def test_load_df(tmp_path: Path, method):
                 "Position": "bottom",
                 "Label": "A1"
             },
-            "bubblesam",
+            "BubbleSAM",
         ),
-        ("invalid_filename.parquet.gzip", {}, "bubblesam"),
+        ("invalid_filename.parquet.gzip", {}, "BubbleSAM"),
     ],
 )
 def test_filename_parsers(fname, expected, method):

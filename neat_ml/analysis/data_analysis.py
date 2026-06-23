@@ -79,7 +79,7 @@ def _parse_filename(
         A dictionary with 'UniqueID', 'Class', 'Offset', 'Position', and 'Label',
         or an empty dictionary if the pattern does not match.
     """
-    if method.lower() == "bubblesam":
+    if method == "BubbleSAM":
         tag = "masks_filtered"
     else:
         tag = "bubble_data"
@@ -95,6 +95,10 @@ def _parse_filename(
     )
     match = _RE.match(fname)
     if not match:
+        # some files in the dataset do not contain ``position`` information in the filename
+        # because they were aquired using a 2X microscope objective without the use of image
+        # tiling and are also not used for performing automated analysis in the workflow.
+        # Returning an empty dictionary skips downstream analysis of these files.
         return {}
     offset, pos, label, cls, uid = match.groups()
     return {
@@ -126,7 +130,7 @@ def _load_df(
         The path to the `parquet.gzip` file.
     method : Literal["BubbleSAM", "OpenCV"]
         The detection method that was used to generate the parquet file,
-        (i.e. `bubblesam` or `opencv`)
+        (i.e. `BubbleSAM` or `OpenCV`)
 
     Returns
     -------
@@ -135,7 +139,7 @@ def _load_df(
         has 'center_x', 'center_y', 'area', 'radius', and 'bbox' columns.
     """
     df = pd.read_parquet(parquet_path)
-    if method.lower() == "bubblesam":
+    if method == "BubbleSAM":
         if {"area", "bbox"}.issubset(df.columns):
             # ``bbox`` object is converted to a str before saving parquet
             # in detection module, convert back to list for processing
@@ -235,6 +239,9 @@ def _calculate_voronoi_stats(
     # calculate statistics from finite areas
     areas_arr = np.asarray(finite_areas)
     mean_area = areas_arr.mean()
+    # calculate the sample standard deviation `ddof=1` because
+    # per-image statistics represent a sample of data points from
+    # a group of images obtained from a single  well-plate.
     std_area = areas_arr.std(ddof=1)
     stats = {
         "mean_voronoi_area": mean_area,
@@ -245,7 +252,7 @@ def _calculate_voronoi_stats(
 
 def _calculate_graph_metrics(
     points: np.ndarray,
-    areas: np.ndarray,
+    areas: pd.Series,
     *,
     method: Literal["delaunay", "knn", "radius"],
     r_param: Optional[Union[int, float]] = None,
@@ -261,8 +268,8 @@ def _calculate_graph_metrics(
     ----------
     points : np.ndarray
         An (N, 2) array of node coordinates.
-    areas : np.ndarray
-        An (N,) array of detected blob areas, used for Largest Connected
+    areas : pd.Series
+        A pandas series of detected blob areas, used for Largest Connected
         Component (LCC) area statistics.
     method : Literal["delaunay", "knn", "radius"]
         The graph construction method: 'delaunay', 'radius', or 'knn'.
@@ -272,10 +279,10 @@ def _calculate_graph_metrics(
         - ``delaunay``: the set of nodes and edges is defined by the Delaunay
                         triangulation of the input points, i.e. the circumcircle of the
                         nodes forming each triangle contains no other node inside.
-                        Generates comprehensive graph of node connectivity and is
-                        useful for when the user wants to give more weight to the number
-                        of graph edges, for example when bubbles have a more spread out
-                        morphology.
+                        Generates comprehensive graph of node connectivity. Delaunay
+                        triangulation cannot be performed for any input with less than 3
+                        data points, and analysis of such inputs will results in an
+                        output graph with no edges.
 
         - ``knn``: maps the connections between the k nearest neighboring nodes
                    regardless of the density of the nodes. Will connect sparse
@@ -283,19 +290,14 @@ def _calculate_graph_metrics(
                    groups of dense nodes, depending on k. The input parameter `k` is
                    modified if the maximum number of neighboring nodes is less than
                    k such that the value of k becomes the number of nodes minus 1.
-                   The knn method is useful when trying to characterizing a variety of
-                   different compositions with varied morphologies because it provides
-                   a generalized view of local and global spatial organization.
+                   The user controls the value of `k_param` via the input yaml file. 
 
         - ``radius``: finds all the connections between nodes within the radius
                       parameter r, which requires user estimation of the relative distance
-                      between nodes. Depending on the radius parameter, the graph
-                      will be smaller in sparse areas and larger in dense areas. Can
-                      also result in no connections being made in graphs where
-                      the distance between any two nodes is greater than the radius
-                      parameter. The radius method is useful for characterizing compositions
-                      with more dense morphologies, where the user wants to emphasize
-                      the relationship between closely connected groups of points.
+                      between nodes. The size of the graph depends on the sparsity/density
+                      of the nodes in relation to the r parameter. The user controls the
+                      value of `r_param` via the input yaml file, which can be adjusted to
+                      accommodate user specifications.
     r_param : Optional[Union[int, float]]
         The radius (in pixels) for 'radius' graphs.
     k_param : Optional[int]
@@ -304,8 +306,8 @@ def _calculate_graph_metrics(
         exceeds the number of nodes for a given input to avoid empty dict
         when n_nodes < k.
     img_hyp : float
-        The value of the image hypotenuse for setting the `distance_upper_bound` argument
-        when performing KDTree query with the `knn` graph method
+        The value of the image hypotenuse (in pixels) for setting the `distance_upper_bound`
+        argument when performing KDTree query with the `knn` graph method
 
     Returns
     -------
@@ -414,6 +416,9 @@ def _calculate_graph_metrics(
 
     degrees = np.fromiter((d for _, d in graph.degree()), dtype=float)
     metrics["graph_avg_degree"] = degrees.mean()
+    # calculate the sample standard deviation with `ddof=1` because
+    # per-image statistics represent sample data points for individual
+    # images comprising a group of images taken from a single image well.
     metrics["graph_degree_std"] = degrees.std(ddof=1)
     
     metrics["graph_avg_clustering"] = nx.average_clustering(graph)
@@ -437,7 +442,7 @@ def _extract_blob_properties(
     area_col: Literal["area"],
     radius_col: Literal["radius"],
     bbox_col: Literal["bbox"],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float]]:
+) -> tuple[np.ndarray, pd.Series, pd.Series, tuple[float, float]]:
     """Extracts geometric properties and image size from a blob DataFrame.
 
     Parameters
@@ -455,17 +460,17 @@ def _extract_blob_properties(
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float]]
+    tuple[np.ndarray, pd.Series, pd.Series, tuple[float, float]]
         A tuple containing: (centroids, areas, radii, (image_width, image_height)).
         Returns empty arrays/NaN values if data is missing.
     """
     required_cols = {*center_cols, area_col, radius_col, bbox_col}
     if not required_cols.issubset(df.columns) or df.empty:
-        return np.array([]), np.array([]), np.array([]), (np.nan, np.nan)
+        return np.array([]), pd.Series(), pd.Series(), (np.nan, np.nan)
 
     centroids = df[center_cols].to_numpy()
-    areas = df[area_col].to_numpy()
-    radii = df[radius_col].to_numpy()
+    areas = df[area_col]
+    radii = df[radius_col]
 
     bbox_array = np.asarray(df[bbox_col].tolist())
     img_w = np.max(bbox_array[:, 2])
@@ -534,6 +539,10 @@ def _calculate_all_spatial_metrics(
     img_area = w * h
     img_hyp = np.hypot(h, w)
     
+    # calculate sample standard deviation below with `ddof=1`
+    # because per-image statistics represent sample data points
+    # for individual images comprising a group of images taken
+    # from a single well-plate.
     metrics.update(
         num_blobs = areas.size,
         mean_blob_area = areas.mean(),
@@ -583,7 +592,8 @@ def _calculate_summary_statistics(
     group_cols : Sequence[str]
         Columns to group by; must exist in df.
     carry_over_cols : Sequence[str]
-        Columns to preserve per group using 'first'.
+        Columns to preserve per group by taking the value of the
+        'first' instance as the value for the entire group.
     exclude_numeric_cols : Sequence[str] | None
         Exact numeric column names to exclude (e.g., ['Offset']).
     exclude_numeric_regex : Sequence[str] | None
@@ -596,7 +606,7 @@ def _calculate_summary_statistics(
         Carry-over columns are included without aggregation.
     """
     # check that any of the grouping columns exist in df
-    valid_cols = pd.Index(group_cols).intersection(df.columns, sort=False).to_list()
+    valid_cols = pd.Index(group_cols).intersection(df.columns).to_list()
     if not valid_cols:
         raise ValueError(f"None of the grouping columns {group_cols} exist.")
 
@@ -611,7 +621,7 @@ def _calculate_summary_statistics(
     df_num = df_out.select_dtypes(include="number")
 
     # find the carry over columns in ``df``
-    carry = list(set(carry_over_cols).intersection(df.columns))
+    carry = df.columns.intersection(carry_over_cols)  # type: ignore[arg-type]
 
     # initialize dictionary keys for aggregation. pandas built in `std` function
     # calculates standard deviation with `ddof=1`, which implies calculation of
@@ -628,7 +638,10 @@ def _calculate_summary_statistics(
     ).agg(agg_spec)  # type: ignore[arg-type]
 
     grouped.columns = ['_'.join(filter(None, map(str, col))) for col in grouped.columns]
-    grouped.rename(columns={f"{c}_first": c for c in df[carry].columns}, inplace=True)
+    # remove `_first` decorator from carry over columns that was used for grouping
+    # TODO: pandas>=3.X has more idiomatic methods of performing multiple string
+    #       replacements with i.e. `pat` argument. fix when we require pandas>=3.X
+    grouped.columns = grouped.columns.str.replace("_first", "")
     # modify `std` column name from lambda fuction to allow for downstream feature analysis 
     grouped.columns = grouped.columns.str.replace("<lambda_0>", "std")
 
@@ -676,9 +689,9 @@ def _process_parquet_files(
     """
     rows = []
 
-    if mode.lower() == "opencv":
+    if mode == "OpenCV":
         glob_pattern = "*_bubble_data.parquet.gzip"
-    elif mode.lower() == "bubblesam":
+    elif mode == "BubbleSAM":
         glob_pattern = "*_masks_filtered.parquet.gzip"
     else:
         raise ValueError("Mode must be either 'OpenCV' or 'BubbleSAM'.")
