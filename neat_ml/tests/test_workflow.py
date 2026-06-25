@@ -6,32 +6,31 @@ import shutil
 import torch
 import pandas as pd
 from numpy.testing import assert_allclose
-from typing import Literal
 
 import neat_ml.workflow.lib_workflow as wf
 
 @pytest.mark.parametrize(
-    ("steps_str", "expected"),
+    ("steps_str", "expected", "err"),
     [
-        ("all", ["detect", "analysis"]),  # expands to full pipeline
-        (" Detect ,  Analysis ", ["detect", "analysis"]),  # whitespace + case normalization
-        ("ANALYSIS,DETECT", ["analysis", "detect"]),  # preserves order after lowercasing
-        ("", []),  # empty input -> empty list
-        (", ,", []),  # only commas/whitespace -> empty list
-        ("ALL", ["detect", "analysis"]),  # 'ALL' expands to full pipeline
-        ("detect,", ["detect"]),  # trailing comma ignored
-        ("X,DETECT", ["x", "detect"]),  # unknown steps pass through lowercased
+        ("all", ["detect", "analysis"], False),  # expands to full pipeline
+        (" detect ,  analysis ", ["detect", "analysis"], False),  # whitespace removed
+        ("ANALYSIS,DETECT", None, True),  # case sensitive inputs raise error
+        ("", None, True),  # empty input -> empty list -> raises error
+        ("ALL", None, True),  # 'ALL' raises error
+        ("detect,", ["detect"], False),  # trailing comma ignored
+        ("X,DETECT", None, True),  # unknown steps raise error
     ],
 )
-def test_as_steps_set_normalizes_and_expands(
-    steps_str: Literal['detect', 'analysis', 'detect,analysis', 'all'],
-    expected: list[str]
-) -> None:
+def test_as_steps_set_normalizes_and_expands(steps_str, expected, err):
     """
-    ``as_steps_set``: normalizes case/whitespace, preserves order, expands exact 'all',
-    and passes unknown tokens through in lowercase.
-    """
-    assert wf.as_steps_set(steps_str) == expected
+    test that ``as_steps_set`` returns appropriate steps without whitespace,
+    expands exact 'all', and enforces lowercase user inputs. 
+    """ 
+    if err:
+        with pytest.raises(ValueError, match="not contained in allowed steps"):
+            wf.as_steps_set(steps_str)
+    else:
+        assert wf.as_steps_set(steps_str) == expected
 
 
 @pytest.mark.parametrize("roots, ds, steps",
@@ -71,6 +70,15 @@ def test_as_steps_set_normalizes_and_expands(
             },
             ["detect", "analysis"]
         ),
+        (
+            {"work": "", "results": "results"},
+            {
+                "analysis": {
+                    "per_image_csv" : "per_img.csv",
+                }
+            },
+            ["detect", "analysis"]
+        ),
     ],
 )
 def test_get_path_structure_builds_expected_paths(
@@ -83,7 +91,13 @@ def test_get_path_structure_builds_expected_paths(
     test that `get_path_structure` builds the appropriate paths
     given the contents of the user input yaml file
     """
-    base_ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    base_ds = {
+        "id": "DS1",
+        "method": "OpenCV",
+        "class": "pos",
+        "time_label": "T01",
+        "composition_csv": "comp.csv",
+    }
     base_ds.update(ds)
     roots = {k: tmp_path / v for k, v in roots.items()}
     paths = wf.get_path_structure(roots, base_ds, steps)  #type: ignore[arg-type]

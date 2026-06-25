@@ -408,23 +408,29 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
     expected = df[["Group", "Label", "Other"]].drop_duplicates().reset_index(drop=True)
     assert_frame_equal(out, expected)
 
-def test_merge_composition_data():
-    summary_df = pd.DataFrame({"UniqueID": ["id1"], "metric": [10]})
-    comp_df = pd.DataFrame({"UniqueID": ["id1"], "Phase": [True]})
+@pytest.mark.parametrize("method, drop_comp_row",
+    [
+        ("BubbleSAM", None),  # test merge performs correctly on bubblesam data
+        ("BubbleSAM", 1),  # test that "left" merge preserves rows without comp data
+        ("OpenCV", None),  # test merge performs correctly on opencv data
+    ]
+)
+def test_merge_composition_data(mock_dir, method, drop_comp_row,):
+    input_dir, output_dir, comp_csv = mock_dir
+    per_img_df = da._process_parquet_files(
+        input_dir, mode="BubbleSAM", graph_method="delaunay"
+    )
+    comp_df = pd.read_csv(input_dir / comp_csv)
+    if drop_comp_row is not None:
+        comp_df.drop(drop_comp_row, inplace=True)
     actual = da._merge_composition_data(
-        summary_df, 
+        per_img_df, 
         comp_df, 
-        cols_to_add=["Phase"],
+        cols_to_add=["Phase_Separation"],
         merge_key="UniqueID"
     )
-    assert "Phase" in actual.columns
-    with pytest.raises(ValueError, match="not found in summary_df"):
-        da._merge_composition_data(
-            summary_df.drop(columns=["UniqueID"]),
-            comp_df,
-            cols_to_add=["Phase"],
-            merge_key="UniqueID"
-        )
+    # check that the dataframe contains the expected number of rows and columns
+    assert actual.shape == (1, 29)
 
 @pytest.mark.parametrize("mode, err, err_msg",
     [
@@ -538,13 +544,32 @@ def test_full_analysis_pipeline(
         npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
         npt.assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
-def test_merge_composition_data_missing_cols_message():
+@pytest.mark.parametrize("summary_df_drop_key, comp_df_drop_key, err_msg",
+    [
+        # missing merge key in summary_df
+        (
+            "UniqueID", None, "not found in summary_df",
+        ),
+        # missing specified merge column from composition_df
+        (
+            None, "Phase", "not found in composition_df",
+        ),
+    ]
+)
+def test_merge_composition_data_errors(
+    summary_df_drop_key,
+    comp_df_drop_key,
+    err_msg):
     """Ensure clear error text when requested cols are missing in composition_df."""
     summary_df = pd.DataFrame({"UniqueID": ["id1"], "metric": [42]})
-    comp_df = pd.DataFrame({"UniqueID": ["id1"]})  # 'Phase' is missing
+    comp_df = pd.DataFrame({"UniqueID": ["id1"], "Phase": [True]})
+    if summary_df_drop_key is not None:
+        summary_df.drop(columns=[summary_df_drop_key], inplace=True)
+    if comp_df_drop_key is not None:
+        comp_df.drop(columns=[comp_df_drop_key], inplace=True)
 
     with pytest.raises(
-        ValueError, match=r"Columns \['Phase'\] not found in composition_df\."
+        ValueError, match=err_msg
     ):
         da._merge_composition_data(
             summary_df,
