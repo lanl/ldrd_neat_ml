@@ -37,41 +37,31 @@ def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
 @pytest.mark.parametrize(
     "pos_vals, feat_names, top_k, exp_names, exp_counts",
     [
+        # case where the features have clear separation in rank
         (
-            [
-                np.array([[0.9, 0.7, 0.0], [0.8, 0.6, 0.1]]),
-                np.array([[0.0, 0.8, 0.6], [0.1, 0.8, 0.7]]),
-            ],
-            np.asarray([f"Feat_{i}" for i in range(3)]),
-            2,
-            ["Feat_1", "Feat_0", "Feat_2"],
-            [2, 1, 1],
-        ),
-        (
-            [
-                np.array([[0.9, 0.7, 0.0, 0.7], [0.8, 0.6, 0.1, 0.7]]),
-                np.array([[0.8, 0.1, 0.2, 0.9], [0.8, 0.1, 0.8, 0.9]]),
-                np.array([[0.7, 0.7, 0.7, 0.1], [0.7, 0.7, 0.8, 0.1]]),
-            ],
+            np.array([[0.9, 0.7, 0.0, 0.8],
+                      [0.5, 0.6, 0.9, 0.7],
+                      [0.4, 0.1, 0.3, 0.6]]),
             np.asarray([f"Feat_{i}" for i in range(4)]),
-            3,
-            ["Feat_0", "Feat_3", "Feat_1", "Feat_2"],
-            [3, 2, 2, 2],
-        ),
-        (
-            [
-                np.array([[0.9, 0.7, 0.0], [0.8, 0.6, 0.1]]),
-                np.array([0.0, 0.8, 0.6]),
-            ],
-            np.asarray([f"Feat_{i}" for i in range(3)]),
             2,
-            ["Feat_1", "Feat_0", "Feat_2"],
-            [2, 1, 1],
+            ["Feat_3", "Feat_0", "Feat_2", "Feat_1"],
+            [3, 2, 1, 0],
+        ),
+        # case where the top features have an equal number of votes.
+        # the ranking follows the order of the input feature names
+        (
+            np.array([[0.9, 0.7, 0.0, 0.8],
+                      [0.5, 0.6, 0.9, 0.7],
+                      [0.4, 0.1, 0.6, 0.3]]),
+            np.asarray([f"Feat_{i}" for i in range(4)]),
+            2,
+            ["Feat_0", "Feat_2", "Feat_3", "Feat_1"],
+            [2, 2, 2, 0],
         ),
     ],
 )
 def test_feature_importance_consensus(
-    pos_vals: list[np.ndarray],
+    pos_vals: np.ndarray,
     feat_names: np.ndarray,
     top_k: int,
     exp_names: list[str],
@@ -159,7 +149,7 @@ def test_compare_methods_end_to_end(
     # SHAP importance values fluctuate on the order of 1e-2 floating
     # point precision between calls, so check that the mean ranking of
     # the feature importance values is preserved.
-    assert_allclose(actual_df["mean_rank"], [1.3333333333333333, 2.0, 2.6666666666666665])
+    assert_allclose(actual_df["mean_rank"], [1.0, 2.333333333333333, 2.6666666666666665])
 
     # check the output of ebm importance ranking.
     # for the same reason that SHAP values are difficult to compare,
