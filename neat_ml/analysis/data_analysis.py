@@ -9,7 +9,6 @@ import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay
 import logging
 from tqdm.auto import tqdm
-from pyarrow.lib import ArrowInvalid  # type: ignore[import-untyped]
 import ast
 
 __all__ = [
@@ -55,6 +54,8 @@ def _merge_composition_data(
     if missing_cols:
         raise ValueError(f"Columns {missing_cols} not found in composition_df.")
 
+    # perform "left" merge to keep per-image statistics even if missing composition information.
+    # image groups without phase separation status are removed after aggregation.
     return summary_df.merge(
         composition_df[[merge_key, *cols_to_add]], on=merge_key, how="left"
     )
@@ -438,7 +439,7 @@ def _calculate_graph_metrics(
 def _extract_blob_properties(
     df: pd.DataFrame,
     *,
-    center_cols: list[str],
+    center_cols: list[Literal["center_x", "center_y"]],
     area_col: Literal["area"],
     radius_col: Literal["radius"],
     bbox_col: Literal["bbox"],
@@ -710,7 +711,7 @@ def _process_parquet_files(
             metadata["Time"] = time_label
         try:
             df_blobs = _load_df(parquet_path, mode)
-        except (ValueError, ArrowInvalid) as exc:
+        except ValueError as exc:
             warnings.warn(
                 f"Failed to load or parse {parquet_path}: {type(exc).__name__}({exc})"
             )

@@ -41,7 +41,6 @@ dev = ['mypy',
        'types-tqdm',
        'types-Pillow',
        'types-pyyaml',
-       'pyarrow-stubs',
 ]
 [tool.setuptools.package-data]
 "neat_ml.data" = ["*.xlsx"]

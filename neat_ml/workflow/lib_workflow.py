@@ -37,7 +37,15 @@ def as_steps_set(
     list[str]
         List of normalized steps.
     """
-    raw = [s.strip().lower() for s in steps_str.split(",") if s.strip()]
+    raw = [s.strip() for s in steps_str.split(",") if s.strip()]
+    # check that the list of provided steps is not empty and all steps
+    # are contained in the list of allowable steps for the workflow.
+    steps_allowed = ["detect", "analysis", "all"]
+    raw_set = set(raw)
+    if not raw_set or not raw_set.issubset(steps_allowed):
+        raise ValueError(
+            f"Steps: {raw} not contained in allowed steps: {steps_allowed}"
+        )
     if raw == ["all"]:
         return ["detect", "analysis"]
 
@@ -71,7 +79,6 @@ def get_path_structure(
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
-    steps_set = set(steps)
 
     base_proc = work_root / ds_id / method / class_label / time_label
 
@@ -80,7 +87,7 @@ def get_path_structure(
 
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
-    if "analysis" in steps_set:
+    if "analysis" in steps:
         a_cfg = dataset_config.get("analysis", {})
         per_img_path = a_cfg.get("per_image_csv")
         agg_path = a_cfg.get("aggregate_csv")
