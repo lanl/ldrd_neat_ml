@@ -63,6 +63,7 @@ datasets:
       - "PEO 20 kg/mol (wt%)"
     role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model)
     ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier)
+    top_n_features: number of features to consider when performing feature importance ranking (default is 20)
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)

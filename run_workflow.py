@@ -103,7 +103,7 @@ def main(config_path: str, steps_str: str) -> None:
             log.info(f"Trained model already exists: {model_path}, skipping training...")
 
     if model_path is not None and any(s in steps for s in ("explain", "infer", "plot")):
-        model_path = Path(model_path_str).expanduser().resolve()
+        model_path = Path(model_path).expanduser().resolve()
         if not model_path.exists():
             raise ValueError(f"Model not found at specified path: {model_path}")
         log.info(f"Using model from config: {model_path}")

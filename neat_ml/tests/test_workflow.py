@@ -761,7 +761,7 @@ def test_stage_explain_aligns_features_and_calls_compare_methods(
     trained_model_bundle,
 ):
     explain_out = tmp_path / "explain_out"
-    train_ds = {"id": "TRX", "composition_cols": ["PEG"]}
+    train_ds = {"id": "TRX", "composition_cols": ["PEG"], "top_n_features": 2}
     paths = {"agg_csv": sample_inference_data, "explain_dir": explain_out}
 
     wf.stage_explain(train_ds, paths, trained_model_bundle, target="ground_truth")

@@ -1,4 +1,3 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Sequence, Any
 
@@ -12,8 +11,10 @@ from interpret.glassbox import ExplainableBoostingClassifier
 from lime.lime_tabular import LimeTabularExplainer
 from sklearn.pipeline import Pipeline
 import logging
+import joblib
 
 logger = logging.getLogger(__name__)
+memory = joblib.Memory("joblib_cache", verbose=0)
 
 
 __all__ = [
@@ -23,8 +24,10 @@ __all__ = [
 ]
 
 
+@memory.cache
 def _run_shap(
-    model, X: pd.DataFrame, 
+    model: Pipeline,
+    X: pd.DataFrame, 
     out_dir: Path, 
     top: int = 20,
     n_jobs: int = -1,
@@ -39,12 +42,12 @@ def _run_shap(
 
     Parameters
     ----------
-    model : Any
+    model : Pipeline
         Fitted classifier exposing a predict_proba(X) -> ndarray method whose
         second dimension contains probabilities for the positive class.
     X : pandas.DataFrame
-        Numeric feature matrix used both as background data for the explainer
-        and as the evaluation set whose SHAP values are summarized.
+        Numeric feature matrix used as background data for masking the permutation
+        explainer and as the input dataset for generating SHAP values. 
     out_dir : pathlib.Path
         Directory where the SHAP bar chart (shap_summary.png) will be saved.
     top : int, default 20
@@ -65,7 +68,7 @@ def _run_shap(
         masker=X.values,
         algorithm="permutation",
         n_jobs=n_jobs,
-        feature_names=X.columns.to_list(),
+        feature_names=X.columns,
     )
     vals = explainer(X.values).values
     vals = vals[:, :, 1] if vals.ndim == 3 else vals
@@ -79,6 +82,7 @@ def _run_shap(
     return imp
 
 
+@memory.cache
 def _run_ebm(
     X: pd.DataFrame,
     y: pd.Series,
@@ -98,9 +102,9 @@ def _run_ebm(
     out_dir : Path
         Folder for saving the EBM bar chart and CSV.
     top : int, default 20
-        Maximum number of features to display in the SHAP summary figure.
+        Maximum number of features to display in the output figure.
     random_state: int
-        random seed variable for initializing explainer
+        random seed variable for initializing the EBM 
 
     Returns
     -------
@@ -110,7 +114,7 @@ def _run_ebm(
     ebm = ExplainableBoostingClassifier(
         interactions=0,
         random_state=random_state,
-        feature_names=X.columns.to_list()
+        feature_names=X.columns,
     ).fit(X.values, y)
 
     data = ebm.explain_global().data()
@@ -130,10 +134,10 @@ def _run_ebm(
     plt.close(fig)
     return imp
 
+@memory.cache
 def _run_lime(
     model: Pipeline,
     X: pd.DataFrame, 
-    n_samples: int = 100,
     *,
     random_state: int = 42,
 ) -> pd.Series:
@@ -144,12 +148,8 @@ def _run_lime(
     ----------
     model : Pipeline
         Fitted classifier with a probability interface compatible with LIME
-        (predict_proba returning an n_samples x 2 array for binary tasks).
     X : pandas.DataFrame
         Numeric feature matrix from which sampling is performed.
-    n_samples : int, default 100
-        Number of rows to sample for aggregation.  The function caps this value
-        at len(X) to avoid redundant sampling on tiny datasets.
     random_state: int
         random seed variable for initializing LIME explainer
 
@@ -158,31 +158,26 @@ def _run_lime(
     pandas.Series
         Index = feature names, values = mean absolute LIME weight (descending).
     """
-    rng = np.random.default_rng(random_state)
-
     expl = LimeTabularExplainer(
         X.values,
-        feature_names=X.columns.tolist(),
+        feature_names=X.columns,
         class_names=["0", "1"],
         discretize_continuous=True,
         random_state=random_state,
     )
 
     agg = np.zeros(X.shape[1])
-    # select random rows on which to train the LIME explainer because
-    # training on all rows is computationally expensive
-    rows = rng.choice(len(X), min(n_samples, len(X)), replace=False)
 
-    for i in rows:
+    for _, row in X.iterrows():
         # for each row, generate LIME explanation
-        exp = expl.explain_instance(X.iloc[i].values, model.predict_proba,
+        exp = expl.explain_instance(row.values, model.predict_proba,
                                     num_features=X.shape[1], labels=(1,))
         # get feature indices and weights for the explanation and
         # aggregate the importances for each feature
         for f_idx, w in exp.as_map()[1]:
             agg[f_idx] += abs(w)
     # return the sorted average absolute importance per feature        
-    return pd.Series(agg / len(rows), index=X.columns).sort_values(ascending=False)
+    return pd.Series(agg / len(X), index=X.columns).sort_values(ascending=False)
 
 def get_k_best_scores(
     X: pd.DataFrame,
@@ -217,7 +212,7 @@ def get_k_best_scores(
     return scores
 
 def feature_importance_consensus(
-    pos_class_feat_imps: Sequence[np.ndarray[Any, np.dtype[np.float64]]],
+    pos_class_feat_imps: np.ndarray[Any, np.dtype[np.float64]],
     feature_names: np.ndarray[Any, np.dtype[np.str_]],
     top_feat_count: int,
 ) -> tuple[np.ndarray[Any, np.dtype[np.str_]], np.ndarray[Any, np.dtype[np.int64]], int]:
@@ -226,9 +221,10 @@ def feature_importance_consensus(
 
     Parameters
     ----------
-    pos_class_feat_imps : Sequence[np.ndarray]
-        Each array holds importances for one model.
-    feature_names : np.ndarray[str]
+    pos_class_feat_imps : np.ndarray[Any, np.dtype[np.float64]]
+        Array containing absolute value importances calculated using
+        each model (SHAP, EBM, LIME) across all features.
+    feature_names :  np.ndarray[Any, np.dtype[np.str_]]
         Feature name for each index.
     top_feat_count : int
         Top-k features extracted from every importance vector.
@@ -244,16 +240,13 @@ def feature_importance_consensus(
     """
     num_models = len(pos_class_feat_imps)
 
-    processed = []
-    for arr in pos_class_feat_imps:
-        if np.atleast_2d(arr).shape[0] > 1:
-            processed.append(np.mean(np.abs(arr), axis=0))
-        else:
-            processed.append(np.abs(arr))
-
-    votes = defaultdict(int) # type: ignore[var-annotated]
-    for imp in processed:
-        top_idx = np.argsort(imp)[::-1][:top_feat_count]
+    votes = dict.fromkeys(feature_names, 0)
+    # rank all the features for each individual metric
+    for imp in pos_class_feat_imps:
+        # find top indices using numpy argpartition algorithm based on
+        # logic used here: https://stackoverflow.com/a/23734295
+        top_idx = np.argpartition(imp, -top_feat_count)[-top_feat_count:]
+        top_idx = top_idx[np.argsort(imp[top_idx])][::-1]
         for name in feature_names[top_idx]:
             votes[name] += 1
 
@@ -270,7 +263,8 @@ def plot_feat_import_consensus(
     out_dir: Path,
 ) -> None:
     """
-    Horizontal bar chart of consensus occurrence x 100/num_models (%).
+    Generates a horizontal bar chart of consensus occurrence of features in the
+    top-n rankings of feature importance models x 100/num_models (%).
 
     Parameters
     ----------
@@ -280,9 +274,8 @@ def plot_feat_import_consensus(
         feature counts corresponding to ``ranked_names``
     num_models : int
         Total number of models used in consensus.
-        Denominator for % calculation.
     top_feat_count : int
-        k used when building the consensus (only for axis label).
+        Top-n features used when building the consensus (only for axis label).
     out_dir: Path
         Location for saving the PNG file.
     """
@@ -305,15 +298,16 @@ def compare_methods(
     X: pd.DataFrame,
     y: pd.Series,
     out_dir: Path,
-    top: int = 20,
+    top: int,
     rng: np.random.Generator | None = None,
 ) -> None:
     """
-    Run SHAP, EBM and LIME on *model* and merge their importances.
+    Run SHAP, EBM and LIME on *model* and merge their feature importances.
 
-    The merged table is ranked by the **mean of method-specific ranks**
-    (*lower* = more consistently important) before the top-k features are
-    plotted.
+    Each feature is first ranked per feature importance method
+    based on relative importance, and then the average ranking across all methods
+    is taken as the final ranking. Ties in ranking for individual importance
+    methods are handled by averaging the ranks of the tied features.
 
     Parameters
     ----------
@@ -351,7 +345,7 @@ def compare_methods(
     plot_feature_importance_comparison(comp, out_dir, top)
 
     ranked_names, ranked_counts, n_models = feature_importance_consensus(
-        [comp[c].to_numpy(dtype=float) for c in ["SHAP", "EBM", "LIME"] if c in comp],
+        comp.to_numpy()[:,:3].T,
         comp.index.values.astype(str),
         top_feat_count=top,
     )

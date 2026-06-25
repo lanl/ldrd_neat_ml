@@ -443,7 +443,7 @@ def stage_explain(
     ----------
     train_dataset_config : dict[str, Any]
         The configuration for the training dataset, used to identify
-        columns for preprocessing.
+        columns for preprocessing and user specified top-n features.
     paths : dict[str, Path]
         A dictionary of file paths, including the training data CSV
         and the output directory for explainability plots.
@@ -476,12 +476,13 @@ def stage_explain(
 
     log.info("Running feature importance comparison methods...")
     explain_dir = paths["explain_dir"]
+    top = train_dataset_config.get("top_n_features", 20)
     compare_methods(
         model=model, 
         X=X, 
         y=y, 
         out_dir=explain_dir, 
-        top=20
+        top=top,
     )
     log.info(f"--> Explainability plots saved to {explain_dir}")
 
