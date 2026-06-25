@@ -20,7 +20,8 @@ def main(config_path: str, steps_str: str) -> None:
     config_path : str
         Path to config YAML.
     steps_str : str
-        Comma separated list of steps or 'all'.
+        str containing individual steps to perform, separated
+        by commas if multiple steps provided, or 'all'.
     """
     steps = as_steps_set(steps_str)
 
