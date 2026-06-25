@@ -304,10 +304,10 @@ def compare_methods(
     """
     Run SHAP, EBM and LIME on *model* and merge their feature importances.
 
-    Each feature is first ranked per feature importance method
-    based on relative importance, and then the average ranking across all methods
-    is taken as the final ranking. Ties in ranking for individual importance
-    methods are handled by averaging the ranks of the tied features.
+    Rank the features based on their total number of occurances within the top-n
+    features for each feature importance method. For ties in importance, each feature
+    is first ranked per feature importance method based on relative importance,
+    and then the average ranking across all methods is taken as the final ranking.
 
     Parameters
     ----------
