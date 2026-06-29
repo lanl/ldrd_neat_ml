@@ -8,7 +8,6 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 import logging
@@ -58,7 +57,7 @@ def preprocess(
     """
     y = pd.Series(dtype=int)
     mask = pd.Series(True, index=df.index)
-    cols_to_drop = exclude if exclude else []
+    cols_to_drop = exclude if exclude is not None else []
 
     if target:
         y = pd.to_numeric(df[target], errors="coerce")
@@ -72,18 +71,17 @@ def preprocess(
     # drop columns that are entirely NaN
     X = X.dropna(axis=1, how='all')
 
-    X_imp = pd.DataFrame(
-        SimpleImputer(strategy="median").fit_transform(X),
-        columns=X.columns,
-        index=X.index,
-    )
+    imputer = SimpleImputer(strategy="median").set_output(transform="pandas")
+    X_imp = imputer.fit_transform(X)
     return X_imp, y
 
 
 def _scale_pos_weight(y: pd.Series) -> float:
     """
     Calculate the negative/positive class ratio 
-    for XGBoost's `scale_pos_weight`.
+    for XGBoost's `scale_pos_weight`. Implemented
+    based on suggestion from:
+    https://xgboost.readthedocs.io/en/latest/parameter.html#parameters-for-tree-booster
 
     Parameters
     ----------
@@ -163,7 +161,6 @@ def train_with_validation(
         - The predicted probabilities for the positive
           class on the validation set.
     """
-    logger.info("Performing ML hyperparamter optimization...")
     spw = _scale_pos_weight(y_train)
     logger.info(f"scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
 
@@ -194,12 +191,12 @@ def train_with_validation(
     pipeline = Pipeline(
         steps=[
             ("impute", SimpleImputer(strategy="median")),
-            ("scale", StandardScaler()),
             ("ensemble", ensemble),
         ]
     )
 
     if ml_hyper_opt:
+        logger.info("Performing ML hyperparamter optimization...")
         param_grid = {
             # XGBoost
             "ensemble__xgb__n_estimators": [10, 20, 50, 100, 200, 400],
@@ -262,7 +259,7 @@ def plot_roc(
     out_png : str
         The file path where the output PNG image will be saved.
     label : str, optional
-        The label for the ROC curve in the plot legend, by 
+        The label for the ROC curve in the plot title, by 
         default "Validation".
     """
     fpr, tpr, _ = roc_curve(y_true, y_prob)
@@ -270,8 +267,8 @@ def plot_roc(
     fig, ax = plt.subplots(1, 1, figsize=(4, 4))
     ax.plot(fpr, tpr, lw=2, label=f"AUC={aucv:.3f}")
     ax.plot([0, 1], [0, 1], "--", lw=1, color="grey")
-    ax.set_xlabel("False-Positive Rate")
-    ax.set_ylabel("True-Positive Rate")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
     ax.set_title(f"ROC Curve for {label} Dataset")
     ax.legend()
     fig.tight_layout()

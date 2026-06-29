@@ -222,6 +222,7 @@ def main(config_path: str, steps_str: str) -> None:
 
     roots = cfg["roots"]
     inference_model = cfg.get("inference_model")
+    random_seed = cfg.get("random_seed")
     log.info(f"Running steps: {steps}")
     
     datasets = cfg.get("datasets", [])
@@ -305,7 +306,7 @@ def main(config_path: str, steps_str: str) -> None:
             log.info("\n--- STAGE: EXPLAIN ---")
             train_ds = train_list[0] if train_list else datasets[0]
             explain_paths = get_path_structure(roots, train_ds, ["train"])
-            stage_explain(train_ds, explain_paths, model_path)
+            stage_explain(train_ds, explain_paths, model_path, random_seed=random_seed)
 
         if any(s in steps for s in ("infer", "plot")):
             log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
