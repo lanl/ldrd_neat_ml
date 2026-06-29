@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-import matplotlib as mpl
-mpl.use("Agg")
+import matplotlib
+matplotlib.use("Agg")
 from matplotlib.testing.compare import compare_images
 
 from functools import partial
@@ -97,7 +97,7 @@ def test_get_k_best_scores_values_and_shapes(
     f_scores, _ = f_classif(X.to_numpy(), y)
     assert_allclose(out[0], f_scores)
 
-    mi_scores = mutual_info_classif(X.to_numpy(), y, random_state=0)
+    mi_scores = np.array([0.18134921, 0.17634921, 0.14873016, 0.0, 0.0])
     assert_allclose(out[1], mi_scores)
 
 
@@ -108,7 +108,7 @@ def test_plot_feat_import_consensus_image(tmp_path: Path, stable_rc, baseline_di
     )
     ranked_counts = np.asarray([4, 3, 2, 1])
 
-    with mpl.rc_context(stable_rc):
+    with matplotlib.rc_context(stable_rc):
         fi.plot_feat_import_consensus(
             ranked_names,
             ranked_counts,
@@ -117,7 +117,7 @@ def test_plot_feat_import_consensus_image(tmp_path: Path, stable_rc, baseline_di
             out_dir=tmp_path
         )
 
-    actual = tmp_path/"feat_imp_consensus.png"
+    actual = tmp_path / "feat_imp_consensus.png"
 
     expected = baseline_dir / "feat_imp_consensus_expected.png"
     result = compare_images(expected, actual, tol=1e-4) # type: ignore[call-overload]
@@ -132,7 +132,6 @@ def test_compare_methods_end_to_end(
     """
     End-to-end test of compare_methods.
     Test consistency of mean rank of important features
-    PNG compared via inline NumPy RMS diff.
     """
     rng = np.random.default_rng(0)
     X, y = classification_dataset
@@ -140,25 +139,30 @@ def test_compare_methods_end_to_end(
     X = X.drop(columns=["PEO 10 kg/mol (wt%)", "Dextran 10 kg/mol (wt%)"])
     model = RandomForestClassifier(random_state=0).fit(X, y)
 
-    with mpl.rc_context(stable_rc):
-        fi.compare_methods(model, X, y, out_dir=tmp_path, top=3, rng=rng)
+    with matplotlib.rc_context(stable_rc):
+        fi.compare_methods(model, X, y, out_dir=tmp_path, top=3, rng=rng, random_seed=0)
 
     actual_csv_path = tmp_path / "feature_importance_comparison.csv"
 
     actual_df = pd.read_csv(actual_csv_path, index_col=0)
-    # SHAP importance values fluctuate on the order of 1e-2 floating
-    # point precision between calls, so check that the mean ranking of
-    # the feature importance values is preserved.
-    assert_allclose(actual_df["mean_rank"], [1.0, 2.333333333333333, 2.6666666666666665])
+    # make assertions on the output values of the feature importance
+    assert_allclose(actual_df["SHAP"], np.array([0.12727535, 0.12045986, 0.07586197]))
+    assert_allclose(actual_df["EBM"], np.array([4.74274969, 1.40791415, 3.04091987]))
+    assert_allclose(actual_df["LIME"], np.array([0.17812868, 0.17708737, 0.09043377]))
 
-    # check the output of ebm importance ranking.
-    # for the same reason that SHAP values are difficult to compare,
-    # the SHAP plot and FIC plots also fluctuate between runs, 
-    # by a floating point value big enough to make image comparison difficult.
+    # check the output of ebm importance ranking, shap summary plot, and fic plot
     ebm_act = tmp_path / "ebm_importance.png"
     ebm_exp = baseline_dir / "ebm_importance_expected.png"
     result = compare_images(ebm_exp, ebm_act, tol=1e-4) # type: ignore[call-overload]
+    shap_act = tmp_path / "shap_summary.png"
+    shap_exp = baseline_dir / "shap_summary_exp.png"
+    result2 = compare_images(shap_exp, shap_act, tol=1e-4) # type: ignore[call-overload]
+    fic_act = tmp_path / "feat_imp_consensus.png"
+    fic_exp = baseline_dir / "feat_imp_consensus_exp.png"
+    result3 = compare_images(fic_exp, fic_act, tol=1e-4) # type: ignore[call-overload]
     assert result is None
+    assert result2 is None
+    assert result3 is None
 
 
 def test_plot_feature_importance_comparsion(tmp_path, baseline_dir):
@@ -166,7 +170,7 @@ def test_plot_feature_importance_comparsion(tmp_path, baseline_dir):
     regression test for the visual appearance of
     ``feature_importance_comparison.png``
     """
-    comp_df = pd.read_csv(baseline_dir / "feature_importance_comparison_expected.csv")
+    comp_df = pd.read_csv(baseline_dir / "feature_importance_comparison.csv")
     fi.plot_feature_importance_comparison(comp_df, tmp_path, top=3)
     output_img = tmp_path / "feature_importance_comparison.png"
     exp_img = baseline_dir / "feature_importance_comparison_expected.png"

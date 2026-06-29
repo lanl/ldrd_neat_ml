@@ -52,6 +52,8 @@ roots:
 
 inference_model: path/to/saved/joblib/model/from/training (used when running inference separately)
 
+random_seed: (optional) integer value for setting random seed value for SHAP explainer
+
 datasets:
   - id: name_of_save_folder
     method: Supports ``OpenCV`` or ``BubbleSAM`` as input

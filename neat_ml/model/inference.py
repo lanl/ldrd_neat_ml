@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import logging
-from .train import preprocess, plot_roc
+from neat_ml.model.train import preprocess, plot_roc 
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def save_predictions(
     Parameters
     ----------
     df : pd.DataFrame
-        Source data (+ optional ground truth).
+        Input dataframe to save.
     y_prob : np.ndarray
         Positive-class probabilities.
     out_csv : Path
@@ -29,6 +29,8 @@ def save_predictions(
     """
     df_out = df.copy()
     df_out["Pred_Prob"] = y_prob
+    # TODO: probability threshold (0.5) below is arbitrary
+    #       and should be updated to use the EER threshold
     df_out["Pred_Label"] = (y_prob >= 0.5).astype(int)
     df_out.to_csv(out_csv, index=False)
     logger.info(f"Predictions saved -> {out_csv}")

@@ -430,6 +430,7 @@ def stage_explain(
     paths: dict[str, Path],
     model_path: Path,
     target: str = "Phase_Separation",
+    random_seed: int | None = None,
 ) -> None:
     """
     Generates feature importance reports for a trained model.
@@ -451,6 +452,8 @@ def stage_explain(
         The path to the saved .joblib model bundle file.
     target : str
         Target dataframe column for performing explanation
+    random_seed : int
+        Optional random seed value for initializing SHAP explainer
     """
     log.info(f"--- Starting Explainability Stage for model: {model_path} ---")
     
@@ -483,6 +486,7 @@ def stage_explain(
         y=y, 
         out_dir=explain_dir, 
         top=top,
+        random_seed=random_seed,
     )
     log.info(f"--> Explainability plots saved to {explain_dir}")
 

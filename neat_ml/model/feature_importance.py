@@ -32,6 +32,7 @@ def _run_shap(
     top: int = 20,
     n_jobs: int = -1,
     rng: np.random.Generator | None = None,
+    random_seed: int | None = None,
 ) -> pd.Series:
     """
     Compute global SHAP values for *model* and derive per-feature importance.
@@ -57,6 +58,8 @@ def _run_shap(
         all cores.
     rng : np.random.Generator | None
         pseudorandom number generator
+    random_seed : int | None
+        optional random seed for initializing explainer
 
     Returns
     -------
@@ -69,16 +72,19 @@ def _run_shap(
         algorithm="permutation",
         n_jobs=n_jobs,
         feature_names=X.columns,
+        seed=random_seed,
     )
     vals = explainer(X.values).values
     vals = vals[:, :, 1] if vals.ndim == 3 else vals
     imp = pd.Series(np.abs(vals).mean(0), index=X.columns).sort_values(ascending=False)
 
+    # TODO: fix shap summay plot fig, ax handling in line with issue #29
+    fig = plt.figure()
     shap.summary_plot(vals, features=X, max_display=top, show=False, rng=rng)
-    plt.gcf().set_size_inches(8, 6)
+    fig.set_size_inches(8, 6)
     plt.tight_layout()
-    plt.savefig(out_dir / "shap_summary.png", dpi=300)
-    plt.close()
+    fig.savefig(out_dir / "shap_summary.png", dpi=300)
+    plt.close(fig)
     return imp
 
 
@@ -287,10 +293,10 @@ def plot_feat_import_consensus(
     ax.invert_yaxis()
     ax.set_xlabel(f"% models with feature in top {top_feat_count}")
     ax.set_yticks(y_pos, ranked_names.tolist())
-    ax.set_title(f"Feature-importance consensus (n={num_models})")
+    ax.set_title(f"Feature importance consensus (n={num_models})")
     fig.tight_layout()
     fig.savefig(out_dir / "feat_imp_consensus.png", dpi=300)
-    plt.close()
+    plt.close(fig)
     logger.info(f"Consensus plot saved -> {out_dir}")
 
 def compare_methods(
@@ -300,6 +306,7 @@ def compare_methods(
     out_dir: Path,
     top: int,
     rng: np.random.Generator | None = None,
+    random_seed: int | None = None,
 ) -> None:
     """
     Run SHAP, EBM and LIME on *model* and merge their feature importances.
@@ -324,9 +331,11 @@ def compare_methods(
         consensus calculation.
     rng : np.random.Generator
         pseudorandom number generator
+    random_seed : int | None
+        optional seed for initializing shap explainer
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    shap_imp = _run_shap(model, X, out_dir, top=top, rng=rng)
+    shap_imp = _run_shap(model, X, out_dir, top=top, rng=rng, random_seed=random_seed)
     ebm_imp  = _run_ebm(X, y, out_dir, top=top)
     lime_imp = _run_lime(model, X)
 
@@ -346,7 +355,7 @@ def compare_methods(
 
     ranked_names, ranked_counts, n_models = feature_importance_consensus(
         comp.to_numpy()[:,:3].T,
-        comp.index.values.astype(str),
+        comp.index.values,
         top_feat_count=top,
     )
     plot_feat_import_consensus(
@@ -382,4 +391,4 @@ def plot_feature_importance_comparison(
     ax.set_title("Comparison of Feature Importance Rankings")
     fig.tight_layout()
     fig.savefig(out_dir / "feature_importance_comparison.png", dpi=300)
-    plt.close()
+    plt.close(fig)

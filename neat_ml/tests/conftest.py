@@ -10,7 +10,6 @@ import cv2
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 import joblib
 
 # try setting plot font to ``Arial``, if installed, 
@@ -238,7 +237,6 @@ def trained_model_bundle(tmp_path_factory):
     model = Pipeline(
         [
             ("impute", SimpleImputer(strategy="median")),
-            ("scale", StandardScaler()),
             ("clf", RandomForestClassifier(random_state=42)),
         ]
     )
