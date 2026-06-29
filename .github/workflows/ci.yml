@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, nidhin_data_analysis_backup ]
 
 jobs:
   test:
@@ -32,6 +32,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ttf-mscorefonts-installer || true
         sudo fc-cache -f -v
+    - name: install openmp
+      if: runner.os == 'macOS'
+      run: |
+        brew update
+        brew install libomp
+    # explicitly set the `OMP_NUM_THREADS=1` (which is already the default for linux runners
+    # that use `libgomp`) environment variable for MacOS runners to prevent oversubscription
+    # of cpu threads when performing parallel operations.
+    - name: Set Thread Limit for macOS
+      if: runner.os == 'macOS'
+      run: |
+        echo "Limiting OpenMP to 1 thread to prevent oversubscription on MacOS runners."
+        echo "OMP_NUM_THREADS=1" >> $GITHUB_ENV
     - name: test
       run: |
         cd /tmp && python -m pytest --pyargs neat_ml --cov=neat_ml --cov-report=term-missing
