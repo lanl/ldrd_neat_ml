@@ -17,6 +17,7 @@ authors:
   - given-names: Mihee
     family-names: Kim
     email: miheekim@lanl.gov
+# TODO: add `doi:` key after code release 
 repository-code: 'https://github.com/lanl/ldrd_neat_ml'
 license: BSD-3-Clause
 preferred-citation:
