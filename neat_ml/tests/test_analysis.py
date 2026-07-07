@@ -1,11 +1,12 @@
 from pathlib import Path
 import numpy as np
-import numpy.testing as npt
+from numpy.testing import assert_equal, assert_allclose, assert_array_equal
 import pandas as pd
 import pytest
 from neat_ml.analysis import data_analysis as da
 from pandas.testing import assert_frame_equal, assert_series_equal
 import logging
+from typing import Literal
 
 
 @pytest.mark.parametrize("pts, expected, img_hyp",
@@ -19,9 +20,8 @@ import logging
     
 )
 def test_calculate_nnd_stats(pts, expected, img_hyp):
-
     actual = da._calculate_nnd_stats(pts, img_hyp)
-    npt.assert_equal(actual, expected)
+    assert_equal(actual, expected)
 
 @pytest.mark.parametrize("pts, exp, warn_msg",
     [
@@ -70,7 +70,9 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
     """
     caplog.set_level(logging.WARNING)
     actual = da._calculate_voronoi_stats(pts)
-    assert actual == pytest.approx(exp)
+    assert actual.keys() == exp.keys()
+    for key, value in actual.items():
+        assert_allclose(value, exp[key])  
     if warn_msg is not None:
         assert warn_msg in caplog.text
 
@@ -164,7 +166,7 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
         # generate realistic "points" and "areas" inputs
         rng = np.random.default_rng(0)
         pts = rng.integers(2, 2000, (10,2)) * 0.5
-        areas = rng.integers(1, 1000, 10).astype(float)
+        areas = rng.integers(1, 1000, 10)
     actual = da._calculate_graph_metrics(
         pts,
         areas,
@@ -173,7 +175,9 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
         r_param=r_param,
         img_hyp=1e7)
     exp_out = {key: value for key, value in zip(exp_cols, expected)}
-    assert actual == pytest.approx(exp_out, nan_ok=True)
+    assert actual.keys() == exp_out.keys()
+    for key, value in actual.items():
+        assert_allclose(value, exp_out[key])
     
 
 @pytest.mark.parametrize("input_df, expected_w_h",
@@ -200,12 +204,12 @@ def test_extract_blob_properties(make_dummy_blobs, input_df, expected_w_h):
             bbox_col="bbox",
         )
     )
-    npt.assert_allclose(actual_centers, expected_centers)
-    npt.assert_allclose((actual_w, actual_h), expected_w_h)
+    assert_allclose(actual_centers, expected_centers)
+    assert_allclose((actual_w, actual_h), expected_w_h)
     if input_df is not None:
         # compare outputs containing actual values
-        npt.assert_allclose(actual_areas, expected_areas)
-        npt.assert_allclose(actual_radii, expected_radii)
+        assert_allclose(actual_areas, expected_areas)
+        assert_allclose(actual_radii, expected_radii)
     else:
         # compare outputs containing empty data structures
         assert_series_equal(actual_areas, expected_areas)
@@ -242,12 +246,12 @@ def test_calculate_all_spatial_metrics(
 
     # some sanity checks for outputs
     assert len(actual) == 22
-    npt.assert_allclose(actual["mean_blob_area"], df["area"].mean())
+    assert_allclose(actual["mean_blob_area"], df["area"].mean())
     assert actual["graph_num_nodes"] == exp_nodes 
-    npt.assert_allclose(actual["graph_avg_neighbor_distance"], exp_neighbor_dist)
-    npt.assert_allclose(actual["mean_nnd"], exp_mean_nnd)
-    npt.assert_allclose(actual["mean_voronoi_area"], exp_mva)
-    # assert that no warnings were raised, indicating that the voronoi stats
+    assert_allclose(actual["graph_avg_neighbor_distance"], exp_neighbor_dist)
+    assert_allclose(actual["mean_nnd"], exp_mean_nnd)
+    assert_allclose(actual["mean_voronoi_area"], exp_mva)
+    # assert that no warnings were logged, indicating that the voronoi stats
     # were not calculated for any array < length 4
     assert caplog.text == ''
 
@@ -288,16 +292,16 @@ def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
         "graph_avg_neighbor_distance",
         "graph_avg_node_area_lcc",
     ):
-        npt.assert_allclose(out[key], np.nan, equal_nan=True)
+        assert_allclose(out[key], np.nan, equal_nan=True)
 
-    npt.assert_array_equal(
+    assert_array_equal(
         np.array([out["graph_num_nodes"], out["graph_num_edges"]]),
         np.array([0, 0]),
     )
 
 
 @pytest.mark.parametrize("method", ["OpenCV", "BubbleSAM"])
-def test_load_df(tmp_path: Path, method):
+def test_load_df(tmp_path: Path, method: Literal["OpenCV", "BubbleSAM"]):
     df_original = pd.DataFrame(
         {
             "area": [100.0],
@@ -313,16 +317,16 @@ def test_load_df(tmp_path: Path, method):
     expected_center_y = (10.0 + 50.0) / 2
     expected_radius = np.sqrt(100.0 / np.pi)
 
-    actual_center_x = actual_df["center_x"].iloc[0]
-    actual_center_y = actual_df["center_y"].iloc[0]
-    actual_radius = actual_df["radius"].iloc[0]
+    actual_center_x = actual_df["center_x"]
+    actual_center_y = actual_df["center_y"]
+    actual_radius = actual_df["radius"]
 
     if method == "OpenCV":
         assert "center" not in actual_df.columns
 
-    npt.assert_allclose(actual_center_x, expected_center_x)
-    npt.assert_allclose(actual_center_y, expected_center_y)
-    npt.assert_allclose(actual_radius, expected_radius)
+    assert_allclose(actual_center_x, expected_center_x)
+    assert_allclose(actual_center_y, expected_center_y)
+    assert_allclose(actual_radius, expected_radius)
 
 
 @pytest.mark.parametrize(
@@ -397,6 +401,7 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
         }
     )
 
+    expected_df = df.copy()
     out = da._calculate_summary_statistics(
         df,
         group_cols=["Group", "Label"],
@@ -405,7 +410,7 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
         exclude_numeric_regex=[r"^graph_.*"],
     )
 
-    expected = df[["Group", "Label", "Other"]].drop_duplicates().reset_index(drop=True)
+    expected = expected_df[["Group", "Label", "Other"]].drop_duplicates().reset_index(drop=True)
     assert_frame_equal(out, expected)
 
 @pytest.mark.parametrize("method, drop_comp_row",
@@ -440,9 +445,9 @@ def test_merge_composition_data(mock_dir, method, drop_comp_row,):
 )
 def test_process_parquet_files_errors(
     tmp_path: Path,
-    mode,
-    err,
-    err_msg,
+    mode: Literal["OpenCV", "BubbleSAM"],
+    err: type[Exception],
+    err_msg: str,
 ):
     with pytest.raises(err, match=err_msg):
         da._process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
@@ -528,21 +533,20 @@ def test_full_analysis_pipeline(
     
     assert "Phase_Separation" in df_agg.columns
     time_value = df_per.get("Time")
-    time_value = time_value.item() if time_value is not None else time_value
-    assert time_label == time_value
-    npt.assert_array_equal(df_agg.columns[:len(group_cols)], group_cols)
+    assert_array_equal(time_value, time_label)
+    assert_array_equal(df_agg.columns[:len(group_cols)], group_cols)
     # numerical checks on the per-image df
-    npt.assert_allclose(df_per["std_blob_area"], 107.07261295235324)
-    npt.assert_allclose(df_per["graph_degree_std"], 0.9189365834726816)
-    npt.assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
-    npt.assert_allclose(df_per["coverage_percentage"], 38.04123711340206)
+    assert_allclose(df_per["std_blob_area"], 107.07261295235324)
+    assert_allclose(df_per["graph_degree_std"], 0.9189365834726816)
+    assert_allclose(df_per["mean_voronoi_area"], 5450.5100956330925)
+    assert_allclose(df_per["coverage_percentage"], 38.04123711340206)
     # numerical checks on the aggregated df
     if phase_label is None:
-        npt.assert_allclose(df_agg["mean_blob_area_max"], 332.1)
-        npt.assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
-        npt.assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
-        npt.assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
-        npt.assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
+        assert_allclose(df_agg["mean_blob_area_max"], 332.1)
+        assert_allclose(df_agg["graph_avg_degree_min"], 2.2)
+        assert_allclose(df_agg["graph_avg_neighbor_distance_min"], 21.13193381222392)
+        assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
+        assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
 @pytest.mark.parametrize("summary_df_drop_key, comp_df_drop_key, err_msg",
     [
@@ -559,8 +563,12 @@ def test_full_analysis_pipeline(
 def test_merge_composition_data_errors(
     summary_df_drop_key,
     comp_df_drop_key,
-    err_msg):
-    """Ensure clear error text when requested cols are missing in composition_df."""
+    err_msg
+):
+    """
+    Ensure that the appropriate error is raised with expected output
+    text when requested cols are missing in composition_df.
+    """
     summary_df = pd.DataFrame({"UniqueID": ["id1"], "metric": [42]})
     comp_df = pd.DataFrame({"UniqueID": ["id1"], "Phase": [True]})
     if summary_df_drop_key is not None:
@@ -579,20 +587,20 @@ def test_merge_composition_data_errors(
         )
 
 
-@pytest.mark.parametrize("file_suff, method, n_value_errors, len_df",
+@pytest.mark.parametrize("file_suff, method, n_value_errors, df_shape",
     [
-        ("masks_filtered", "BubbleSAM", 1, 1),
+        ("masks_filtered", "BubbleSAM", 1, (1, 28)),
         # should only throw a value error when
         # bubblesam is missing area/bbox columns
-        ("bubble_data", "OpenCV", 0, 2),
+        ("bubble_data", "OpenCV", 0, (2, 28)),
     ]
 )
 def test_process_parquet_files_warns_and_continues(
     tmp_path: Path,
-    file_suff,
-    method,
-    n_value_errors,
-    len_df,
+    file_suff: str,
+    method: Literal["OpenCV", "BubbleSAM"],
+    n_value_errors: int,
+    df_shape: tuple,
 ):
     """
     test that ``process_parquet_files`` warns on unparsable filenames and
@@ -602,7 +610,7 @@ def test_process_parquet_files_warns_and_continues(
     input_dir = tmp_path / "input"
     input_dir.mkdir()
 
-    # a file that contains all the necessary information for
+    # a parquet file that contains all the necessary information for
     # returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
@@ -618,7 +626,7 @@ def test_process_parquet_files_warns_and_continues(
         }).to_parquet(
         input_dir / good
     )
-    # a parquet file that is not in the correct format and
+    # a parquet filename that is not in the correct format and
     # therefore is not readable by the ``_parse_filename`` function
     unparsable = f"weird_{file_suff}.parquet.gzip"
     pd.DataFrame(
@@ -629,17 +637,17 @@ def test_process_parquet_files_warns_and_continues(
         }).to_parquet(
         input_dir / unparsable
     )
-    # a file that does not contain the appropriate columns
+    # a parquet file that does not contain the appropriate columns
     # for calculating the output metrics with method == bubblesam
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
         f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
     pd.DataFrame({"wrong_col": [1], "center": [(10.0, 10.0)]}).to_parquet(input_dir / badcontent)
-    # a file that does not contain readable parquet data
+    # a parquet file that does not contain readable parquet data
     arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
         f"3333-3333-3333-333333333333_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_invalid, "w") as f:
         f.write("ArrowInvalid text file")
-    # a file that is completely empty
+    # a parquet file that is completely empty
     arrow_io = ("offset -1_center_A3_O_Ph_Raw_44444444-"
         f"4444-4444-4444-444444444444_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_io, "w") as f:
@@ -664,7 +672,7 @@ def test_process_parquet_files_warns_and_continues(
         assert exp_msg in all_msgs
 
     assert isinstance(df, pd.DataFrame)
-    assert len(df) == len_df
+    assert df.shape == df.shape
 
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):

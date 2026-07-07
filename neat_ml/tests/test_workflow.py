@@ -6,6 +6,7 @@ import shutil
 import torch
 import pandas as pd
 from numpy.testing import assert_allclose
+import copy
 
 import neat_ml.workflow.lib_workflow as wf
 
@@ -83,9 +84,9 @@ def test_as_steps_set_normalizes_and_expands(steps_str, expected, err):
 )
 def test_get_path_structure_builds_expected_paths(
     tmp_path: Path,
-    roots,
-    ds,
-    steps,
+    roots: dict,
+    ds: dict,
+    steps: list,
 ):
     """
     test that `get_path_structure` builds the appropriate paths
@@ -99,8 +100,9 @@ def test_get_path_structure_builds_expected_paths(
         "composition_csv": "comp.csv",
     }
     base_ds.update(ds)
+    input_ds = copy.deepcopy(base_ds)
     roots = {k: tmp_path / v for k, v in roots.items()}
-    paths = wf.get_path_structure(roots, base_ds, steps)  #type: ignore[arg-type]
+    paths = wf.get_path_structure(roots, input_ds, steps)
 
     base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
     assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
@@ -119,14 +121,14 @@ def test_get_path_structure_builds_expected_paths(
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
-def test_get_path_structure_fallbacks(tmp_path):
+def test_get_path_structure_fallbacks(tmp_path: Path):
     """
     test that `get_path_structure` uses input dict fallbacks
     when not explicitly defined by user. will fail if fallbacks are None.
     """
     roots = {"work": "work_path"}
     ds = {"method": "OpenCV", "id": "ds_id"}
-    paths = wf.get_path_structure(roots, ds, "detect")
+    paths = wf.get_path_structure(roots, ds, ["detect"])
     assert paths.get("proc_dir") == Path("work_path/ds_id/OpenCV/_Processed_OpenCV")
     assert paths.get("det_dir") == Path("work_path/ds_id/OpenCV/_Processed_OpenCV_With_Blob_Data")
 
@@ -583,9 +585,9 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
 def test_stage_analyze_features_input_dir_warnings(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
-    mode,
-    input_exist,
-    warn_msg,
+    mode: str,
+    input_exist: bool,
+    warn_msg: str,
 ):
     """
     Input dir exists but contains no parquet files.
