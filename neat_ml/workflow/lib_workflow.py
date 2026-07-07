@@ -287,8 +287,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     
     if graph_method is None:
         raise ValueError("Please provide `graph_method` input.")
-    if ((graph_method.lower() == "knn" and k_param is None)
-        or (graph_method.lower() == "radius" and r_param is None)):
+    if ((graph_method == "knn" and k_param is None)
+        or (graph_method == "radius" and r_param is None)):
         raise ValueError(
             (f"Graph method: {graph_method} requires appropriate"
             "param input (i.e. `k_param` or `r_param`).")
