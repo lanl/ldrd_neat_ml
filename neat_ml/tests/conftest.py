@@ -131,7 +131,7 @@ def make_dummy_blobs():
         return df, center_x, center_y, areas, radii
     return _make
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def mock_dir(tmp_path_factory, make_dummy_blobs):
     """Creates a mock directory structure for end-to-end pipeline testing."""
     tmp_out_path = tmp_path_factory.mktemp("out")
