@@ -610,8 +610,8 @@ def test_process_parquet_files_warns_and_continues(
     input_dir = tmp_path / "input"
     input_dir.mkdir()
 
-    # a parquet file that contains all the necessary information for
-    # returning a dataframe containing a row of calculated metrics
+    # a parquet file with a parseable filename and appropriate contents
+    # for returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
     if method == "BubbleSAM":
@@ -626,8 +626,9 @@ def test_process_parquet_files_warns_and_continues(
         }).to_parquet(
         input_dir / good
     )
-    # a parquet filename that is not in the correct format and
-    # therefore is not readable by the ``_parse_filename`` function
+    # a parquet file with appropriate contents but having a filename
+    # that is not in the correct format and therefore is not readable
+    # by the ``_parse_filename`` function
     unparsable = f"weird_{file_suff}.parquet.gzip"
     pd.DataFrame(
         {
@@ -637,17 +638,18 @@ def test_process_parquet_files_warns_and_continues(
         }).to_parquet(
         input_dir / unparsable
     )
-    # a parquet file that does not contain the appropriate columns
-    # for calculating the output metrics with method == bubblesam
+    # a parquet file with a parseable filename, that does not contain
+    # the appropriate columns for calculating the output metrics
+    # with method == bubblesam
     badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
         f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
     pd.DataFrame({"wrong_col": [1], "center": [(10.0, 10.0)]}).to_parquet(input_dir / badcontent)
-    # a parquet file that does not contain readable parquet data
+    # a parquet file with a parseable filename, that does not contain readable parquet data
     arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
         f"3333-3333-3333-333333333333_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_invalid, "w") as f:
         f.write("ArrowInvalid text file")
-    # a parquet file that is completely empty
+    # a parquet file with a parseable filename that is completely empty
     arrow_io = ("offset -1_center_A3_O_Ph_Raw_44444444-"
         f"4444-4444-4444-444444444444_{file_suff}.parquet.gzip")
     with open(input_dir / arrow_io, "w") as f:
