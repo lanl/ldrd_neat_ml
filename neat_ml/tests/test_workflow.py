@@ -119,6 +119,17 @@ def test_get_path_structure_builds_expected_paths(
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
+def test_get_path_structure_fallbacks(tmp_path):
+    """
+    test that `get_path_structure` uses input dict fallbacks
+    when not explicitly defined by user. will fail if fallbacks are None.
+    """
+    roots = {"work": "work_path"}
+    ds = {"method": "OpenCV", "id": "ds_id"}
+    paths = wf.get_path_structure(roots, ds, "detect")
+    assert paths.get("proc_dir") == Path("work_path/ds_id/OpenCV/_Processed_OpenCV")
+    assert paths.get("det_dir") == Path("work_path/ds_id/OpenCV/_Processed_OpenCV_With_Blob_Data")
+
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
     If 'work' key is missing in roots, a KeyError is raised.
@@ -464,29 +475,42 @@ def test_stage_analyze_features_warns_when_composition_csv_missing(
         "analysis": {
             "input_dir": input_dir, 
             "composition_csv": missing_csv,
-            "graph_method": "knn",
-            "graph_param": 1
             }
          }
-    wf.stage_analyze_features(ds, {})
+    roots = {"work": "work_path", "results": "results_path"}
+    paths = wf.get_path_structure(roots, ds, ["analysis"])
+    wf.stage_analyze_features(ds, paths)
 
     assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
 
 
+@pytest.mark.parametrize("include_save_paths, include_ds_id, ds_id",
+    [
+        # test case with user provided save paths and `ds_id`
+        # desired behavior: use user provided save paths
+        (True, True, "AN4"),
+        # test case without user provided save paths, but with `ds_id`
+        # desired behavior: use default save paths with `ds_id` subdir
+        (False, True, "AN4"),
+        # test case without user provided save paths or `ds_id`
+        # desired behavior: use default save paths with default `ds_id` ("unknown")
+        (False, False, "unknown")
+    ]
+)
 def test_stage_analyze_features_happy_path_calls_full_analysis(
     tmp_path: Path,
-    mock_dir,
+    mock_dir: tuple[Path, Path, Path],
+    include_save_paths: bool,
+    include_ds_id: bool,
+    ds_id: str,
 ):
     """
     stage_analyze_features: happy path creates output dirs
     and calls full_analysis with expected args.
     """
     input_dir, output_dir, comp_csv = mock_dir
-    out_per = output_dir / "per_image.csv"
-    out_agg = output_dir / "aggregate.csv"
     
     ds = {
-        "id": "AN4",
         "method": "OpenCV",
         "time_label": "T99",
         "composition_cols": ["PEG", "Dex"],
@@ -494,11 +518,26 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
         "k_param": 7,
         "analysis": {
             "input_dir": input_dir,
-            "per_image_csv": out_per,
-            "aggregate_csv": out_agg,
         },
     }
-    roots = {"work": input_dir, "results": output_dir}
+    # user provided `ds_id` (overrides default "unknown")
+    if include_ds_id:
+        ds.update({"id": ds_id})
+    # user provided save paths override default save paths
+    if include_save_paths:
+        out_per = output_dir / "per_image.csv"
+        out_agg = output_dir / "aggregate.csv"
+        ds["analysis"].update( # type: ignore[attr-defined]
+            {
+                "per_image_csv": out_per,
+                "aggregate_csv": out_agg,
+            }
+        )
+    else:
+        # expected default save paths
+        out_per = output_dir / ds_id / "per_image.csv"
+        out_agg = output_dir / ds_id / "aggregate.csv"
+    roots = {"work": str(input_dir), "results": str(output_dir)}
     paths = wf.get_path_structure(roots, ds, ["analysis"])
     wf.stage_analyze_features(ds, paths)
 
@@ -550,7 +589,7 @@ def test_stage_analyze_features_input_dir_warnings(
             "k_param": 1
         },
     }
-    wf.stage_analyze_features(ds, paths={})
+    wf.stage_analyze_features(ds, paths={"per_csv": "per_img.csv", "agg_csv": "agg.csv"})
     assert warn_msg in caplog.text
 
 
@@ -585,4 +624,4 @@ def test_stage_analyze_features_no_graph_method_param_error(
             },
         }
     with pytest.raises(ValueError, match=err_msg):
-        wf.stage_analyze_features(ds, paths={})
+        wf.stage_analyze_features(ds, paths={"per_csv": "per_img.csv", "agg_csv": "agg.csv"})

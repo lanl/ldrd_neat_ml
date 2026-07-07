@@ -75,7 +75,7 @@ def get_path_structure(
     """
     paths = {}
     ds_id = dataset_config.get("id", "unknown")
-    method = dataset_config.get("method", "")
+    method = dataset_config["method"]
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
@@ -234,10 +234,15 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     paths : dict[str, Path]
         Paths built for active steps.
     """
-    # gather dataset configuration settings
-    ds_id = dataset_config.get("id", "unknown")
-    mode = dataset_config.get("method", "")
-    time_label = dataset_config.get("time_label", "")
+    # gather optional dataset configuration settings
+    # from user input. defaults are set in `paths` by
+    # calling `get_path_structure`, where "root:work" and
+    # "root:results" dirs are default if user settings
+    # are not provided and default `ds_id` is "unknown".
+    # user input is required for `method`.
+    ds_id = dataset_config.get("id")
+    mode = dataset_config["method"]
+    time_label = dataset_config.get("time_label")
 
     composition_cols = dataset_config.get("composition_cols", [])
     analysis_cfg = dataset_config.get("analysis", {})
@@ -260,17 +265,14 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         log.warning(f"Analysis input_dir '{input_dir}' does not exist for '{ds_id}'.")
         return
 
-    per_image_csv = Path(
-        analysis_cfg.get("per_image_csv") or paths.get("per_csv") or Path.cwd()
-    )
-    aggregate_csv = Path(
-        analysis_cfg.get("aggregate_csv") or paths.get("agg_csv") or Path.cwd()
-    )
+    # get the dataset paths for saving analysis results
+    # from the path structure generated from user input
+    # or defaults.
+    per_image_csv = paths["per_csv"]
+    aggregate_csv = paths["agg_csv"]
+
     # get the path for the composition csv from input configuration
-    composition_csv = (
-        Path(analysis_cfg["composition_csv"])
-        if "composition_csv" in analysis_cfg else paths.get("composition_csv")
-    )
+    composition_csv = paths.get("composition_csv")
     if composition_csv and not composition_csv.exists():
         log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
         return
@@ -292,9 +294,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
             "param input (i.e. `k_param` or `r_param`).")
         )
 
-    method_key = mode.lower()
-    expected_pattern = ("*_bubble_data.parquet.gzip" if method_key == "opencv"
-        else "*_masks_filtered.parquet.gzip" if method_key == "bubblesam" else None
+    expected_pattern = ("*_bubble_data.parquet.gzip" if mode == "OpenCV"
+        else "*_masks_filtered.parquet.gzip" if mode == "BubbleSAM" else None
     )
     if expected_pattern is not None and not any(input_dir.rglob(expected_pattern)):
         log.warning(
