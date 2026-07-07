@@ -484,17 +484,20 @@ def test_stage_analyze_features_warns_when_composition_csv_missing(
     assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
 
 
-@pytest.mark.parametrize("include_save_paths, include_ds_id, ds_id",
+@pytest.mark.parametrize("include_save_paths, include_ds_id, include_analysis_cfg, ds_id",
     [
         # test case with user provided save paths and `ds_id`
         # desired behavior: use user provided save paths
-        (True, True, "AN4"),
+        (True, True, True, "AN4"),
         # test case without user provided save paths, but with `ds_id`
         # desired behavior: use default save paths with `ds_id` subdir
-        (False, True, "AN4"),
+        (False, True, True, "AN4"),
         # test case without user provided save paths or `ds_id`
         # desired behavior: use default save paths with default `ds_id` ("unknown")
-        (False, False, "unknown")
+        (False, False, True, "unknown"),
+        # test case without user provided `analysis` cfg
+        # desired behavior: use default paths `det_dir` for `input_dir`
+        (False, True, False, "AN4"),
     ]
 )
 def test_stage_analyze_features_happy_path_calls_full_analysis(
@@ -502,6 +505,7 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     mock_dir: tuple[Path, Path, Path],
     include_save_paths: bool,
     include_ds_id: bool,
+    include_analysis_cfg: bool,
     ds_id: str,
 ):
     """
@@ -516,10 +520,15 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
         "composition_cols": ["PEG", "Dex"],
         "graph_method": "knn",
         "k_param": 7,
-        "analysis": {
-            "input_dir": input_dir,
-        },
     }
+    if include_analysis_cfg:
+        ds.update(
+            {
+                "analysis": {
+                    "input_dir": input_dir,
+                }
+            }
+        )
     # user provided `ds_id` (overrides default "unknown")
     if include_ds_id:
         ds.update({"id": ds_id})
@@ -539,6 +548,13 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
         out_agg = output_dir / ds_id / "aggregate.csv"
     roots = {"work": str(input_dir), "results": str(output_dir)}
     paths = wf.get_path_structure(roots, ds, ["analysis"])
+    if not include_analysis_cfg:
+        # in this case, if no user `analysis` cfg is provided
+        # the default input directory is set to the `det_dir`
+        # path. Recapitulate this behavior by copying the files
+        # from `mock_dir` to the expected path.
+        shutil.copytree(input_dir, paths["det_dir"])
+
     wf.stage_analyze_features(ds, paths)
 
     # assertions about the outputs from calling ``full_analysis``
@@ -589,7 +605,10 @@ def test_stage_analyze_features_input_dir_warnings(
             "k_param": 1
         },
     }
-    wf.stage_analyze_features(ds, paths={"per_csv": "per_img.csv", "agg_csv": "agg.csv"})
+    wf.stage_analyze_features(
+        ds,
+        paths={"per_csv": Path("per_img.csv"), "agg_csv": Path("agg.csv")}
+    )
     assert warn_msg in caplog.text
 
 
