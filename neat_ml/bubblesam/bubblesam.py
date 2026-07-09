@@ -163,8 +163,17 @@ def analyze_and_filter_masks(
                 radius = radius.item()
                 circ = circ.item()
                 euler_number = euler_number.item()
+            # ymin, xmin, ymax, xmax
+            min_row, min_col, max_row, max_col = rp.bbox
+            cx = (max_col + min_col) / 2
+            cy = (max_row + min_row) / 2
             mask_info = {              
-                'bbox': rp.bbox,
+                'bbox_xmax': max_col,
+                'bbox_xmin': min_col,
+                'bbox_ymax': max_row,
+                'bbox_ymin': min_row,
+                'center_x': cx,
+                'center_y': cy,
                 'contour': max_contour,
                 'major_axis': major_axis,
                 'minor_axis': minor_axis,
@@ -202,9 +211,11 @@ def plot_filtered_masks(
 
     for idx, row in masks_summary_df.iterrows():
         contour = row['contour']
-        bbox = row['bbox']
         ax.plot(contour[:, 0], contour[:, 1], linewidth=1, color='blue')
-        min_row, min_col, max_row, max_col = bbox
+        min_row = row["bbox_ymin"]
+        min_col = row["bbox_xmin"]
+        max_row = row["bbox_ymax"]
+        max_col = row["bbox_xmax"]
         rect = Rectangle(
             (min_col, min_row),
             max_col - min_col,

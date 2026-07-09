@@ -320,10 +320,10 @@ def test_run_bubblesam_model_cfg_error():
 @pytest.mark.parametrize("seg_params, exp_bbox",
     [  
         # a test case where the segmentation contains two disjoint areas
-        ([[50, 60], [40, 45]], (50, 50, 60, 60)),
+        ([[50, 60], [40, 45]], [50, 50, 60, 60]),
         # a test case where the segmentation contains a region that touches
         # the image boundary at the bottom right corner
-        ([[90, 100]], (90, 90, 100, 100)),
+        ([[90, 100]], [90, 90, 100, 100]),
     ]
 )
 def test_bubblesam_contours(seg_params, exp_bbox):
@@ -347,5 +347,10 @@ def test_bubblesam_contours(seg_params, exp_bbox):
     df = analyze_and_filter_masks(input_df, 25, 0.7, device="cpu")
     # assert that there is only a single dataframe row after filtration
     # corresponding to the appropriate segmentation map to keep from `seg2`
-    assert df.bbox.item() == exp_bbox
+    # and that the bounding box values contained in the row
+    # correspond to the expected segmentation map.
+    actual_bbox = [
+        df.bbox_ymin.item(), df.bbox_xmin.item(), df.bbox_ymax.item(), df.bbox_xmax.item()
+    ]
+    assert actual_bbox == exp_bbox
     assert df.contour.item().shape == (36, 2)
