@@ -114,7 +114,8 @@ def analyze_and_filter_masks(
     Returns
     -------
     df_filtered : pd.DataFrame
-        A filtered DataFrame with new columns (contour, bbox, major_axis, minor_axis, 
+        A filtered DataFrame with new columns (contour, bbox_xmax, bbox_xmin,
+        bbox_ymax, bbox_ymin, center_x, center_y, major_axis, minor_axis, 
         area, radius, circ, euler_number) but excluding 'segmentation'.
     """
     filtered_rows = []
@@ -202,7 +203,9 @@ def plot_filtered_masks(
     original_image : np.ndarray
         Original image array.
     masks_summary_df : pd.DataFrame
-        DataFrame containing the columns 'contour' and 'bbox' for each mask.
+        DataFrame containing the columns with 'contour' and bounding box
+        coordinates ('bbox_xmax', 'bbox_xmin', 'bbox_ymax', and
+        'bbox_ymin') for each mask.
     output_path : Path
         File path to save the resulting figure.
     """
