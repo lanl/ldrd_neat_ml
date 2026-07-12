@@ -187,3 +187,15 @@ the following command to generate the figures used in the
 manuscript: 
 
 `python -m neat_ml.plot_manuscript_figures`
+
+## Citing this Project
+
+If you use the contents of this repository as part of a project that results in publication,
+please cite the following associated manuscript (citation information is available in the
+repository "About" section under "Cite this repository"):
+
+```
+Thomas, N., Witmer, A., Lee, H. K., López, C. A., Reddy, T., & Kim, M. (2026). Machine
+Learning-Assisted Phase Diagram Determination in Aqueous Two-Phase Systems. Langmuir,
+42(18), 12658-12669.
+```
