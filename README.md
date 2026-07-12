@@ -188,7 +188,7 @@ manuscript:
 
 `python -m neat_ml.plot_manuscript_figures`
 
-### Citing this Project
+## Citing this Project
 
 If you use the contents of this repository as part of a project that results in publication,
 please cite the following associated manuscript (citation information is available in the
