@@ -72,6 +72,7 @@ datasets:
     composition_cols:
       - "Dextran 500 kg/mol (wt%)"
       - "PEO 20 kg/mol (wt%)"
+    img_shape: list containing the height and width (in pixels) of the input images, e.g. [2456, 2052] (required for `analysis` step) 
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)

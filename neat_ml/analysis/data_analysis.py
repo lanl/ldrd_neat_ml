@@ -9,7 +9,6 @@ import pandas as pd
 from scipy.spatial import KDTree, Voronoi, Delaunay
 import logging
 from tqdm.auto import tqdm
-import ast
 
 __all__ = [
     "full_analysis"
@@ -109,63 +108,6 @@ def _parse_filename(
         "Position": pos,
         "Label": label,
     }
-
-
-def _load_df(
-    parquet_path: Path,
-    method: Literal["BubbleSAM", "OpenCV"],
-) -> pd.DataFrame:
-    """
-    Loads a parquet file and converts it to the standard blob schema.
-
-    BubbleSAM parquet files store 'area' and 'bbox'. This function computes the
-    'center' and 'radius' to make it compatible with downstream analysis.
-    OpenCV parquet files already contain these values and so they do not need
-    to be computed, in which case the parquet file is loaded and the ``center``
-    values are converted from a tuple to separate dataframe columns for x
-    and y coordinates.
-
-    Parameters
-    ----------
-    parquet_path : Path
-        The path to the `parquet.gzip` file.
-    method : Literal["BubbleSAM", "OpenCV"]
-        The detection method that was used to generate the parquet file,
-        (i.e. `BubbleSAM` or `OpenCV`)
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame with data from performing detection,
-        has 'center_x', 'center_y', 'area', 'radius', and 'bbox' columns.
-    """
-    df = pd.read_parquet(parquet_path)
-    if method == "BubbleSAM":
-        if {"area", "bbox"}.issubset(df.columns):
-            # ``bbox`` object is converted to a str before saving parquet
-            # in detection module, convert back to list for processing
-            bbox_col = df["bbox"].apply(ast.literal_eval)
-            bbox_arr = np.array(bbox_col.tolist())
-            cy = (bbox_arr[:, 0] + bbox_arr[:, 2]) / 2 
-            cx = (bbox_arr[:, 1] + bbox_arr[:, 3]) / 2 
-            out = pd.DataFrame({
-                "center_x": cx, 
-                "center_y": cy,
-                "area": df["area"],
-                "radius": np.sqrt(df["area"] / np.pi),
-                "bbox": bbox_col,
-            })
-            return out
-        else:
-            raise ValueError("BubbleSAM file is missing 'area' or 'bbox' columns.")
-    # convert the OpenCV center values stored as a tuple into two separate columns
-    # TODO: store these values directly during bubble detection for opencv instead
-    # of performing programmatically.
-    else:
-        df[["center_x", "center_y"]] = pd.DataFrame(df["center"].to_list(), index=df.index)
-        df.drop(columns=["center"], inplace=True)
-
-    return df
 
 
 def _calculate_nnd_stats(
@@ -442,47 +384,44 @@ def _extract_blob_properties(
     center_cols: list[Literal["center_x", "center_y"]],
     area_col: Literal["area"],
     radius_col: Literal["radius"],
-    bbox_col: Literal["bbox"],
-) -> tuple[np.ndarray, pd.Series, pd.Series, tuple[float, float]]:
+    bbox_cols: list[Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]],
+) -> tuple[np.ndarray, pd.Series, pd.Series]:
     """Extracts geometric properties and image size from a blob DataFrame.
 
     Parameters
     ----------
     df : pd.DataFrame
         DataFrame loaded from a blob data parquet file.
-    center_cols: list[str]
+    center_cols: list[Literal["center_x", "center_y"]]
         Column names for blob centroids [x, y].
     area_col : Literal["area"]
         Column name for blob areas
-    radius_col : Literl["radius"]
+    radius_col : Literal["radius"]
         Column name for blob radii.
-    bbox_col : Literal["bbox"]
-        Column name for bounding boxes (x, y, w, h).
+    bbox_cols : Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]
+        Column names for bounding box coordinates.
 
     Returns
     -------
-    tuple[np.ndarray, pd.Series, pd.Series, tuple[float, float]]
-        A tuple containing: (centroids, areas, radii, (image_width, image_height)).
-        Returns empty arrays/NaN values if data is missing.
+    tuple[np.ndarray, pd.Series, pd.Series]
+        A tuple containing: (centroids, areas, radii).
+        Returns empty arrays/pandas series values if data is missing.
     """
-    required_cols = {*center_cols, area_col, radius_col, bbox_col}
+    required_cols = {*center_cols, area_col, radius_col, *bbox_cols}
     if not required_cols.issubset(df.columns) or df.empty:
-        return np.array([]), pd.Series(), pd.Series(), (np.nan, np.nan)
+        return np.array([]), pd.Series(), pd.Series()
 
     centroids = df[center_cols].to_numpy()
     areas = df[area_col]
     radii = df[radius_col]
 
-    bbox_array = np.asarray(df[bbox_col].tolist())
-    img_w = np.max(bbox_array[:, 2])
-    img_h = np.max(bbox_array[:, 3])
-
-    return centroids, areas, radii, (img_w, img_h)
+    return centroids, areas, radii
 
 def _calculate_all_spatial_metrics(
     df_blobs: pd.DataFrame,
     *,
     graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: list,
     k_param: Optional[int] = None,
     r_param: Optional[Union[int, float]] = None,
 ) -> dict[str, Any]:
@@ -497,6 +436,8 @@ def _calculate_all_spatial_metrics(
         The per-blob data table for a single image.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph construction method ('delaunay', 'radius', or 'knn').
+    img_shape : list
+        User provided image shape dimensions, i.e. [height, width]
     k_param : Optional[int]
         The k value for graph construction when method == "knn".
     r_param : Optional[Union[int, float]]
@@ -530,13 +471,14 @@ def _calculate_all_spatial_metrics(
         "median_voronoi_area": np.nan,
         "std_voronoi_area": np.nan,
     }
-    centroids, areas, radii, (w, h) = _extract_blob_properties(
+    centroids, areas, radii = _extract_blob_properties(
         df_blobs,
         center_cols=["center_x", "center_y"],
         area_col="area",
         radius_col="radius",
-        bbox_col="bbox",
+        bbox_cols=["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"],
     )
+    h, w = img_shape
     img_area = w * h
     img_hyp = np.hypot(h, w)
     
@@ -653,6 +595,7 @@ def _process_parquet_files(
     *,
     mode: Literal["OpenCV", "BubbleSAM"],
     graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: list,
     k_param: int | None = None,
     r_param: int | float | None = None,
     time_label: str | None = None,
@@ -674,6 +617,8 @@ def _process_parquet_files(
         which files to look for and how to parse them.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph construction method to use ('delaunay', 'radius', 'knn').
+    img_shape : list
+        User provided image shape dimensions, i.e. [height, width]
     k_param : Optional[int]
         Parameter for ``knn`` graph construction.
     r_param : Optional[int | float]
@@ -709,15 +654,15 @@ def _process_parquet_files(
             continue
         if time_label:
             metadata["Time"] = time_label
-        try:
-            df_blobs = _load_df(parquet_path, mode)
-        except ValueError as exc:
-            warnings.warn(
-                f"Failed to load or parse {parquet_path}: {type(exc).__name__}({exc})"
-            )
-            continue
+        # load the parquet storing the dataframe of blob data
+        # and calculate the per-image metrics
+        df_blobs = pd.read_parquet(parquet_path)
         metrics = _calculate_all_spatial_metrics(
-            df_blobs, graph_method=graph_method, k_param=k_param, r_param=r_param,
+            df_blobs,
+            graph_method=graph_method,
+            k_param=k_param,
+            r_param=r_param,
+            img_shape=img_shape,
         )
         metrics["image_name"] = parquet_path.name.replace("parquet.gzip", "tiff")
         metrics.update(metadata)
@@ -736,6 +681,7 @@ def full_analysis(
     aggregate_csv: Path,
     mode: Literal["OpenCV", "BubbleSAM"],
     graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: list,
     r_param: int | float | None = None,
     k_param: int | None = None,
     composition_csv: Path | None = None,
@@ -770,6 +716,8 @@ def full_analysis(
         The processing mode, either 'OpenCV' or 'BubbleSAM'.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph topology method ('delaunay', 'radius', 'knn').
+    img_shape: list
+        User provided image shape, i.e. [height, width]
     r_param : Optional[Union[int, float]]
         The radius (in pixels) for 'radius' graphs.
     k_param : Optional[int]
@@ -802,6 +750,7 @@ def full_analysis(
         k_param=k_param,
         r_param=r_param,
         time_label=time_label,
+        img_shape=img_shape
     )
 
     # re-order df columns to put the file information first

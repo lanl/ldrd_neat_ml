@@ -453,7 +453,14 @@ def test_stage_analyze_features_warns_when_input_dir_unavailable(
     analysis.input_dir nor paths['det_dir'] is available.
     """
     caplog.set_level(logging.WARNING)
-    ds = {"id": "AN1", "method": "OpenCV", "time_label": "T01", "analysis": {}}
+    ds = {
+        "id": "AN1",
+        "method": "OpenCV",
+        "time_label":
+        "T01",
+        "analysis": {},
+        "img_shape": [10, 10],
+    }
     wf.stage_analyze_features(ds, {})
     assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
 
@@ -474,6 +481,7 @@ def test_stage_analyze_features_warns_when_composition_csv_missing(
         "id": "AN3",
         "method": "OpenCV",
         "time_label": "T01",
+        "img_shape": [10, 10],
         "analysis": {
             "input_dir": input_dir, 
             "composition_csv": missing_csv,
@@ -522,6 +530,7 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
         "composition_cols": ["PEG", "Dex"],
         "graph_method": "knn",
         "k_param": 7,
+        "img_shape": [90, 97],
     }
     if include_analysis_cfg:
         ds.update(
@@ -601,6 +610,7 @@ def test_stage_analyze_features_input_dir_warnings(
         "id": "AN4",
         "method": mode,
         "time_label": "T01",
+        "img_shape": [10, 10],
         "analysis": {
             "input_dir": input_dir,
             "graph_method": "knn",
@@ -614,28 +624,31 @@ def test_stage_analyze_features_input_dir_warnings(
     assert warn_msg in caplog.text
 
 
-@pytest.mark.parametrize("graph_method, graph_param, err_msg",
+@pytest.mark.parametrize("graph_method, graph_param, img_shape, err_msg",
     [
-        (None, None, "Please provide `graph_method` input."),
-        ("knn", None, "Graph method:"),
-        ("radius", None, "Graph method:"),
+        (None, None, [10, 10], "Please provide `graph_method` input."),
+        ("knn", None, [10, 10], "Graph method:"),
+        ("radius", None, [10, 10], "Graph method:"),
+        ("radius", 30, None, "Please provide `img_shape`"),
     ]
 )
-def test_stage_analyze_features_no_graph_method_param_error(
+def test_stage_analyze_features_errors(
     tmp_path,
     graph_method,
     graph_param,
+    img_shape,
     err_msg
 ):
     """
     assert that a ValueError is raised when no ``graph_method`` is provided
     OR when ``graph_method`` is "knn" or "radius" and the appropriate parameter is
-    not provided.
+    not provided OR when ``img_shape`` param is not provided.
     """
     ds = {
         "id": "AN5",
         "method": "BubbleSAM",
         "time_label": "T01",
+        "img_shape": img_shape,
         "analysis":
             {
                 "input_dir": tmp_path,
