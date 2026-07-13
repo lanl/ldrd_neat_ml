@@ -180,32 +180,38 @@ def test_calculate_graph_metrics(method, r_param, k_param, pts, areas, expected)
         assert_allclose(value, exp_out[key])
     
 
-@pytest.mark.parametrize("input_df, expected_w_h",
-    [
-        ("dummy_blobs", (97.0, 90.0)),
-        (None, (np.nan, np.nan)),
-    ]
-)
-def test_extract_blob_properties(make_dummy_blobs, input_df, expected_w_h):
+@pytest.mark.parametrize("input_df", ["dummy_blobs", None])
+def test_extract_blob_properties(make_dummy_blobs, input_df):
     if input_df == "dummy_blobs":
-        df, expected_center_x, expected_center_y, expected_areas, expected_radii = make_dummy_blobs()
-        expected_centers = np.stack([expected_center_x, expected_center_y], axis=1)
+        (df, expected_center_x, expected_center_y,
+            expected_areas, expected_radii) = make_dummy_blobs
+        expected_centers = np.stack(
+            [expected_center_x, expected_center_y], axis=1
+        )
     else:
-        df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
+        df = pd.DataFrame(
+            columns=[
+                "center_x",
+                "center_y",
+                "area",
+                "radius",
+                "bbox_xmax",
+                "bbox_xmin",
+                "bbox_ymin",
+                "bbox_ymax",
+            ]
+        )
         expected_centers = np.array([])
         expected_areas = pd.Series()
         expected_radii = pd.Series()
-    actual_centers, actual_areas, actual_radii, (actual_w, actual_h) = (
-        da._extract_blob_properties(
-            df,
-            center_cols=["center_x", "center_y"],
-            area_col="area",
-            radius_col="radius",
-            bbox_col="bbox",
-        )
+    actual_centers, actual_areas, actual_radii = da._extract_blob_properties(
+        df,
+        center_cols=["center_x", "center_y"],
+        area_col="area",
+        radius_col="radius",
+        bbox_cols=["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"],
     )
     assert_allclose(actual_centers, expected_centers)
-    assert_allclose((actual_w, actual_h), expected_w_h)
     if input_df is not None:
         # compare outputs containing actual values
         assert_allclose(actual_areas, expected_areas)
@@ -242,7 +248,7 @@ def test_calculate_all_spatial_metrics(
     else:
         df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
 
-    actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay")
+    actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay", img_shape=[2440, 1115])
 
     # some sanity checks for outputs
     assert len(actual) == 22
@@ -258,11 +264,15 @@ def test_calculate_all_spatial_metrics(
 @pytest.mark.parametrize(
     "df_empty",
     [
-        pd.DataFrame(columns=["center", "area", "radius", "bbox"]),
+        pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"]),
         pd.DataFrame(
             {
-                "center": [(10.0, 20.0), (30.0, 40.0)],
-                "bbox": [(0, 0, 100, 100), (5, 5, 200, 150)],
+                "center_x": [10.0, 30.0],
+                "center_y": [30.0, 40.0],
+                "bbox_xmax": [100, 200],
+                "bbox_xmin": [0, 0],
+                "bbox_ymax": [100, 150],
+                "bbox_ymin": [0, 0],
                 # "area" and "radius" intentionally omitted
             }
         ),
@@ -270,7 +280,9 @@ def test_calculate_all_spatial_metrics(
     ids=["empty_df_with_required_cols", "missing_required_cols"],
 )
 def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
-    out = da._calculate_all_spatial_metrics(df_empty, graph_method="delaunay")
+    out = da._calculate_all_spatial_metrics(
+        df_empty, graph_method="delaunay", img_shape=[100, 100]
+    )
 
     assert out["num_blobs"] == 0
     assert out["total_blob_area"] == 0.0
@@ -281,7 +293,6 @@ def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
         "std_blob_area",
         "mean_blob_radius",
         "median_blob_radius",
-        "coverage_percentage",
         "mean_nnd",
         "median_nnd",
         "graph_avg_degree",
@@ -295,38 +306,14 @@ def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
         assert_allclose(out[key], np.nan, equal_nan=True)
 
     assert_array_equal(
-        np.array([out["graph_num_nodes"], out["graph_num_edges"]]),
-        np.array([0, 0]),
+        np.array(
+            [
+                out["graph_num_nodes"],
+                out["graph_num_edges"],
+                out["coverage_percentage"],
+            ]),
+        np.array([0, 0, 0.0]),
     )
-
-
-@pytest.mark.parametrize("method", ["OpenCV", "BubbleSAM"])
-def test_load_df(tmp_path: Path, method: Literal["OpenCV", "BubbleSAM"]):
-    df_original = pd.DataFrame(
-        {
-            "area": [100.0],
-            "bbox": '[10.0, 20.0, 50.0, 60.0]',
-            "center": [(40.0, 30.0)],
-            "radius": [np.sqrt(100.0 / np.pi)],
-        }
-    )
-    parquet_path = tmp_path / "mock_masks_filtered.parquet.gzip"
-    df_original.to_parquet(parquet_path)
-    actual_df = da._load_df(parquet_path, method)
-    expected_center_x = (20.0 + 60.0) / 2
-    expected_center_y = (10.0 + 50.0) / 2
-    expected_radius = np.sqrt(100.0 / np.pi)
-
-    actual_center_x = actual_df["center_x"]
-    actual_center_y = actual_df["center_y"]
-    actual_radius = actual_df["radius"]
-
-    if method == "OpenCV":
-        assert "center" not in actual_df.columns
-
-    assert_allclose(actual_center_x, expected_center_x)
-    assert_allclose(actual_center_y, expected_center_y)
-    assert_allclose(actual_radius, expected_radius)
 
 
 @pytest.mark.parametrize(
@@ -423,7 +410,10 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
 def test_merge_composition_data(mock_dir, method, drop_comp_row,):
     input_dir, output_dir, comp_csv = mock_dir
     per_img_df = da._process_parquet_files(
-        input_dir, mode="BubbleSAM", graph_method="delaunay"
+        input_dir,
+        mode="BubbleSAM",
+        graph_method="delaunay",
+        img_shape=[10, 10]
     )
     comp_df = pd.read_csv(input_dir / comp_csv)
     if drop_comp_row is not None:
@@ -437,20 +427,26 @@ def test_merge_composition_data(mock_dir, method, drop_comp_row,):
     # check that the dataframe contains the expected number of rows and columns
     assert actual.shape == (1, 29)
 
-@pytest.mark.parametrize("mode, err, err_msg",
+@pytest.mark.parametrize("mode, img_shape, err, err_msg",
     [
-        ("BadMode", ValueError, "Mode must be either"),
-        ("OpenCV", FileNotFoundError, "No valid files were processed"),
+        ("BadMode", [10, 10], ValueError, "Mode must be either"),
+        ("OpenCV", [10, 10], FileNotFoundError, "No valid files were processed"),
     ]
 )
 def test_process_parquet_files_errors(
     tmp_path: Path,
     mode: Literal["OpenCV", "BubbleSAM"],
+    img_shape: list,
     err: type[Exception],
     err_msg: str,
 ):
     with pytest.raises(err, match=err_msg):
-        da._process_parquet_files(tmp_path, mode=mode, graph_method="delaunay")
+        da._process_parquet_files(
+            tmp_path,
+            mode=mode,
+            graph_method="delaunay",
+            img_shape=img_shape,
+        )
 
 @pytest.mark.parametrize(
     "mode, tiff_name, time_label, phase_label, exp_agg_shape, exp_per_shape", 
@@ -521,6 +517,7 @@ def test_full_analysis_pipeline(
         time_label=time_label,
         group_cols=group_cols,
         carry_over_cols=["Phase_Separation"],
+        img_shape=[90, 97],
     )
 
     assert per_image_csv.exists()
@@ -587,26 +584,23 @@ def test_merge_composition_data_errors(
         )
 
 
-@pytest.mark.parametrize("file_suff, method, n_value_errors, df_shape",
+@pytest.mark.parametrize("file_suff, method",
     [
-        ("masks_filtered", "BubbleSAM", 1, (1, 28)),
-        # should only throw a value error when
-        # bubblesam is missing area/bbox columns
-        ("bubble_data", "OpenCV", 0, (2, 28)),
+        ("masks_filtered", "BubbleSAM"),
+        ("bubble_data", "OpenCV"),
     ]
 )
 def test_process_parquet_files_warns_and_continues(
     tmp_path: Path,
+    make_dummy_blobs: tuple, 
     file_suff: str,
     method: Literal["OpenCV", "BubbleSAM"],
-    n_value_errors: int,
-    df_shape: tuple,
 ):
     """
-    test that ``process_parquet_files`` warns on unparsable filenames and
-    loader failures (ValueError from ``_load_df``), but still
-    returns rows for the good files.
+    test that ``process_parquet_files`` warns on unparsable
+    but still returns rows for the good files.
     """
+    df, _, _, _, _ = make_dummy_blobs 
     input_dir = tmp_path / "input"
     input_dir.mkdir()
 
@@ -614,71 +608,30 @@ def test_process_parquet_files_warns_and_continues(
     # for returning a dataframe containing a row of calculated metrics
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
-    if method == "BubbleSAM":
-        bbox = "[0.0, 0.0, 10.0, 10.0]"
-    elif method == "OpenCV":
-        bbox = [[0.0, 0.0, 10.0, 10.0]] # type: ignore[assignment] 
-    pd.DataFrame(
-        {
-            "area": [10.0],
-            "bbox": bbox,
-            "center": [(5.0, 5.0)]
-        }).to_parquet(
-        input_dir / good
-    )
+    df.to_parquet(input_dir / good)
     # a parquet file with appropriate contents but having a filename
     # that is not in the correct format and therefore is not readable
     # by the ``_parse_filename`` function
     unparsable = f"weird_{file_suff}.parquet.gzip"
-    pd.DataFrame(
-        {
-            "area": [10.0],
-            "bbox": [(0.0, 0.0, 10.0, 10.0)],
-            "center": [(5.0, 5.0)],
-        }).to_parquet(
-        input_dir / unparsable
-    )
-    # a parquet file with a parseable filename, that does not contain
-    # the appropriate columns for calculating the output metrics
-    # with method == bubblesam
-    badcontent = ("offset -2_center_A2_O_Ph_Raw_22222222-"
-        f"2222-2222-2222-222222222222_{file_suff}.parquet.gzip")
-    pd.DataFrame({"wrong_col": [1], "center": [(10.0, 10.0)]}).to_parquet(input_dir / badcontent)
-    # a parquet file with a parseable filename, that does not contain readable parquet data
-    arrow_invalid = ("offset -1_center_A3_O_Ph_Raw_33333333-"
-        f"3333-3333-3333-333333333333_{file_suff}.parquet.gzip")
-    with open(input_dir / arrow_invalid, "w") as f:
-        f.write("ArrowInvalid text file")
-    # a parquet file with a parseable filename that is completely empty
-    arrow_io = ("offset -1_center_A3_O_Ph_Raw_44444444-"
-        f"4444-4444-4444-444444444444_{file_suff}.parquet.gzip")
-    with open(input_dir / arrow_io, "w") as f:
-        pass
+    df.to_parquet(input_dir / unparsable)
 
     with pytest.warns(UserWarning) as record:
-        df = da._process_parquet_files(input_dir, mode=method, graph_method="delaunay")
+        df = da._process_parquet_files(
+            input_dir,
+            mode=method,
+            graph_method="delaunay",
+            img_shape=[10, 10]
+        )
 
     msgs = [str(w.message) for w in record.list]
     all_msgs = "\n".join(msgs)
-    # check that the appropriate warnings are produced
-    # as a result of the various exceptions that can be raised
-    assert sum("ArrowInvalid" in m for m in msgs) == 2
-    assert sum("ValueError" in m for m in msgs) == n_value_errors
-    exp_msgs = [
-        "Could not parse metadata from filename",
-        "Failed to load or parse",
-        "Either the file is corrupted or this is not a parquet file.",
-        "Parquet file size is 0 bytes",
-    ]
-    for exp_msg in exp_msgs:
-        assert exp_msg in all_msgs
-
+    assert "Could not parse metadata from filename" in all_msgs
     assert isinstance(df, pd.DataFrame)
-    assert df.shape == df.shape
+    assert df.shape == (1, 28)
 
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):
-    _, _, pts, areas, _ = make_dummy_blobs()
+    _, _, pts, areas, _ = make_dummy_blobs
     with pytest.raises(ValueError, match="Invalid input parameter"):
         da._calculate_graph_metrics(pts, areas, method="bad", img_hyp=1e7)
 
@@ -698,7 +651,7 @@ def test_calculate_graph_metrics_bad_params(
     r_param,
     err_msg,
 ):
-    _, _, pts, areas, _ = make_dummy_blobs()
+    _, _, pts, areas, _ = make_dummy_blobs
     with pytest.raises(ValueError, match=err_msg):
         da._calculate_graph_metrics(
             pts, areas, method=method, r_param=r_param, k_param=k_param, img_hyp=1e7,

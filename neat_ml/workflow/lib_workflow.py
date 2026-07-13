@@ -243,6 +243,10 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     ds_id = dataset_config.get("id")
     mode = dataset_config["method"]
     time_label = dataset_config.get("time_label")
+    img_shape = dataset_config.get("img_shape")
+
+    if img_shape is None:
+        raise ValueError("Please provide `img_shape` via input yaml file.")
 
     composition_cols = dataset_config.get("composition_cols", [])
     analysis_cfg = dataset_config.get("analysis", {})
@@ -328,4 +332,5 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         carry_over_cols=carry_over_cols,
         time_label=time_label,
         exclude_numeric_cols=["Offset"],
+        img_shape=img_shape
     )

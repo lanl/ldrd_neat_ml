@@ -99,37 +99,34 @@ def image_with_circles_fixture(tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="session")
 def make_dummy_blobs():
-    def _make(mode="opencv"):
-        """
-        Dataframe containing random values for the metrics of
-        10 ``blobs`` to recapitulate the values found in the
-        output parquet files from the blob detection step.
-        """
-        rng = np.random.default_rng(1)
-        center_x = rng.integers(20, 100, 10)
-        center_y = rng.integers(20, 100, 10)
-        areas   = rng.integers(100, 500, 10)
-        radii   = rng.integers(0, 10, 10)
-        xmin = center_x - radii
-        ymin = center_y - radii
-        xmax = center_x + radii
-        ymax = center_y + radii
+    """
+    Dataframe containing random values for the metrics of
+    10 ``blobs`` to recapitulate the values found in the
+    output parquet files from the blob detection step.
+    """
+    rng = np.random.default_rng(1)
+    center_x = rng.integers(20, 100, 10)
+    center_y = rng.integers(20, 100, 10)
+    areas   = rng.integers(100, 500, 10)
+    radii   = rng.integers(0, 10, 10)
+    xmin = center_x - radii
+    ymin = center_y - radii
+    xmax = center_x + radii
+    ymax = center_y + radii
 
-        bboxes = np.column_stack((xmin, ymin, xmax, ymax)).tolist()
-        if mode == "bubblesam":
-            bboxes = [str(row) for row in bboxes]
-
-        df = pd.DataFrame(
-            {
-                "center_x": center_x,
-                "center_y": center_y,
-                "area": areas,
-                "radius": radii,
-                "bbox": bboxes
-            }
-        )
-        return df, center_x, center_y, areas, radii
-    return _make
+    df = pd.DataFrame(
+        {
+            "center_x": center_x,
+            "center_y": center_y,
+            "area": areas,
+            "radius": radii,
+            "bbox_xmin": xmin,
+            "bbox_xmax": xmax,
+            "bbox_ymin": ymin,
+            "bbox_ymax": ymax,
+        }
+    )
+    return df, center_x, center_y, areas, radii
 
 @pytest.fixture(scope="function")
 def mock_dir(tmp_path_factory, make_dummy_blobs):
@@ -144,17 +141,14 @@ def mock_dir(tmp_path_factory, make_dummy_blobs):
         "offset -5_bottom_A2_O_Ph_Raw_163c48ec-5ec9"
         "-4b1c-b304-ea40e77f0780_bubble_data.parquet.gzip"
     )
-    df_ocv, _, _, _, _ = make_dummy_blobs("opencv")
-    # recapituale ``center`` tuple handling
-    df_ocv["center"] = list(zip(df_ocv["center_x"], df_ocv["center_y"]))
-    df_ocv.to_parquet(input_dir / ocv_fname)
+    df, _, _, _, _ = make_dummy_blobs
+    df.to_parquet(input_dir / ocv_fname)
 
     bsam_fname = (
         "offset -5_bottom_A1_O_Ph_Raw_b96c0d64-03fd-"
         "4285-824d-e82eafedce90_masks_filtered.parquet.gzip"
     )
-    df_bsam, _, _, _, _ = make_dummy_blobs("bubblesam")
-    df_bsam.to_parquet(input_dir / bsam_fname)
+    df.to_parquet(input_dir / bsam_fname)
 
     comp_df = pd.DataFrame({
         "UniqueID": ["163c48ec-5ec9-4b1c-b304-ea40e77f0780",
@@ -206,6 +200,34 @@ def real_blobs():
             2: [1082, 2361, 1115, 2393],
             3: [730, 1983, 761, 2014],
             4: [704, 2407, 735, 2440]
-        }
+        },
+        "bbox_xmin": {
+            0: 896,
+            1: 725,
+            2: 1082,
+            3: 730,
+            4: 704
+        },
+        "bbox_xmax": {
+            0: 2194,
+            1: 2106,
+            2: 2361,
+            3: 1983,
+            4: 2407
+        },
+        "bbox_ymin": {
+            0: 947,
+            1: 754,
+            2: 1115,
+            3: 761,
+            4: 735
+        },
+        "bbox_ymax": {
+            0: 2247,
+            1: 2135,
+            2: 2393,
+            3: 2014,
+            4: 2440
+        },
     }
     return pd.DataFrame(blob_dict)
