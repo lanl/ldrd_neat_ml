@@ -3,6 +3,7 @@ from typing import Any, Optional
 import numpy as np
 import torch
 import logging
+import os
 
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
@@ -67,11 +68,15 @@ class SAMModel:
             appropriate `SAM2` model backend as determined by user input and available
             system hardware.
         """
-        self.device = (
-            "cuda" if (torch.cuda.is_available() and device == "gpu")
-            else "mps" if (torch.backends.mps.is_available() and device == "gpu")
-            else "cpu"
-        )
+        # for GitHub CI: only use device="cpu" to avoid errors with macos `mps` backend (see issue #41)
+        if os.getenv("GITHUB_ACTIONS"):
+            self.device = "cpu"
+        else:
+            self.device = (
+                "cuda" if (torch.cuda.is_available() and device == "gpu")
+                else "mps" if (torch.backends.mps.is_available() and device == "gpu")
+                else "cpu"
+            )
         if device == "gpu":
             if torch.cuda.is_available():
                 torch.autocast(
