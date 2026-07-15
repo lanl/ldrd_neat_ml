@@ -69,7 +69,7 @@ class SAMModel:
             system hardware.
         """
         # for GitHub CI: only use device="cpu" to avoid errors with macos `mps` backend (see issue #41)
-        if os.getenv("GITHUB_ACTIONS"):
+        if os.getenv("GITHUB_ACTIONS") == "true":
             self.device = "cpu"
         else:
             self.device = (
