@@ -347,5 +347,10 @@ def test_bubblesam_contours(seg_params, exp_bbox):
     df = analyze_and_filter_masks(input_df, 25, 0.7, device="cpu")
     # assert that there is only a single dataframe row after filtration
     # corresponding to the appropriate segmentation map to keep from `seg2`
-    assert df.bbox.item() == exp_bbox
+    # and that the bounding box values contained in the row
+    # correspond to the expected segmentation map.
+    actual_bbox = (
+        df.bbox_ymin.item(), df.bbox_xmin.item(), df.bbox_ymax.item(), df.bbox_xmax.item()
+    )
+    assert actual_bbox == exp_bbox
     assert df.contour.item().shape == (36, 2)
