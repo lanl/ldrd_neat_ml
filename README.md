@@ -14,6 +14,23 @@ and optional dependencies by calling:
 ```
 python -m pip install -v ".[dev]" 
 ```
+### Supported versions
+
+This project has been tested with Python 3.11–3.14.
+
+Supported dependency ranges are declared in `pyproject.toml`. The following dependency versions are known to be incompatible with the workflow:
+
+| Dependency | Incompatible version(s) | Reason |
+| ----- | ----- | ----- |
+| `matplotlib` | `>=3.11.0` | Produces inconsistent image-comparison test results across operating systems. |
+| `numpy` | `<=1.26.3`, `>=2.1.3` | Required to maintain `mypy` type compatibility with legacy code. See issue #38. |
+| `xgboost` | `<2.1.4` | Incompatible with `scikit-learn >1.5.0`. |
+| `shap` | `<0.47.0` | Does not support the `rng` argument used by `summary_plot`. |
+| `torch` | `<2.5.1` | Does not meet the minimum version required by SAM 2. |
+| `torchvision` | `<0.21.1` | Does not meet the minimum version required by SAM 2. |
+| `scipy` | `1.17.0` | Contains a bug that affects LIME explainer outputs. |
+
+These incompatible dependency versions are detected during import and raise an `ImportError`, preventing the workflow from running.
 
 ## Writing a `.yaml` input file for OpenCV or SAM2 detection
 
@@ -47,6 +64,12 @@ provided as either absolute or relative file paths.
 ```yaml
 roots:
   work: path/to/save/output
+  model: path/to/save/trained/model
+  results: path/to/save/training/results
+
+inference_model: path/to/saved/joblib/model/from/training (used when running inference separately)
+
+random_seed: (optional) integer value for setting random seed value for SHAP explainer
 
 datasets:
   - id: name_of_save_folder
@@ -57,6 +80,9 @@ datasets:
     composition_cols:
       - "Dextran 500 kg/mol (wt%)"
       - "PEO 20 kg/mol (wt%)"
+    role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model)
+    ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier)
+    top_n_features: number of features to consider when performing feature importance ranking (default is 20)
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -146,7 +172,11 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect,analysis`
+`python run_workflow.py --config <YAML file> --steps detect,analysis,train,infer,explain,plot`
+
+>[!NOTE]
+> When running the workflow on `MacOS` with `libomp` runtime, it may be necessary to explicitly set environment
+> variable `OMP_NUM_THREADS=1` to prevent oversubscription of CPU threads when performing parallel operations.
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -167,6 +197,10 @@ place the outputs under ``roots:work`` filepath from the `.yaml` file
 For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also need to be added to the
 input `yaml` file (a description of which can also be found above). These steps process the output bubble
 detection data and save an `csv` file of aggregated metrics.
+
+Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for saving the model, training/inference results can be set with `root: model` and `root: results` respectively, and `inference_model` can be set to explicitly provide the path to the trained model when performing inference separately from training. 
+
+The user can also determine whether or not to perform machine learning classifier hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt` to True or False (the default is True if no parameter is specified.)
 
 For information relevant to running the workflow:  
 
