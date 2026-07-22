@@ -154,12 +154,12 @@ def test_bubblesam_detection_generates_pngs(
         circularity_threshold=0.90,
         debug=True,
     )
+    # drop the contour column which is only used
+    # for plotting and not saved for any downstream processes
+    df.drop(columns=["contour"], inplace=True)
     saved_df = pd.read_parquet(
         out_dir / "circles_masks_filtered.parquet.gzip",
     )
-    # because `contour` is saved as a list, ``read_parquet``
-    # loads it as a 1-d array, so need to reshape it back to 2-d
-    saved_df['contour'] = saved_df['contour'].apply(np.stack)
     assert_frame_equal(df, saved_df)
 
     actual_overlay  = out_dir / f"{stem}_with_mask.png"
