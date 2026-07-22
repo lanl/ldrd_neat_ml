@@ -286,10 +286,9 @@ def bubblesam_detection(
     )
    
     # save filtered dataframe as parquet file
-    # convert ``contour`` column to list to save as parquet
-    # because PyArrow cannot save 2-d arrays 
     save_filtered_df = filtered_df.copy()
-    save_filtered_df["contour"] = save_filtered_df["contour"].apply(list)
+    # drop the `contour` column which is not used in any downstream processes
+    save_filtered_df.drop(columns=["contour"], inplace=True)
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
         compression="gzip",
