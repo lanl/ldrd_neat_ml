@@ -218,7 +218,7 @@ def test_sam_internal_api(
     total_area = np.sum([x.get("area") for x in masks])
     assert len(masks) == 24
     assert total_area == 5091
-    assert_allclose(iou, 0.880697)
+    assert_allclose(iou, 0.880697)  # type: ignore[arg-type]
 
 @pytest.mark.parametrize("device",
     [
