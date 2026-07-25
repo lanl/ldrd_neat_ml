@@ -265,9 +265,9 @@ def bubblesam_detection(
 
     Returns
     -------
-    filtered_df : pd.DataFrame
+    save_filtered_df : pd.DataFrame
         A DataFrame containing properties of the masks (e.g., bubbles), 
-        including contour, bounding box, axes lengths, etc.
+        including bounding box, axes lengths, etc.
     """
     image_basename = image_path.stem
     image = cv2.imread(image_path)  # type: ignore[call-overload]
@@ -287,7 +287,8 @@ def bubblesam_detection(
    
     # save filtered dataframe as parquet file
     save_filtered_df = filtered_df.copy()
-    # drop the `contour` column which is not used in any downstream processes
+    # drop the `contour` column which is only used for `plot_filtered_masks`
+    # when `debug==True`, so we dont need to store it in the output dataframe.
     save_filtered_df.drop(columns=["contour"], inplace=True)
     save_filtered_df.to_parquet(
         output_dir / f'{image_basename}_masks_filtered.parquet.gzip',
@@ -316,7 +317,7 @@ def bubblesam_detection(
     elif (torch.backends.mps.is_available() and sam_model.device != "cpu"):
         torch.mps.empty_cache()
 
-    return filtered_df
+    return save_filtered_df
 
 def run_bubblesam(
     df_imgs: pd.DataFrame,

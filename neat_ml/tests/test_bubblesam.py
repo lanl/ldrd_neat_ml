@@ -154,9 +154,6 @@ def test_bubblesam_detection_generates_pngs(
         circularity_threshold=0.90,
         debug=True,
     )
-    # drop the contour column which is only used
-    # for plotting and not saved for any downstream processes
-    df.drop(columns=["contour"], inplace=True)
     saved_df = pd.read_parquet(
         out_dir / "circles_masks_filtered.parquet.gzip",
     )
