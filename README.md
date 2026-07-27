@@ -15,6 +15,23 @@ and optional dependencies by calling:
 python -m pip install -v ".[dev]" 
 ```
 
+### Supported versions
+
+This project has been tested with Python 3.11–3.14.
+
+Supported dependency ranges are declared in `pyproject.toml`. The following dependency versions are known to be incompatible with the workflow:
+
+| Dependency | Incompatible version(s) | Reason |
+| ----- | ----- | ----- |
+| `matplotlib` | `>=3.11.0` | Produces inconsistent image-comparison test results across operating systems. |
+| `xgboost` | `<2.1.4` | Incompatible with `scikit-learn >1.5.0`. |
+| `shap` | `<0.47.0` | Does not support the `rng` argument used by `summary_plot`. |
+| `torch` | `<2.5.1` | Does not meet the minimum version required by SAM 2. |
+| `torchvision` | `<0.20.1` | Does not meet the minimum version required by SAM 2. |
+| `scipy` | `1.17.0` | Contains a bug that affects LIME explainer outputs. |
+
+These incompatible dependency versions are detected during import and raise an `ImportError`, preventing the workflow from running.
+
 ## Writing a `.yaml` input file for OpenCV or SAM2 detection
 
 The workflow takes as input a `.yaml` configuration file with information

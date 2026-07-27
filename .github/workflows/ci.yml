@@ -13,6 +13,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13", "3.14"]
+        requirements-file: ["requirements_low.txt", "requirements_high.txt"]
 
     steps:
     - uses: actions/checkout@v5
@@ -20,9 +21,13 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-    - name: install and lint
+    - name: install dependencies
       run: |
-        python -m pip install -v ".[dev]"
+        python -m pip install -U setuptools pip
+        python -m pip install -r requirements/${{ matrix.requirements-file }}
+        python -m pip install -v .
+    - name: lint
+      run: |
         mypy neat_ml
         ruff check neat_ml
     - name: cache fonts
