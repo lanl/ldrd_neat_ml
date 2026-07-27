@@ -32,7 +32,9 @@ dependencies = [
 ]
 [project.optional-dependencies]
 dev = ['mypy',
-       'ruff',
+       # ruff==0.16.0 introduces several default rules breaking linting
+       # see issue #49
+       'ruff<=0.15.2',
        'pandas-stubs',
        'pytest',
        'pytest-xdist',
