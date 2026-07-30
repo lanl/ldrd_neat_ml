@@ -296,7 +296,7 @@ def _calculate_graph_metrics(
         if len(pairs) != 0:
             diff = np.diff(points[pairs], axis=1)
             # calculate the euclidean distance between pairs of points 
-            dist = np.linalg.norm(diff, axis=2)
+            dist = np.linalg.norm(diff, axis=2).flatten()
             # add point, distance pairs to graph edges
             graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
     # alternatively calculate the graph using the KDTree
@@ -342,7 +342,7 @@ def _calculate_graph_metrics(
         # euclidean distance between the points
         point_pairs = np.column_stack((tri_sim.ravel(), tri_sim_shift.ravel()))
         diff = np.diff(points[point_pairs], axis=1)
-        dist = np.linalg.norm(diff, axis=2)
+        dist = np.linalg.norm(diff, axis=2).flatten()
         # add new edges to the graph
         new_edges = (
             (
