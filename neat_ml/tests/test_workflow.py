@@ -8,8 +8,11 @@ import pandas as pd
 from numpy.testing import assert_allclose
 import copy
 import re
+from numpy.testing import assert_allclose, assert_array_equal
 import numpy as np
 from matplotlib.testing.compare import compare_images
+import joblib
+from sklearn.utils.validation import check_is_fitted
 
 import neat_ml.workflow.lib_workflow as wf
 
@@ -683,7 +686,7 @@ def test_stage_analyze_features_errors(
         wf.stage_analyze_features(ds, paths={"per_csv": "per_img.csv", "agg_csv": "agg.csv"})
 
 
-def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_path: Path) -> None:
+def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_path: Path):
     """
     When steps include train/infer/explain/plot, ensure the extra paths are built and
     model_dir honors roots['model'] override.
@@ -713,7 +716,7 @@ def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_
         ({"id": "VAL"}, None, r"requires validation paths \(val_paths\)\."),
     ]
 )
-def test_stage_train_model_requires_validation_args(tmp_path: Path, val_ds, val_paths, err_msg):
+def test_stage_train_model_requires_validation_args(tmp_path, val_ds, val_paths, err_msg):
     train_ds = {"id": "TR1"}
     train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
 
@@ -726,40 +729,38 @@ def test_stage_train_model_requires_validation_args(tmp_path: Path, val_ds, val_
         )
 
 
-def test_stage_train_model_missing_train_csv_raises(tmp_path: Path, sample_data):
+@pytest.mark.parametrize("train_csv, val_csv, missing",
+    [
+        # case where `train_csv` is missing
+        (None, "val.csv", "Train"),
+        # case where `val_csv` is missing
+        ("train.csv", None, "Validation"),
+    ]
+)
+def test_stage_train_model_missing_csv_raises(
+    tmp_path,
+    sample_data,
+    train_csv,
+    val_csv,
+    missing,
+):
     train_ds = {"id": "TR2"}
-    missing = (tmp_path / "train.csv").resolve()
-    train_paths = {"agg_csv": missing, "model_dir": tmp_path / "model"}
+    train_path = (tmp_path / "train.csv").resolve()
     val_path = tmp_path / "val.csv"
-    val_paths = {"agg_csv": val_path}
-    sample_data.to_csv(val_path)
-
-    with pytest.raises(FileNotFoundError,
-        match=f"Train aggregate CSV not found: {missing}"
-    ):
-        wf.stage_train_model(
-            train_ds,
-            train_paths,
-            val_ds={"id": "VAL"},
-            val_paths=val_paths,
-            target="target"
-        )
-
-def test_stage_train_model_missing_val_csv_raises(tmp_path: Path, sample_data):
-    train_path = tmp_path / "train.csv"
-    sample_data.to_csv(train_path)
-    train_ds = {"id": "TR3"}
     train_paths = {"agg_csv": train_path, "model_dir": tmp_path / "model"}
+    if train_csv is None:
+        sample_data.to_csv(val_path)
+    if val_csv is None:
+        sample_data.to_csv(train_path)
 
-    missing = tmp_path / "val.csv"
     with pytest.raises(FileNotFoundError,
-        match=f"Validation aggregate CSV not found: {missing}"
+        match=f"{missing} aggregate CSV not found"
     ):
         wf.stage_train_model(
             train_ds,
             train_paths,
             val_ds={"id": "VAL"},
-            val_paths={"agg_csv": missing},
+            val_paths={"agg_csv": val_path},
             target="target"
         )
 
@@ -815,22 +816,35 @@ def test_stage_train_model_happy_path_saves_bundle_and_roc(
     tmp_path: Path,
     sample_data,
 ):
-
     train_ds = {"id": "TR5"}
     train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
     val_paths = {"agg_csv": tmp_path / "val.csv"}
     sample_data.to_csv(val_paths["agg_csv"], index=False)
     sample_data.to_csv(train_paths["agg_csv"], index=False)
 
-    wf.stage_train_model(
+    model_path = wf.stage_train_model(
         train_ds,
         train_paths,
         val_ds={"id": "VAL"},
         val_paths=val_paths,
         target="target"
     )
-    model_path = train_paths["model_dir"]                                                             
-    assert (tmp_path / model_path / "TR5_val_roc.png").exists()
+    save_path = train_paths["model_dir"]                                                             
+    # check that the roc-curve was generated
+    assert (tmp_path / save_path / "TR5_val_roc.png").exists()
+    # check that the model bundle contains a fitted classifier
+    model_bundle = joblib.load(model_path)
+    check_is_fitted(model_bundle["model"])
+    # assertions that the roc-auc and pr-auc values
+    model_metrics = model_bundle["metrics"]
+    assert_array_equal(list(model_metrics.values()), [1.0, 1.0])
+    # assertions on the expected values from
+    # performing ml hyperparameter optimization
+    model_params = model_bundle["best_params"]
+    assert model_params["ensemble__xgb__learning_rate"] == 0.05
+    assert model_params["ensemble__xgb__max_depth"] == 3
+    assert model_params["ensemble__xgb__n_estimators"] == 10
+
 
 def test_stage_explain_aligns_features_and_calls_compare_methods(
     tmp_path: Path,
@@ -856,14 +870,18 @@ def test_stage_explain_aligns_features_and_calls_compare_methods(
             'ebm_importance.csv'
         ]
     )
+    fic_df = pd.read_csv(explain_out / "feature_importance_comparison.csv")
+    ebm_df = pd.read_csv(explain_out / "ebm_importance.csv")
+    assert_allclose(fic_df["SHAP"].values, [0.111888, 0.007520])  # type: ignore[arg-type]
+    assert_allclose(ebm_df["0"].values, [0.16195064, 0.10430588])  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("only_inference, exp_img",
+@pytest.mark.parametrize("only_inference, exp_img, n_cols",
     [
         # test-case for plotting phase diagram with inference only
-        (True, "infer_only_phase_diagram_exp.png"),
+        (True, "infer_only_phase_diagram_exp.png", 7),
         # test-case for plotting phase diagram with training + inference
-        (False, "train_infer_phase_diagram_exp.png"),
+        (False, "train_infer_phase_diagram_exp.png", 8),
     ]
 )
 def test_stage_run_inference_calls_inference_and_makes_pred_dir(
@@ -873,6 +891,7 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
     trained_model_bundle: Path,
     only_inference: bool,
     exp_img: str,
+    n_cols: int,
 ):
     # add composition columns to sample inference data
     sample_data = pd.read_csv(sample_inference_data)
@@ -905,6 +924,9 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
         target=target,
     )
     assert set(os.listdir(out_dir)).issubset(["phase_plots", "roc.png", "pred.csv"])
+    pred_df = pd.read_csv(out_dir / "pred.csv")
+    assert pred_df["Pred_Label"].sum() == 3
+    assert pred_df.shape == (50, n_cols)
     result = compare_images(
         out_dir / "phase_plots/phase_diagram.png",
         baseline_dir / exp_img,
