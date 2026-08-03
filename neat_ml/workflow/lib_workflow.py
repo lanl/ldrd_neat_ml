@@ -94,9 +94,11 @@ def get_path_structure(
         # if either of the paths are missing from the analysis config
         # assign the default dir to whichever paths are missing
         if not (per_img_path and agg_path):
-            results_root = Path(roots.get("results"))  # type: ignore[arg-type]
-            per_img_path = per_img_path or results_root / ds_id / "per_image.csv"
-            agg_path = agg_path or results_root / ds_id / "aggregate.csv"
+            results_root = roots.get("results")  
+            if results_root is None:
+                raise ValueError("Please provide `results` path via input yaml file")
+            per_img_path = per_img_path or Path(results_root) / ds_id / "per_image.csv"
+            agg_path = agg_path or Path(results_root) / ds_id / "aggregate.csv"
         paths["per_csv"] = Path(per_img_path)
         paths["agg_csv"] = Path(agg_path)
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
@@ -131,17 +133,21 @@ def run_detection(
     debug = detection_cfg.get("debug", False)
     ds_id = dataset_config.get("id", "unknown")
     method = dataset_config.get("method", "")
-    # get method (``opencv`` or ``bubblesam``) and initialize
+    # get method (``OpenCV`` or ``BubbleSAM``) and initialize
     # variables to guide function calls
-    if method.lower() == "opencv":
+    if method == "OpenCV":
         check_dirs = set(["det_dir", "proc_dir"])
         file_suffix = "_bubble_data"
-    else:
+    elif method == "BubbleSAM":
         check_dirs = set(["det_dir"])
         file_suffix = "_masks_filtered"
+    else:
+        raise ValueError(
+            f"Method: {method} must be either `OpenCV` or `BubbleSAM` and is case sensitive."
+        )
     
     # check if the appropriate image filepaths are available
-    if not set(paths.keys()) == check_dirs:
+    if not check_dirs.issubset(paths.keys()):
         log.warning("Detection paths not built (step not selected or misconfig). Skipping.")
         return None
     
@@ -160,8 +166,8 @@ def run_detection(
         log.info(f"Detection already exists for {ds_id}. Skipping.")
         return None
     
-    # for the ``opencv`` method, perform image preprocessing
-    if method.lower() == "opencv":
+    # for the ``OpenCV`` method, perform image preprocessing
+    if method == "OpenCV":
         proc_dir = paths["proc_dir"].expanduser().resolve()
         proc_dir.mkdir(parents=True, exist_ok=True)
         log.info(f"Preprocessing (OpenCV) for {ds_id} -> {proc_dir}")

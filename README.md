@@ -35,15 +35,19 @@ mask parameters override the built-in parameters for the `SAM-2` model.
 
 When performing analysis/metric calculation of the resulting bubble detections,
 the `yaml` file provides the necessary paths for finding the detection parquet
-files; the user generated composition csv file that stores per-image sample
+files; the (optional) user generated composition CSV file that stores per-image sample
 information related to the experimental setup and data collection including
 phase separation ground-truth labels and composition weight percentages;
-the paths for storing per-image and aggregate metrics. The composition csv
+the paths for storing per-image and aggregate metrics. If provided by the user, the composition CSV
 must contain two required columns, 1. "Phase_Separation", which stores the user
 provided labels of phase separation status that are used for downstream tasks;
 2. "Group", which are unique labels that are used to aggregate per-image metrics
-across images that were taken from the same imaging well. The user also provides
-a choice of method for calculating graph-based metrics of bubble connectivity
+across images that were taken from the same imaging well. The user can provide custom values
+indicating the names of the grouping columns for aggregating the data.
+The default columns for aggregating the per-image metrics are "Group", "Label", "Time", and "Class".
+The aggregation step will fail if none of the provided or default group columns are
+present in the per-image output dataframe, whether or not a composition CSV file is provided.
+The user also provides a choice of method for calculating graph-based metrics of bubble connectivity
 (`knn`, `radius` or `delaunay`). With `graph_method == knn`, the user must provide
 a `k_param` integer value denoting the number of nearest neighbors to use for
 building the graph. With `graph_method == radius`, the user must provide an
@@ -63,8 +67,7 @@ provided as either absolute or relative file paths.
 ```yaml
 roots:
   work: path/to/save/output
-  # `results` key is required when providing explicit
-  # `analysis:per_image_csv` or `analysis:aggregate_csv` keys
+  # `results` key is required when performing `analysis`
   # or else path generation will fail and throw an error
   results: path/to/save/analysis/outputs
 
