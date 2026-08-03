@@ -421,7 +421,7 @@ def _calculate_all_spatial_metrics(
     df_blobs: pd.DataFrame,
     *,
     graph_method: Literal["delaunay", "radius", "knn"],
-    img_shape: list,
+    img_shape: Sequence[int],
     k_param: Optional[int] = None,
     r_param: Optional[Union[int, float]] = None,
 ) -> dict[str, Any]:
@@ -436,7 +436,7 @@ def _calculate_all_spatial_metrics(
         The per-blob data table for a single image.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph construction method ('delaunay', 'radius', or 'knn').
-    img_shape : list
+    img_shape : Sequence[int]
         User provided image shape dimensions, i.e. [height, width]
     k_param : Optional[int]
         The k value for graph construction when method == "knn".
@@ -552,6 +552,12 @@ def _calculate_summary_statistics(
     valid_cols = pd.Index(group_cols).intersection(df.columns).to_list()
     if not valid_cols:
         raise ValueError(f"None of the grouping columns {group_cols} exist.")
+    # output warning if some of the grouping columns are not in the df
+    elif set(valid_cols) != set(group_cols):
+        missing_cols = set(group_cols) - set(valid_cols)
+        log.warning(
+            f"Some provided group columns missing from input dataframe: {missing_cols}"
+        )
 
     # ignore unwanted columns based on user input
     df_out = df.loc[
@@ -595,7 +601,7 @@ def _process_parquet_files(
     *,
     mode: Literal["OpenCV", "BubbleSAM"],
     graph_method: Literal["delaunay", "radius", "knn"],
-    img_shape: list,
+    img_shape: Sequence[int],
     k_param: int | None = None,
     r_param: int | float | None = None,
     time_label: str | None = None,
@@ -617,7 +623,7 @@ def _process_parquet_files(
         which files to look for and how to parse them.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph construction method to use ('delaunay', 'radius', 'knn').
-    img_shape : list
+    img_shape : Sequence[int]
         User provided image shape dimensions, i.e. [height, width]
     k_param : Optional[int]
         Parameter for ``knn`` graph construction.
@@ -681,7 +687,7 @@ def full_analysis(
     aggregate_csv: Path,
     mode: Literal["OpenCV", "BubbleSAM"],
     graph_method: Literal["delaunay", "radius", "knn"],
-    img_shape: list,
+    img_shape: Sequence[int],
     r_param: int | float | None = None,
     k_param: int | None = None,
     composition_csv: Path | None = None,
@@ -716,7 +722,7 @@ def full_analysis(
         The processing mode, either 'OpenCV' or 'BubbleSAM'.
     graph_method : Literal["delaunay", "radius", "knn"]
         The graph topology method ('delaunay', 'radius', 'knn').
-    img_shape: list
+    img_shape: Sequence[int]
         User provided image shape, i.e. [height, width]
     r_param : Optional[Union[int, float]]
         The radius (in pixels) for 'radius' graphs.

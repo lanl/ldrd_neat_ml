@@ -121,6 +121,14 @@ def test_get_path_structure_builds_expected_paths(
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
+def test_get_path_structure_results_error():
+    """test that get_path_structure raises error when no
+    explicit `results` path is provided by the user"""
+    roots = {"work": "work_path"}
+    input_ds = {"method": "BubbleSAM"}
+    with pytest.raises(ValueError, match="Please provide `results` path"):
+        wf.get_path_structure(roots, input_ds, ["analysis"])
+
 def test_get_path_structure_fallbacks(tmp_path: Path):
     """
     test that `get_path_structure` uses input dict fallbacks
@@ -235,16 +243,36 @@ def test_run_detection_skips_if_output_already_exists(
     assert "Detection already exists" in caplog.text
 
 
+@pytest.mark.parametrize("method", ["opencv", "bubblesam"])
+def test_run_detection_method_error(method):
+    """test that run_detection uses case sensitive method"""
+    ds = {"method": method}
+    with pytest.raises(ValueError, match=f"Method: {method}"):
+        wf.run_detection(ds, {})
+
+
 @pytest.mark.parametrize("ds, paths, exp_columns",
     [
         (    
-            {"id": "BS4", "method": "bubblesam", "detection": {}},
+            {"id": "BS4", "method": "BubbleSAM", "detection": {}},
             {"det_dir": "det_dir"},
             {"image_filepath", "num_blobs_SAM", "median_radii_SAM"},
         ),
         (
             {"id": "DS6", "method": "OpenCV", "detection": {"debug": True}},
             {"proc_dir": "proc_dir", "det_dir": "det_dir"},
+            {"image_filepath", "num_blobs_opencv", "median_radii_opencv"},
+        ),
+        # when running `steps=detect,analysis` check that detection does
+        # not skip when `analysis` paths are present
+        (
+            {"id": "DS6", "method": "OpenCV", "detection": {"debug": True}},
+            {
+                "proc_dir": "proc_dir",
+                "det_dir": "det_dir",
+                "per_csv": "per_csv",
+                "agg_csv": "agg_csv",
+            },
             {"image_filepath", "num_blobs_opencv", "median_radii_opencv"},
         ),
     ]
@@ -276,7 +304,7 @@ def test_stage_detect_pipeline_runs(
         shutil.copy(raw_image, tif_dir / "tif_img.tif")
         shutil.copy(raw_image, tiff_dir / "tiff_img.tiff")
         
-        if method == "bubblesam":
+        if method == "BubbleSAM":
             # provide reduced mask_settings/model params
             ds["detection"].update(
                 {"model_cfg":
@@ -310,7 +338,7 @@ def test_stage_detect_pipeline_runs(
                 ]
             )
         )
-    if method == "bubblesam":
+    if method == "BubbleSAM":
         assert (set(os.listdir(det_dir_exp)) == 
             set(
                 [
@@ -344,9 +372,9 @@ def test_stage_detect_unknown_method_error(
 @pytest.mark.parametrize("method, device, paths, suffix",
     [
         # cases using bubblesam method with different devices
-        ("bubblesam", "cpu", {"det_dir": "det"}, "masks_filtered"),
+        ("BubbleSAM", "cpu", {"det_dir": "det"}, "masks_filtered"),
         pytest.param(
-            "bubblesam",
+            "BubbleSAM",
             "gpu",
             {"det_dir": "det"},
             "masks_filtered",
@@ -358,7 +386,7 @@ def test_stage_detect_unknown_method_error(
             ]
         ),
         # case using opencv method
-        ("opencv", None, {"det_dir": "det", "proc_dir": "proc"}, "bubble_data")
+        ("OpenCV", None, {"det_dir": "det", "proc_dir": "proc"}, "bubble_data")
     ]
 )
 def test_run_workflow_single_image_path(
@@ -383,7 +411,7 @@ def test_run_workflow_single_image_path(
             "img_dir": image_with_circles_fixture,
         }
     }
-    if method == "bubblesam":
+    if method == "BubbleSAM":
         ds["detection"].update(
             {"model_cfg":
                 {
@@ -398,7 +426,7 @@ def test_run_workflow_single_image_path(
     df_out = wf.run_detection(ds, paths)
     assert df_out.shape == (1, 3)
     masks = pd.read_parquet(det_dir / f"circles_{suffix}.parquet.gzip")
-    if method == "bubblesam":
+    if method == "BubbleSAM":
         summary_df = pd.read_csv(det_dir / "bubblesam_summary.csv")
         assert_allclose(summary_df.median_radii_SAM, 12.778613837669742)
         assert summary_df.num_blobs_SAM.item() == 2
@@ -424,7 +452,7 @@ def test_run_detection_bad_path_error(tmp_path):
         wf.run_detection(ds, paths)
         
 @pytest.mark.parametrize("method",
-    ["bubblesam", "opencv"]
+    ["BubbleSAM", "OpenCV"]
 )
 def test_stage_detect_returns_empty_dataframe(
     tmp_path: Path,

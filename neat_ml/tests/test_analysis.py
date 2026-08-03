@@ -373,6 +373,15 @@ def test_calculate_summary_statistics():
         da._calculate_summary_statistics(df, ["BadCol"], [])
 
 
+def test_calculate_summary_statistics_warns_missing_cols(caplog):
+    """test that calculate_summary_statistics outputs a warning
+    when a subset of "group_cols" is missing from the dataframe"""
+    caplog.set_level(logging.WARNING)
+    df = pd.DataFrame({"col1": [1.0], "col2": [1.0], "nums": [1.0]})
+    da._calculate_summary_statistics(df, ["col1", "col2", "col3"], carry_over_cols=[])
+    assert "Some provided group columns missing" in caplog.text
+
+
 def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
     """
     numeric_cols exists in df but is emptied by exclude_numeric_regex.
