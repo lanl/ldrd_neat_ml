@@ -96,7 +96,7 @@ def _parse_filename(
     match = _RE.match(fname)
     if not match:
         # some files in the dataset do not contain ``position`` information in the filename
-        # because they were aquired using a 2X microscope objective without the use of image
+        # because they were acquired using a 2X microscope objective without the use of image
         # tiling and are also not used for performing automated analysis in the workflow.
         # Returning an empty dictionary skips downstream analysis of these files.
         return {}
@@ -590,7 +590,7 @@ def _calculate_summary_statistics(
     # TODO: pandas>=3.X has more idiomatic methods of performing multiple string
     #       replacements with i.e. `pat` argument. fix when we require pandas>=3.X
     grouped.columns = grouped.columns.str.replace("_first", "")
-    # modify `std` column name from lambda fuction to allow for downstream feature analysis 
+    # modify `std` column name from lambda function to allow for downstream feature analysis 
     grouped.columns = grouped.columns.str.replace("<lambda_0>", "std")
 
     return grouped
