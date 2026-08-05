@@ -49,7 +49,7 @@ def _merge_composition_data(
     """
     if merge_key not in summary_df.columns:
         raise ValueError(f"Merge key '{merge_key}' not found in summary_df.")
-    missing_cols = [c for c in (merge_key, *cols_to_add) if c not in composition_df.columns]
+    missing_cols = set((merge_key, *cols_to_add)) - set(composition_df.columns)
     if missing_cols:
         raise ValueError(f"Columns {missing_cols} not found in composition_df.")
 
@@ -259,7 +259,6 @@ def _calculate_graph_metrics(
         floating point statistical measures if calculation is not possible.
     """
     metrics = {}
-    metrics["graph_num_nodes"] = points.shape[0]
 
     # check if input method is valid
     if method not in ["knn", "delaunay", "radius"]:
@@ -398,7 +397,7 @@ def _extract_blob_properties(
         Column name for blob areas
     radius_col : Literal["radius"]
         Column name for blob radii.
-    bbox_cols : Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]
+    bbox_cols : list[Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]]
         Column names for bounding box coordinates.
 
     Returns

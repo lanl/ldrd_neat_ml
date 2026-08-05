@@ -9,19 +9,9 @@ import logging
 from typing import Literal
 
 
-@pytest.mark.parametrize("pts, expected, img_hyp",
-    [
-        (
-            np.array([[0., 0.], [1., 0.], [2., 0.]]),
-            {"mean_nnd": 1.0, "median_nnd": 1.0},
-            3,
-        ),
-    ]
-    
-)
-def test_calculate_nnd_stats(pts, expected, img_hyp):
-    actual = da._calculate_nnd_stats(pts, img_hyp)
-    assert_equal(actual, expected)
+def test_calculate_nnd_stats():
+    actual = da._calculate_nnd_stats(np.array([[0., 0.], [1., 0.], [2., 0.]]), 3)
+    assert_equal(actual, {"mean_nnd": 1.0, "median_nnd": 1.0})
 
 @pytest.mark.parametrize("pts, exp, warn_msg",
     [
@@ -618,10 +608,11 @@ def test_process_parquet_files_warns_and_continues(
     good = ("offset -1_center_A1_O_Ph_Raw_11111111-"
         f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
     df.to_parquet(input_dir / good)
-    # a parquet file with appropriate contents but having a filename
-    # that is not in the correct format and therefore is not readable
-    # by the ``_parse_filename`` function
-    unparsable = f"weird_{file_suff}.parquet.gzip"
+    # a parquet file that is missing the `position` information in the filename,
+    # indicating that it should not be included in analysis and is intentionally
+    # skipped by the ``_parse_filename`` function
+    unparsable = ("offset -1_A1_O_Ph_Raw_11111111-"
+        f"1111-1111-1111-111111111111_{file_suff}.parquet.gzip")
     df.to_parquet(input_dir / unparsable)
 
     with pytest.warns(UserWarning) as record:

@@ -133,18 +133,14 @@ def run_detection(
     debug = detection_cfg.get("debug", False)
     ds_id = dataset_config.get("id", "unknown")
     method = dataset_config.get("method", "")
-    # get method (``OpenCV`` or ``BubbleSAM``) and initialize
+    # get method (``opencv`` or ``bubblesam``) and initialize
     # variables to guide function calls
-    if method == "OpenCV":
+    if method.lower() == "opencv":
         check_dirs = set(["det_dir", "proc_dir"])
         file_suffix = "_bubble_data"
-    elif method == "BubbleSAM":
+    else:
         check_dirs = set(["det_dir"])
         file_suffix = "_masks_filtered"
-    else:
-        raise ValueError(
-            f"Method: {method} must be either `OpenCV` or `BubbleSAM` and is case sensitive."
-        )
     
     # check if the appropriate image filepaths are available
     if not check_dirs.issubset(paths.keys()):
@@ -166,8 +162,8 @@ def run_detection(
         log.info(f"Detection already exists for {ds_id}. Skipping.")
         return None
     
-    # for the ``OpenCV`` method, perform image preprocessing
-    if method == "OpenCV":
+    # for the ``opencv`` method, perform image preprocessing
+    if method.lower() == "opencv":
         proc_dir = paths["proc_dir"].expanduser().resolve()
         proc_dir.mkdir(parents=True, exist_ok=True)
         log.info(f"Preprocessing (OpenCV) for {ds_id} -> {proc_dir}")
@@ -284,8 +280,7 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     # get the path for the composition csv from input configuration
     composition_csv = paths.get("composition_csv")
     if composition_csv and not composition_csv.exists():
-        log.warning(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
-        return
+        raise FileNotFoundError(f"Composition CSV '{composition_csv}' missing for '{ds_id}'.")
 
     group_cols = analysis_cfg.get("group_cols", ["Group", "Label", "Time", "Class"])
     cols_to_add = ["Group", "Phase_Separation"] + composition_cols
