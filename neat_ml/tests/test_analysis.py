@@ -597,7 +597,7 @@ def test_process_parquet_files_warns_and_continues(
 ):
     """
     test that ``process_parquet_files`` warns on unparsable
-    but still returns rows for the good files.
+    filename but still returns rows for the good files.
     """
     df, _, _, _, _ = make_dummy_blobs 
     input_dir = tmp_path / "input"
