@@ -37,8 +37,8 @@ the paths for storing per-image and aggregate metrics. If provided by the user, 
 must contain two required columns, 1. "Phase_Separation", which stores the user
 provided labels of phase separation status that are used for downstream tasks;
 2. "Group", which are unique labels that are used to aggregate per-image metrics
-across images that were taken from the same imaging well. The user can provide custom values
-indicating the names of the grouping columns for aggregating the data.
+across images that were taken from the same imaging well. The user can provide additional
+custom values indicating the names of the grouping columns for aggregating the data.
 The default columns for aggregating the per-image metrics are "Group", "Label", "Time", and "Class".
 The aggregation step will fail if none of the provided or default group columns are
 present in the per-image output dataframe, whether or not a composition CSV file is provided.

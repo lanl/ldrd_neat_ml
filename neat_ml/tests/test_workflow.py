@@ -146,10 +146,9 @@ def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
     """
     roots = {"result": str(tmp_path)}
     ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
-    steps = ['detect','analysis']
 
     with pytest.raises(KeyError, match="work"):
-        wf.get_path_structure(roots, ds, steps)  # type: ignore[arg-type]
+        wf.get_path_structure(roots, ds, ["detect", "analysis"])
 
 @pytest.mark.parametrize("ds",
     [
@@ -243,18 +242,10 @@ def test_run_detection_skips_if_output_already_exists(
     assert "Detection already exists" in caplog.text
 
 
-@pytest.mark.parametrize("method", ["opencv", "bubblesam"])
-def test_run_detection_method_error(method):
-    """test that run_detection uses case sensitive method"""
-    ds = {"method": method}
-    with pytest.raises(ValueError, match=f"Method: {method}"):
-        wf.run_detection(ds, {})
-
-
 @pytest.mark.parametrize("ds, paths, exp_columns",
     [
         (    
-            {"id": "BS4", "method": "BubbleSAM", "detection": {}},
+            {"id": "BS4", "method": "bubblesam", "detection": {}},
             {"det_dir": "det_dir"},
             {"image_filepath", "num_blobs_SAM", "median_radii_SAM"},
         ),
@@ -304,7 +295,7 @@ def test_stage_detect_pipeline_runs(
         shutil.copy(raw_image, tif_dir / "tif_img.tif")
         shutil.copy(raw_image, tiff_dir / "tiff_img.tiff")
         
-        if method == "BubbleSAM":
+        if method == "bubblesam":
             # provide reduced mask_settings/model params
             ds["detection"].update(
                 {"model_cfg":
@@ -338,7 +329,7 @@ def test_stage_detect_pipeline_runs(
                 ]
             )
         )
-    if method == "BubbleSAM":
+    if method == "bubblesam":
         assert (set(os.listdir(det_dir_exp)) == 
             set(
                 [
@@ -372,9 +363,9 @@ def test_stage_detect_unknown_method_error(
 @pytest.mark.parametrize("method, device, paths, suffix",
     [
         # cases using bubblesam method with different devices
-        ("BubbleSAM", "cpu", {"det_dir": "det"}, "masks_filtered"),
+        ("bubblesam", "cpu", {"det_dir": "det"}, "masks_filtered"),
         pytest.param(
-            "BubbleSAM",
+            "bubblesam",
             "gpu",
             {"det_dir": "det"},
             "masks_filtered",
@@ -386,7 +377,7 @@ def test_stage_detect_unknown_method_error(
             ]
         ),
         # case using opencv method
-        ("OpenCV", None, {"det_dir": "det", "proc_dir": "proc"}, "bubble_data")
+        ("opencv", None, {"det_dir": "det", "proc_dir": "proc"}, "bubble_data")
     ]
 )
 def test_run_workflow_single_image_path(
@@ -411,7 +402,7 @@ def test_run_workflow_single_image_path(
             "img_dir": image_with_circles_fixture,
         }
     }
-    if method == "BubbleSAM":
+    if method == "bubblesam":
         ds["detection"].update(
             {"model_cfg":
                 {
@@ -426,7 +417,7 @@ def test_run_workflow_single_image_path(
     df_out = wf.run_detection(ds, paths)
     assert df_out.shape == (1, 3)
     masks = pd.read_parquet(det_dir / f"circles_{suffix}.parquet.gzip")
-    if method == "BubbleSAM":
+    if method == "bubblesam":
         summary_df = pd.read_csv(det_dir / "bubblesam_summary.csv")
         assert_allclose(summary_df.median_radii_SAM, 12.778613837669742)
         assert summary_df.num_blobs_SAM.item() == 2
@@ -452,7 +443,7 @@ def test_run_detection_bad_path_error(tmp_path):
         wf.run_detection(ds, paths)
         
 @pytest.mark.parametrize("method",
-    ["BubbleSAM", "OpenCV"]
+    ["bubblesam", "opencv"]
 )
 def test_stage_detect_returns_empty_dataframe(
     tmp_path: Path,
@@ -493,14 +484,13 @@ def test_stage_analyze_features_warns_when_input_dir_unavailable(
     assert "No analysis input_dir provided and det_dir unavailable." in caplog.text
 
 
-def test_stage_analyze_features_warns_when_composition_csv_missing(
-    caplog: pytest.LogCaptureFixture,
+def test_stage_analyze_features_errors_when_composition_csv_missing(
     tmp_path: Path
 ):
     """
-    stage_analyze_features: logs warning if composition_csv is provided but does not exist.
+    stage_analyze_features: raises FileNotFoundError if composition_csv
+    is provided but does not exist.
     """
-    caplog.set_level(logging.WARNING)
     input_dir = tmp_path / "in"
     input_dir.mkdir()
     missing_csv = tmp_path / "missing.csv"
@@ -517,9 +507,9 @@ def test_stage_analyze_features_warns_when_composition_csv_missing(
          }
     roots = {"work": "work_path", "results": "results_path"}
     paths = wf.get_path_structure(roots, ds, ["analysis"])
-    wf.stage_analyze_features(ds, paths)
-
-    assert f"Composition CSV '{missing_csv}' missing for 'AN3'." in caplog.text
+    
+    with pytest.raises(FileNotFoundError, match="Composition CSV"):
+        wf.stage_analyze_features(ds, paths)
 
 
 @pytest.mark.parametrize("include_save_paths, include_ds_id, include_analysis_cfg, ds_id",

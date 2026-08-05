@@ -10,6 +10,7 @@ datasets:
     composition_cols:
       - "Dextran 500 kg/mol (wt%)"
       - "PEO 20 kg/mol (wt%)"
+    img_shape: [img_h, img_w]  # values for image height and width (in pixels)
     # with the ``analysis`` key, all of the same per-image and
     # aggregate features are calculated from the outputs
     # of detection using either method (BubbleSAM or OpenCV)
