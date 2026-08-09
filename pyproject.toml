@@ -30,7 +30,6 @@ dependencies = [
     'scipy>=1.15.3,!=1.17.0; python_version < "3.14"',
     'scipy>=1.16.1,!=1.17.0; python_version >= "3.14"',
     'pyyaml>=6.0.2',
-    'pooch>=1.9.0',
     'pyarrow>=23.0.1',
     'torch>=2.5.1; python_version < "3.13"',
     'torch>=2.9.0; python_version >= "3.13"',
@@ -45,6 +44,7 @@ test = [
     "pytest==9.1.1",
     "pytest-xdist==3.8.0",
     "pytest-cov==7.1.0",
+    'pooch>=1.9.0',
 ]
 lint = [
     "ruff==0.16.2",
