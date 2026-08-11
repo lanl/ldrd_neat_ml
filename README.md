@@ -12,7 +12,7 @@ Install the project, core dependencies,
 and optional dependencies by calling:
 
 ```
-python -m pip install -v ".[dev]" 
+python -m pip install -v . --group dev 
 ```
 
 ### Supported versions
