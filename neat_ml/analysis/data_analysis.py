@@ -305,11 +305,11 @@ def _calculate_graph_metrics(
         # k is the minimum of the input parameter
         # and the maximal number of neighbors (nodes-1) 
         # to avoid empty dict entries when n_nodes < k
-        k = min(k_param, n_nodes - 1)
+        k = min(k_param, n_nodes - 1)  # type: ignore[type-var] 
         tree = KDTree(points)
         # gather point pairs from tree with knn 
         # index k by 1 because closest node is always itself
-        dists, idxs = tree.query(points, k=k + 1, distance_upper_bound=img_hyp)
+        dists, idxs = tree.query(points, k=k + 1, distance_upper_bound=img_hyp)  # type: ignore[operator]
         # broadcast the first column (node indices) to the shape of the
         # knn array so that we can group the nodes with each of their
         # nearest neighbors
@@ -371,7 +371,7 @@ def _calculate_graph_metrics(
     components = list(nx.connected_components(graph))
     metrics["graph_num_components"] = len(components)
     lcc = max(components, key=len)
-    metrics["graph_lcc_node_fraction"] = len(lcc) / n_nodes
+    metrics["graph_lcc_node_fraction"] = len(lcc) / n_nodes  # type: ignore[assignment]
     lcc_areas = [graph.nodes[n]["area"] for n in lcc]
     metrics["graph_avg_node_area_lcc"] = np.mean(lcc_areas)
 
@@ -493,7 +493,7 @@ def _calculate_all_spatial_metrics(
         total_blob_area = areas.sum(),
         mean_blob_radius = radii.mean(),
         median_blob_radius = np.median(radii),
-    )
+    )  # type: ignore[call-overload]
 
     tba = metrics["total_blob_area"]
     coverage = 100.0 * tba / img_area
@@ -762,7 +762,7 @@ def full_analysis(
     id_cols = ["image_name", "Offset", "Position", "Label", "Class", "Time", "UniqueID"]
     id_cols = [c for c in id_cols if c in per_img_df.columns]
     ordered_cols = id_cols + [c for c in per_img_df.columns if c not in id_cols]
-    per_img_df = per_img_df[ordered_cols]
+    per_img_df = per_img_df[ordered_cols]  # type: ignore[assignment]
     per_image_csv.parent.mkdir(parents=True, exist_ok=True)
     per_img_df.to_csv(per_image_csv, index=False)
     log.info(f"Per-image metrics saved to: {per_image_csv}")
