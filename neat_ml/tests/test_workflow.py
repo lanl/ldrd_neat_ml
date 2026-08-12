@@ -634,13 +634,23 @@ def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_
 
 @pytest.mark.parametrize("val_ds, val_paths, err_msg",
     [
-        (None, {"agg_csv": Path("val.csv")}, r"requires a validation dataset config \(val_ds\)\."),
-        ({"id": "VAL"}, None, r"requires validation paths \(val_paths\)\."),
+        (None, {"agg_csv": Path("val.csv")}, r"requires a validation dataset config \(val_ds\)"),
+        ({"id": "VAL"}, None, r"requires validation paths \(val_paths\)"),
     ]
 )
-def test_stage_train_model_requires_validation_args(tmp_path, val_ds, val_paths, err_msg):
+def test_stage_train_model_requires_validation_args(
+    tmp_path,
+    sample_data,
+    val_ds,
+    val_paths,
+    err_msg
+):
     train_ds = {"id": "TR1"}
-    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+    agg_csv_path = tmp_path / "train.csv"
+    train_paths = {"agg_csv": agg_csv_path, "model_dir": tmp_path / "model"}
+    # save a sample training dataset to circumvent earlier checks
+    target_data = sample_data.rename(columns={"target": "Phase_Separation", "feature3": "Group"})
+    target_data.to_csv(agg_csv_path)
 
     with pytest.raises(ValueError, match=err_msg):
         wf.stage_train_model(
@@ -712,9 +722,8 @@ def test_stage_train_model_no_overlapping_features_raises(tmp_path: Path, sample
 
 
 def test_stage_train_model_column_mismatch(
-    tmp_path: Path, sample_data, caplog
+    tmp_path: Path, sample_data: pd.DataFrame,
 ):
-    caplog.set_level(logging.WARNING)
     train_ds = {"id": "TR4"}
     train_path = tmp_path / "train.csv"
     val_path = tmp_path / "val.csv"
@@ -723,20 +732,22 @@ def test_stage_train_model_column_mismatch(
     sample_data.to_csv(train_path, index=False)
     val_data = sample_data.drop(columns=["feature1", "exclude_col"])
     val_data.to_csv(val_path, index=False)
+    
+    with pytest.raises(ValueError, match="Feature mismatch"):
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds={"id": "VAL"},
+            val_paths=val_paths,
+            target="target"
+        )
 
-    wf.stage_train_model(
-        train_ds,
-        train_paths,
-        val_ds={"id": "VAL"},
-        val_paths=val_paths,
-        target="target"
-    )
-    assert "Feature mismatch" in caplog.text
 
-
+@pytest.mark.parametrize("ml_hyper_opt", [True, False])
 def test_stage_train_model_happy_path_saves_bundle_and_roc(
     tmp_path: Path,
-    sample_data,
+    sample_data: pd.DataFrame,
+    ml_hyper_opt: bool,
 ):
     train_ds = {"id": "TR5"}
     train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
@@ -749,11 +760,12 @@ def test_stage_train_model_happy_path_saves_bundle_and_roc(
         train_paths,
         val_ds={"id": "VAL"},
         val_paths=val_paths,
-        target="target"
+        target="target",
+        ml_hyper_opt=ml_hyper_opt,
     )
     save_path = train_paths["model_dir"]                                                             
     # check that the roc-curve was generated
-    assert (tmp_path / save_path / "TR5_val_roc.png").exists()
+    assert (tmp_path / save_path / "TR5_roc.png").exists()
     # check that the model bundle contains a fitted classifier
     model_bundle = joblib.load(model_path)
     check_is_fitted(model_bundle["model"])
@@ -761,11 +773,21 @@ def test_stage_train_model_happy_path_saves_bundle_and_roc(
     model_metrics = model_bundle["metrics"]
     assert_array_equal(list(model_metrics.values()), [1.0, 1.0])
     # assertions on the expected values from
-    # performing ml hyperparameter optimization
+    # performing ml hyperparameter optimization.
+    # with ml_hyper_opt==True, `train_model` returns best_params from
+    # `GridSearchCV`; with my_hyper_opt==False, `train_model returns 
+    # best_params from `Pipeline`.
     model_params = model_bundle["best_params"]
-    assert model_params["ensemble__xgb__learning_rate"] == 0.05
-    assert model_params["ensemble__xgb__max_depth"] == 3
-    assert model_params["ensemble__xgb__n_estimators"] == 10
+    if ml_hyper_opt:
+        assert model_params["ensemble__xgb__learning_rate"] == 0.05
+        assert model_params["ensemble__xgb__max_depth"] == 3
+        assert model_params["ensemble__xgb__n_estimators"] == 10
+    else:
+        assert_allclose(
+            model_params["ensemble__xgb__scale_pos_weight"], 0.9411764705882353
+        )
+        assert model_params['ensemble__rf__n_estimators'] == 500
+        assert model_params['ensemble__xgb__colsample_bytree'] == 0.8
 
 
 def test_stage_explain_aligns_features_and_calls_compare_methods(

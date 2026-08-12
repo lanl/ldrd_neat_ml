@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import logging
-from neat_ml.model.train import preprocess, plot_roc 
+from neat_ml.model.train import ml_preprocess, plot_roc 
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def run_inference(
     feats = bundle.get("features", [])
 
     df = pd.read_csv(data_csv)
-    X, y = preprocess(df, target, exclude_cols)
+    X, y = ml_preprocess(df, target, exclude_cols)
 
     X = X.reindex(columns=list(set(X.columns) | set(feats)))
     X = X[feats] if feats else X

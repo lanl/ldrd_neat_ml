@@ -1,17 +1,20 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Literal
 import pandas as pd
-from joblib import load as joblib_load
+import joblib
 import numpy as np
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
 from neat_ml.opencv.detection import run_opencv
 from neat_ml.bubblesam.bubblesam import run_bubblesam
 from neat_ml.analysis.data_analysis import full_analysis
-from neat_ml.model.train import (preprocess as ml_preprocess,
-                                 train_with_validation, save_model_bundle,
-                                 plot_roc)
+from neat_ml.model.train import (
+    ml_preprocess,
+    train_model,
+    save_model_bundle,
+    plot_roc,
+)
 from neat_ml.model.inference import run_inference
 from neat_ml.model.feature_importance import compare_methods
 from neat_ml.utils.lib_plotting import plot_phase_diagram
@@ -38,12 +41,14 @@ def as_steps_set(steps_str: str) -> list[str]:
     Parameters
     ----------
     steps_str : str
-        Comma-separated steps; accepts 'detect', 'analysis'.
+        Comma-separated string of steps; accepts 'detect', 'analysis',
+        'train', 'infer', 'explain', 'plot', or 'all', which expands
+        to full pipeline.
 
     Returns
     -------
     list[str]
-        Normalized steps. 'all' expands to full pipeline.
+        Normalized steps.
     """
     raw = [s.strip() for s in steps_str.split(",") if s.strip()]
     if raw == ["all"]:
@@ -343,7 +348,9 @@ def stage_train_model(
     ml_hyper_opt: bool = True,
 ) -> Path:
     """
-    Train with a dedicated validation dataset and save artifacts.
+    Train an ensemble machine learning classifier and save
+    the trained model using joblib. Perform ML hyperparameter
+    optimization if requested by the user using validation dataset.
 
     Parameters
     ----------
@@ -352,7 +359,8 @@ def stage_train_model(
     train_paths : dict[str, Path]
         Paths for training; needs 'agg_csv' and 'model_dir'.
     val_ds : dict[str, Any]
-        Validation dataset config used for model selection.
+        Validation dataset config used for determining best model
+        parameters when performing hyperparameter optimization.
     val_paths : dict[str, Path]
         Paths for validation; needs 'agg_csv'.
     target : str
@@ -366,58 +374,72 @@ def stage_train_model(
     Path
         Filesystem path to the saved model bundle (.joblib).
     """
-    if val_ds is None:
-        raise ValueError("stage_train_model requires a validation dataset config (val_ds).")
-    if val_paths is None:
-        raise ValueError("stage_train_model requires validation paths (val_paths).")
    
     ds_id = train_ds["id"]
 
+    # load training dataset
     agg_tr = train_paths["agg_csv"].expanduser().resolve()
     if not agg_tr.exists():
         raise FileNotFoundError(f"Train aggregate CSV not found: {agg_tr}")
     df_tr = pd.read_csv(agg_tr)
-    excl_tr = ["Group", "Label", "Time", "Class"] + \
-        list(train_ds.get("composition_cols", []))
+    # initialize column names to exclude from training feature datatset
+    # and prepare data for ML training. 
+    excl_tr = ["Group", "Label", "Time", "Class"] + train_ds.get("composition_cols", [])
     X_tr, y_tr = ml_preprocess(df_tr, target=target, exclude=excl_tr)
+    
+    if ml_hyper_opt:
+        # check for appropriate validation dataset paths if performing hyperparamter optimization
+        if val_ds is None:
+            raise ValueError(
+                "stage_train_model requires a validation dataset config (val_ds) for hyperparameter optimization."
+            )
+        if val_paths is None:
+            raise ValueError(
+                "stage_train_model requires validation paths (val_paths) for hyperparameter optimization."
+            )
 
-    agg_val = val_paths["agg_csv"]
-    if not agg_val.exists():
-        raise FileNotFoundError(f"Validation aggregate CSV not found: {agg_val}")
-    df_val = pd.read_csv(agg_val)
-    excl_val = ["Group", "Label", "Time", "Class"] + \
-        list(val_ds.get("composition_cols", []))
-    X_val, y_val = ml_preprocess(df_val, target=target, exclude=excl_val)
+        agg_val = val_paths["agg_csv"]
+        if not agg_val.exists():
+            raise FileNotFoundError(f"Validation aggregate CSV not found: {agg_val}")
+        df_val = pd.read_csv(agg_val)
+        excl_val = ["Group", "Label", "Time", "Class"] + val_ds.get("composition_cols", [])
+        X_val, y_val = ml_preprocess(df_val, target=target, exclude=excl_val)
 
-    common_cols = [c for c in X_tr.columns if c in X_val.columns]
-    if not common_cols:
-        raise ValueError("No overlapping feature columns between train and validation.")
-    if len(common_cols) < len(X_tr.columns) or len(common_cols) < len(X_val.columns):
-        log.warning(
-            f"Feature mismatch: using {len(common_cols)}"
-            f" common features (train={X_tr.columns}, val={X_val.columns})."
-        )
-    X_tr = X_tr[common_cols]
-    X_val = X_val[common_cols]
+        common_cols = [c for c in X_tr.columns if c in X_val.columns]  # type: ignore[assignment]
+        if not common_cols:
+            raise ValueError("No overlapping feature columns between train and validation.")
+        if len(common_cols) < len(X_tr.columns) or len(common_cols) < len(X_val.columns):
+            raise ValueError(
+                f"Feature mismatch: using {len(common_cols)}"
+                f" common features (train={X_tr.columns}, val={X_val.columns})."
+            )
+        X_val = X_val[common_cols]
+        X_tr = X_tr[common_cols]
+    else:
+        # We dont pass a validation dataset if not performing hyperparameter optimization
+        common_cols = X_tr.columns  # type: ignore[assignment]
+        X_val = None
+        y_val = None
 
+    # perform model training and save trained model
     model_dir = train_paths["model_dir"]
     model_dir.mkdir(parents=True, exist_ok=True)
     model_path = model_dir / f"{ds_id}_model.joblib"
-    # check to see if the model path already exists, if so, skip re-training
-    model, metrics, best_params, val_proba = train_with_validation(
+    model, metrics, best_params, val_proba = train_model(
         X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt
     )
     save_model_bundle(
         model=model,
-        features=common_cols,
+        features=common_cols,  # type: ignore[arg-type]
         metrics=metrics,
         best_params=best_params,
         path=model_path,
     )
-    roc_png = model_dir / f"{ds_id}_val_roc.png"
-    plot_roc(y_true=y_val.to_numpy(), y_prob=val_proba, out_png=str(roc_png))
-    roc_metric = metrics.get("val_roc_auc", np.nan)
-    pr_metric = metrics.get("val_pr_auc", np.nan)
+    roc_png = model_dir / f"{ds_id}_roc.png"
+    y_out = y_val if y_val is not None else y_tr
+    plot_roc(y_true=y_out.to_numpy(), y_prob=val_proba, out_png=str(roc_png))
+    roc_metric = metrics.get("roc_auc", np.nan)
+    pr_metric = metrics.get("pr_auc", np.nan)
     log.info(
         f"--> Model saved: {model_path} | ROC: {roc_png} | " 
         f"AUC={roc_metric:.3f} | PR-AUC={pr_metric:.3f}"
@@ -471,7 +493,7 @@ def stage_explain(
     )
 
     log.info(f"Loading trained model bundle from {model_path}...")
-    model_bundle = joblib_load(model_path)
+    model_bundle = joblib.load(model_path)
     model = model_bundle['model']
 
     log.info(f"Aligning data to the {len(model_bundle['features'])} features the model was trained on.")
@@ -494,7 +516,7 @@ def stage_run_inference_and_plot(
     infer_dataset_config: dict[str, Any],
     paths: dict[str, Path],
     model_path: Path,
-    steps: list[str],
+    steps: list[Literal["infer", "plot"]],
     target: str | None = None,
 ) -> None:
     """
@@ -512,7 +534,7 @@ def stage_run_inference_and_plot(
         A dictionary of file paths for data and results.
     model_path : Path
         The path to the trained model file.
-    steps : list[str]
+    steps : list[Literal["infer", "plot"]]
         A list of active workflow steps to determine 
         whether to run inference, plotting, or both.
     target : str | None

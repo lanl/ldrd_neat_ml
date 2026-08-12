@@ -187,6 +187,8 @@ def plot_gmm_decision_regions(
     y_col: str,
     phase_col: str,
     ax: Axes,
+    xrange: Optional[list[int]],
+    yrange: Optional[list[int]],
     n_components: int,
     random_state: int,
     boundary_color: str,
@@ -195,8 +197,6 @@ def plot_gmm_decision_regions(
     plot_regions: bool,
     region_colors: tuple[str, str] = ("lightsteelblue", "aquamarine"),
     decision_boundary_width: int = 3,
-    xrange: Optional[list[int]]=None,
-    yrange: Optional[list[int]]=None,
 ) -> tuple[GaussianMixture, np.ndarray, Optional[np.ndarray]]:
     """
     Trains a GMM and creates contour traces for phase 
