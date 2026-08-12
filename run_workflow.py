@@ -288,9 +288,15 @@ def main(config_path: str, steps_str: str) -> None:
                     roots, val_ds, steps=["train"]) if val_ds else None
             )
             ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
+            n_jobs = train_ds.get("n_jobs", -1)
 
             model_path = stage_train_model(
-                train_ds, train_paths, val_ds, val_paths, ml_hyper_opt=ml_hyper_opt
+                train_ds,
+                train_paths,
+                val_ds,
+                val_paths,
+                ml_hyper_opt=ml_hyper_opt,
+                n_jobs=n_jobs,
             )
         else:
             model_path = trained_model

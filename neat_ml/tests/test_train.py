@@ -15,14 +15,14 @@ from sklearn.pipeline import Pipeline
 from neat_ml.model.train import (
     _scale_pos_weight,
     plot_roc,
-    preprocess,
+    ml_preprocess,
     save_model_bundle,
-    train_with_validation,
+    train_model,
 )
 
 
 def test_preprocess(sample_data: pd.DataFrame):
-    actual_X, actual_y = preprocess(
+    actual_X, actual_y = ml_preprocess(
         sample_data,
         target="target",
         exclude=["exclude_col"],
@@ -38,7 +38,7 @@ def test_preprocess(sample_data: pd.DataFrame):
     assert actual_y.dtype == int
 
 def test_preprocess_no_exclude(sample_data: pd.DataFrame):
-    actual_X, _ = preprocess(sample_data, target="target")
+    actual_X, _ = ml_preprocess(sample_data, target="target")
     assert "exclude_col" in actual_X.columns
     assert "target" not in actual_X.columns
 
@@ -55,8 +55,8 @@ def test_scale_pos_weight(y_in, exp):
     assert_allclose(_scale_pos_weight(y_out), exp)
 
 
-def test_train_with_validation(sample_data: pd.DataFrame):
-    X, y = preprocess(sample_data, target="target")
+def test_train_model(sample_data: pd.DataFrame):
+    X, y = ml_preprocess(sample_data, target="target")
     # perfectly align all the feature data with the target
     rng = np.random.default_rng(123)
     X['feature1'] = np.where(
@@ -70,23 +70,19 @@ def test_train_with_validation(sample_data: pd.DataFrame):
         rng.uniform(0, 4, len(X))
     )
     X_train, y_train = X.iloc[:80], y.iloc[:80]
-    X_val, y_val = X.iloc[80:], y.iloc[80:]
 
-    model, metrics, _, actual_val_proba = train_with_validation(
-        X_train, y_train, X_val, y_val, n_jobs=1, ml_hyper_opt=False,
+    model, metrics, _, actual_proba = train_model(
+        X_train, y_train, n_jobs=1, ml_hyper_opt=False,
     )
 
     assert isinstance(model, Pipeline)
     assert isinstance(metrics, dict)
-    assert isinstance(actual_val_proba, np.ndarray)
-    assert "val_roc_auc" in metrics
-    assert "val_pr_auc" in metrics
-    assert metrics["val_roc_auc"] == 1.0
-    assert actual_val_proba.shape[0] == X_val.shape[0]
-    assert_allclose(
-        actual_val_proba[:5],
-        np.array([0.52166154, 0.01328962, 0.94898656, 0.01328962, 0.01328962])
-    )
+    assert isinstance(actual_proba, np.ndarray)
+    assert "roc_auc" in metrics
+    assert "pr_auc" in metrics
+    assert metrics["roc_auc"] == 1.0
+    assert actual_proba.shape[0] == X_train.shape[0]
+    assert all((actual_proba > 0.5) == y_train)
 
 
 def test_plot_roc(tmp_path: Path, baseline_dir):
@@ -98,12 +94,27 @@ def test_plot_roc(tmp_path: Path, baseline_dir):
     result = compare_images(expected_image_path, actual_image_path, tol=1e-4) # type: ignore[call-overload]
     assert result is None
 
-def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
-    X, y = preprocess(sample_data, target="target")
+@pytest.mark.parametrize("ml_hyper_opt, roc_auc, pr_auc",
+    [
+        (True, 1.0, 0.99999999999999),
+        (False, 1.0, 1.0),
+    ]
+)
+def test_save_model_bundle(
+    tmp_path,
+    sample_data,
+    ml_hyper_opt,
+    roc_auc,
+    pr_auc,
+):
+    X, y = ml_preprocess(sample_data, target="target")
     X_train, y_train = X.iloc[:80], y.iloc[:80]
-    X_val, y_val = X.iloc[80:], y.iloc[80:]
-    model, metrics, params, _ = train_with_validation(
-        X_train, y_train, X_val, y_val, n_jobs=1, ml_hyper_opt=False
+    if ml_hyper_opt:
+        X_val, y_val = X.iloc[80:], y.iloc[80:]
+    else:
+        X_val = y_val = None
+    model, metrics, params, _ = train_model(
+        X_train, y_train, X_val, y_val, n_jobs=1, ml_hyper_opt=ml_hyper_opt
     )
 
     features = list(X.columns)
@@ -118,7 +129,7 @@ def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
     )
 
     actual_bundle = joblib.load(bundle_path)
-    expected_metrics = {'val_roc_auc': 0.6222222222222222, 'val_pr_auc': 0.5988003663003663}
+    expected_metrics = {'roc_auc': roc_auc, 'pr_auc': pr_auc}
 
     assert isinstance(actual_bundle, dict)
     assert_equal(
@@ -133,8 +144,13 @@ def test_save_model_bundle(tmp_path: Path, sample_data: pd.DataFrame):
     for actual_val, exp_val in zip(actual_metrics.values(), expected_metrics.values()):
         assert_allclose(actual_val, exp_val) 
     actual_params = actual_bundle["best_params"]
-    # spot check output values against expected parameters
-    assert_allclose(actual_params["ensemble__xgb__scale_pos_weight"], 0.9512195121951219)
-    assert actual_params["ensemble__xgb__subsample"] == 0.8
-    assert actual_params["ensemble__rf__n_estimators"] == 500
-    assert actual_params["ensemble__rf__criterion"] == 'gini'
+    if ml_hyper_opt:
+        assert actual_params['ensemble__xgb__learning_rate'] == 0.05
+        assert actual_params['ensemble__xgb__max_depth'] == 3 
+        assert actual_params['ensemble__xgb__n_estimators'] == 10
+    else:
+        assert_allclose(actual_params["ensemble__xgb__scale_pos_weight"], 0.9512195121951219)
+        # spot check output values against expected parameters
+        assert actual_params["ensemble__xgb__subsample"] == 0.8
+        assert actual_params["ensemble__rf__n_estimators"] == 500
+        assert actual_params["ensemble__rf__criterion"] == 'gini'

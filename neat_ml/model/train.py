@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 __all__ = [
-    "preprocess",
-    "train_with_validation",
+    "ml_preprocess",
+    "train_model",
     "save_model_bundle",
 ]
 
-def preprocess(
+def ml_preprocess(
     df: pd.DataFrame,
     target: str | None = None,
     exclude: list[str] | None = None,
@@ -101,11 +101,11 @@ def _scale_pos_weight(y: pd.Series) -> float:
     return neg / pos if pos else 1.0
 
 
-def train_with_validation(
+def train_model(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    X_val: pd.DataFrame,
-    y_val: pd.Series,
+    X_val: pd.DataFrame | None = None,
+    y_val: pd.Series | None = None,
     n_jobs: int = -1,
     random_state: int = 42,
     ml_hyper_opt: bool = True,
@@ -116,11 +116,11 @@ def train_with_validation(
     np.ndarray,
 ]:
     """
-    Train an ensemble classifier with hyperparameter 
-    tuning on a validation set.
+    Train an ensemble ML classifier (with hyperparameter 
+    tuning on a validation set when requested by the user).
 
-    This function iterates over a predefined 
-    hyperparameter grid, fitting each candidate model 
+    When `ml_hyper_opt==True`, this function iterates over a
+    predefined hyperparameter grid, fitting and ensemble ML model 
     on the training set and evaluating its ROC-AUC 
     score on the validation set. The parameters of 
     the best model are then used to train a final model
@@ -132,10 +132,14 @@ def train_with_validation(
         The feature matrix for the training set.
     y_train : pd.Series
         The target vector for the training set.
-    X_val : pd.DataFrame
+    X_val : pd.DataFrame | None
         The feature matrix for the validation set.
-    y_val : pd.Series
+        Validation dataset only required when performing
+        ML hyperparameter optimization
+    y_val : pd.Series | None
         The target vector for the validation set.
+        Validation dataset only required when performing
+        ML hyperparameter optimizaton
     n_jobs : int
         The number of parallel processes to run
         when training the classifier. Default = -1
@@ -155,11 +159,13 @@ def train_with_validation(
         - The final model pipeline, refit on 
           the combined train+validation data.
         - A dictionary of performance metrics 
-          (ROC-AUC, PR-AUC) on the validation set.
+          (ROC-AUC, PR-AUC) on the evaluation
+          dataset (training or validation).
         - A dictionary of the best hyperparameters
           found during the grid search.
         - The predicted probabilities for the positive
-          class on the validation set.
+          class on the evaluation dataset (training or
+          validation).
     """
     spw = _scale_pos_weight(y_train)
     logger.info(f"scale_pos_weight={spw:.3f}  |  train neg/pos={np.bincount(y_train)}")
@@ -195,7 +201,9 @@ def train_with_validation(
         ]
     )
 
-    if ml_hyper_opt:
+    # TODO: currently hyperparameter optimization is only
+    # performed on the xgboost model parameters (see issue #57)
+    if ml_hyper_opt and X_val is not None and y_val is not None:
         logger.info("Performing ML hyperparameter optimization...")
         param_grid = {
             # XGBoost
@@ -221,20 +229,26 @@ def train_with_validation(
         grid_search.fit(X, y)
         final_model = grid_search.best_estimator_
         best_params = grid_search.best_params_
+        eval_dataset = X_val
+        eval_labels = y_val
     else:
         logger.info("Skipping ML hyperparameter optimization...")
         final_model = pipeline.fit(X_train, y_train) 
         best_params = pipeline.get_params()
+        eval_dataset = X_train
+        eval_labels = y_train
 
-    val_proba = final_model.predict_proba(X_val)[:, 1]
-    pr_auc = average_precision_score(y_val, val_proba)
-    best_score = roc_auc_score(y_val, val_proba)
-    metrics = {"val_roc_auc": best_score, "val_pr_auc": pr_auc}
+    out_proba = final_model.predict_proba(eval_dataset)[:, 1]
+    pr_auc = average_precision_score(eval_labels, out_proba)
+    best_score = roc_auc_score(eval_labels, out_proba)
+    metrics = {"roc_auc": best_score, "pr_auc": pr_auc}
     
-    logger.info(f"[BEST] val ROC-AUC={best_score:.4f}  | val PR-AUC={pr_auc:.4f}")
+    logger.info(
+        f"[BEST] ROC-AUC={best_score:.4f} | PR-AUC={pr_auc:.4f}"
+    )
     logger.info(f"[BEST] hyper-parameters: {best_params}")
 
-    return final_model, metrics, best_params, val_proba
+    return final_model, metrics, best_params, out_proba
 
 
 def plot_roc(

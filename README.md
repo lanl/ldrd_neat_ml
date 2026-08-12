@@ -127,9 +127,10 @@ datasets:
       - "PEO 20 kg/mol (wt%)"
     # list containing the height and width (in pixels) of the input images (required for `analysis` step)
     img_shape: [2456, 2052] 
-    role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model)
-    ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier)
+    role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model. Validation dataset only required if performing ML hyperparameter optimization.)
+    ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier. Validation dataset required for hyperparameter optimization.)
     top_n_features: number of features to consider when performing feature importance ranking (default is 20)
+    n_jobs: number of parallel process to run for ML model training (default is to use all available CPUs)
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -251,7 +252,10 @@ bubble detection data, extracts features from the data, and saves CSV files cont
 
 Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for saving the model, training/inference results can be set with `root: model` and `root: results` respectively, and `inference_model` can be set to explicitly provide the path to the trained model when performing inference separately from training. 
 
-The user can also determine whether or not to perform machine learning classifier hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt` to True or False (the default is True if no parameter is specified.)
+The user can also determine whether or not to perform machine learning classifier
+hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt`
+to True or False (the default is True if no parameter is specified), and set the
+number of parallel processes to use when performing ML classifier training with `n_jobs`. 
 
 For information relevant to running the workflow:  
 
