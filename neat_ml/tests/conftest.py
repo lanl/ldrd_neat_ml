@@ -179,38 +179,6 @@ def stable_rc():
 
 
 @pytest.fixture(scope="session")
-def sample_phase_df(tmp_path_factory):
-    """
-    Generates a synthetic DataFrame with two distinct clusters of points,
-    representing two phases, to create a less complex and more realistic
-    phase diagram for visual testing.
-    """
-    tmp_csv_path = tmp_path_factory.mktemp("input_data")
-    rng = np.random.default_rng(seed=0)
-    n_per_phase = 25
-
-    mean0 = [3, 2]
-    cov0 = [[3, 0.5], [0.5, 2]]
-    coords0 = rng.multivariate_normal(mean0, cov0, n_per_phase)
-    df0 = pd.DataFrame(coords0, columns=["Dextran", "PEO"])
-    df0["TruePhase"] = 0
-
-    mean1 = [12, 6]
-    cov1 = [[4, -1], [-1, 3]]
-    coords1 = rng.multivariate_normal(mean1, cov1, n_per_phase)
-    df1 = pd.DataFrame(coords1, columns=["Dextran", "PEO"])
-    df1["TruePhase"] = 1
-    df = pd.concat([df0, df1], ignore_index=True)
-    df[["Dextran", "PEO"]] = df[["Dextran", "PEO"]].clip(lower=0)
-    df = df.sample(frac=1, random_state=rng).reset_index(drop=True)
-    flip = rng.random(len(df)) < 0.1
-    df["PredPhase"] = np.where(flip, 1 - df["TruePhase"], df["TruePhase"])
-    csv_out = tmp_csv_path / "input_data.csv"
-    df.to_csv(csv_out)
-    return csv_out
-
-
-@pytest.fixture(scope="session")
 def sample_data() -> pd.DataFrame:
     """
     Provides a sample DataFrame for consistent testing.
