@@ -56,7 +56,7 @@ def _merge_composition_data(
     # perform "left" merge to keep per-image statistics even if missing composition information.
     # image groups without phase separation status are removed after aggregation.
     return summary_df.merge(
-        composition_df[[merge_key, *cols_to_add]], on=merge_key, how="left"
+        composition_df[[merge_key, *cols_to_add]], how="left"
     )
 
 def _parse_filename(
@@ -216,8 +216,7 @@ def _calculate_graph_metrics(
         Component (LCC) area statistics.
     method : Literal["delaunay", "knn", "radius"]
         The graph construction method: 'delaunay', 'radius', or 'knn'.
-        Descriptions of each method and their relative merits are provided
-        below:
+        Descriptions of each method are provided below:
 
         - ``delaunay``: the set of nodes and edges is defined by the Delaunay
                         triangulation of the input points, i.e. the circumcircle of the
@@ -291,13 +290,12 @@ def _calculate_graph_metrics(
         tree = KDTree(points)
         # gather point pairs from tree with radius param
         pairs = tree.query_pairs(r=r_param, output_type='ndarray')
-        # if pairs exist, find difference between pairs of points
-        if len(pairs) != 0:
-            diff = np.diff(points[pairs], axis=1)
-            # calculate the euclidean distance between pairs of points 
-            dist = np.linalg.norm(diff, axis=2).flatten()
-            # add point, distance pairs to graph edges
-            graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
+        # find difference between pairs of points
+        diff = np.diff(points[pairs], axis=1)
+        # calculate the euclidean distance between pairs of points 
+        dist = np.linalg.norm(diff, axis=2).flatten()
+        # add point, distance pairs to graph edges
+        graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
     # alternatively calculate the graph using the KDTree
     # to find the k-nearest neighbors of the points as determined
     # by the input `k_param`
@@ -379,11 +377,6 @@ def _calculate_graph_metrics(
 
 def _extract_blob_properties(
     df: pd.DataFrame,
-    *,
-    center_cols: list[Literal["center_x", "center_y"]],
-    area_col: Literal["area"],
-    radius_col: Literal["radius"],
-    bbox_cols: list[Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]],
 ) -> tuple[np.ndarray, pd.Series, pd.Series]:
     """Extracts geometric properties and image size from a blob DataFrame.
 
@@ -391,14 +384,6 @@ def _extract_blob_properties(
     ----------
     df : pd.DataFrame
         DataFrame loaded from a blob data parquet file.
-    center_cols: list[Literal["center_x", "center_y"]]
-        Column names for blob centroids [x, y].
-    area_col : Literal["area"]
-        Column name for blob areas
-    radius_col : Literal["radius"]
-        Column name for blob radii.
-    bbox_cols : list[Literal["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"]]
-        Column names for bounding box coordinates.
 
     Returns
     -------
@@ -406,13 +391,22 @@ def _extract_blob_properties(
         A tuple containing: (centroids, areas, radii).
         Returns empty arrays/pandas series values if data is missing.
     """
-    required_cols = {*center_cols, area_col, radius_col, *bbox_cols}
+    required_cols = {
+        "center_x",
+        "center_y",
+        "area",
+        "radius",
+        "bbox_xmax",
+        "bbox_xmin",
+        "bbox_ymax",
+        "bbox_ymin",
+    }
     if not required_cols.issubset(df.columns) or df.empty:
         return np.array([]), pd.Series(), pd.Series()
 
-    centroids = df[center_cols].to_numpy()
-    areas = df[area_col]
-    radii = df[radius_col]
+    centroids = df[["center_x", "center_y"]].to_numpy()
+    areas = df["area"]
+    radii = df["radius"]
 
     return centroids, areas, radii
 
@@ -448,13 +442,6 @@ def _calculate_all_spatial_metrics(
         A dictionary containing all calculated metrics for the image.
     """
     metrics = {
-        "num_blobs": 0,
-        "mean_blob_area": np.nan,
-        "median_blob_area": np.nan,
-        "std_blob_area": np.nan,
-        "total_blob_area": 0.0,
-        "mean_blob_radius": np.nan,
-        "median_blob_radius": np.nan,
         "graph_num_nodes": 0,
         "graph_num_edges": 0,
         "graph_avg_degree": np.nan,
@@ -470,13 +457,7 @@ def _calculate_all_spatial_metrics(
         "median_voronoi_area": np.nan,
         "std_voronoi_area": np.nan,
     }
-    centroids, areas, radii = _extract_blob_properties(
-        df_blobs,
-        center_cols=["center_x", "center_y"],
-        area_col="area",
-        radius_col="radius",
-        bbox_cols=["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"],
-    )
+    centroids, areas, radii = _extract_blob_properties(df_blobs)
     h, w = img_shape
     img_area = w * h
     img_hyp = np.hypot(h, w)
@@ -522,7 +503,7 @@ def _calculate_summary_statistics(
     carry_over_cols: Sequence[str],
     *,
     exclude_numeric_cols: Sequence[str] | None = None,
-    exclude_numeric_regex: Sequence[str] | None = None,
+    exclude_numeric_regex: str | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate numeric metrics per group, excluding selected numeric columns.
@@ -538,7 +519,7 @@ def _calculate_summary_statistics(
         'first' instance as the value for the entire group.
     exclude_numeric_cols : Sequence[str] | None
         Exact numeric column names to exclude (e.g., ['Offset']).
-    exclude_numeric_regex : Sequence[str] | None
+    exclude_numeric_regex : str | None
         Regex patterns; numeric columns matching any are excluded.
 
     Returns
@@ -562,7 +543,7 @@ def _calculate_summary_statistics(
     df_out = df.loc[
         :, (~df.columns.isin([*(exclude_numeric_cols
             if exclude_numeric_cols else []), *group_cols]))
-        & (~df.columns.str.contains("|".join(exclude_numeric_regex or ["$^"])))
+        & (~df.columns.str.contains(exclude_numeric_regex or "$^"))
     ]
 
     # collect all remaining columns that contain numerical data
@@ -695,7 +676,7 @@ def full_analysis(
     carry_over_cols: Sequence[str] | None = None,
     time_label: str | None = None,
     exclude_numeric_cols: list[str] | None = None,
-    exclude_numeric_regex: list[str] | None = None,
+    exclude_numeric_regex: str | None = None,
 ) -> None:
     """Executes the complete data analysis pipeline.
 
@@ -743,7 +724,7 @@ def full_analysis(
         collection time-point of the sample data.
     exclude_numeric_cols : list[str] | None
         Exact numeric columns to exclude from aggregation.
-    exclude_numeric_regex : list[str] | None
+    exclude_numeric_regex : str | None
         Regex patterns; matching numeric columns are excluded.
     """
     # iterate through all parquet files and return a dataframe
@@ -774,6 +755,10 @@ def full_analysis(
         per_img_df = _merge_composition_data(
             per_img_df, comp_df, cols_to_add=cols_to_add, merge_key="UniqueID"
         )
+    elif composition_csv and not cols_to_add:
+        # if user provides a composition CSV file, they must also explicitly
+        # state which columns from the CSV file to add to the per_img_df
+        raise ValueError("Please provide `cols_to_add` argument for merging dataframes.")
 
     # determine the df columns on which to aggregate statistics (user specified
     # or default) and which columns to preserve without aggregating

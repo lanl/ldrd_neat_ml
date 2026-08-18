@@ -240,8 +240,7 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     # from user input. defaults are set in `paths` by
     # calling `get_path_structure`, where "root:work" and
     # "root:results" dirs are default if user settings
-    # are not provided and default `ds_id` is "unknown".
-    # user input is required for `method`.
+    # are not provided. user input is required for `method`.
     ds_id = dataset_config.get("id")
     mode = dataset_config["method"]
     time_label = dataset_config.get("time_label")
@@ -256,10 +255,8 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
     # get the user provided input path storing parquet files OR
     # the detection dir where parquets were saved after detection
     analysis_input_dir = analysis_cfg.get("input_dir")
-    input_dir = (
-        Path(analysis_input_dir) if analysis_input_dir 
-        else (paths["det_dir"] if "det_dir" in paths and paths["det_dir"] else None)
-    )
+    detection_input_dir = paths["det_dir"] if "det_dir" in paths and paths["det_dir"] else None
+    input_dir = Path(analysis_input_dir) if analysis_input_dir else detection_input_dir
     if not input_dir:
         log.warning(
             f"No analysis input_dir provided and det_dir unavailable. Skipping '{ds_id}'."

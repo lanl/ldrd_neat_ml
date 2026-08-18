@@ -39,13 +39,13 @@ def main(config_path: str, steps_str: str) -> None:
             base_path = Path(roots.get("work"))
             dataset_id = ds.get("id")
             method = ds.get("method")
-            img_class = ds.get("class")
-            timestamp = ds.get("time_label")
-            paths = get_path_structure(roots, ds, steps)
             # ``method`` is required to orchestrate downstream processess,
             # so strictly enforce user input. 
             if method is None:
                 raise ValueError("Please provide `datasets:method` via input yaml file.")
+            img_class = ds.get("class")
+            timestamp = ds.get("time_label")
+            paths = get_path_structure(roots, ds, steps)
             # run detection and return output dataframe
             df_out = stage_detect(ds, paths)
             out_path = base_path / dataset_id  / method / img_class / timestamp

@@ -1,12 +1,10 @@
-from pathlib import Path
 import numpy as np
 from numpy.testing import assert_equal, assert_allclose, assert_array_equal
 import pandas as pd
 import pytest
 from neat_ml.analysis import data_analysis as da
-from pandas.testing import assert_frame_equal, assert_series_equal
+from pandas.testing import assert_frame_equal
 import logging
-from typing import Literal
 
 
 def test_calculate_nnd_stats():
@@ -103,6 +101,15 @@ def test_calculate_voronoi_stats(caplog, pts, exp, warn_msg):
             [10, 1, 0.2, 0.42163702135578396,
             0.0, 92.28488500290825, 9, 0.2, 793.0]
         ),
+        # a radius param that is too small to generate point pairs
+        (
+            "radius",
+            30,
+            None,
+            None,
+            None,
+            [10, 0, 0.0, 0.0, 0.0, np.nan, 10, 0.1, 278.0]
+        ),
         # a radius param that generates multiple edges
         (
             "radius",
@@ -191,35 +198,24 @@ def test_extract_blob_properties(make_dummy_blobs, input_df):
                 "bbox_ymax",
             ]
         )
-        expected_centers = np.array([])
-        expected_areas = pd.Series()
-        expected_radii = pd.Series()
-    actual_centers, actual_areas, actual_radii = da._extract_blob_properties(
-        df,
-        center_cols=["center_x", "center_y"],
-        area_col="area",
-        radius_col="radius",
-        bbox_cols=["bbox_xmax", "bbox_xmin", "bbox_ymax", "bbox_ymin"],
-    )
+        expected_centers = []
+        expected_areas = []
+        expected_radii = []
+    actual_centers, actual_areas, actual_radii = da._extract_blob_properties(df)
     assert_allclose(actual_centers, expected_centers)
-    if input_df is not None:
-        # compare outputs containing actual values
-        assert_allclose(actual_areas, expected_areas)
-        assert_allclose(actual_radii, expected_radii)
-    else:
-        # compare outputs containing empty data structures
-        assert_series_equal(actual_areas, expected_areas)
-        assert_series_equal(actual_radii, expected_radii)
+    # compare outputs containing actual values
+    assert_array_equal(actual_areas, expected_areas)
+    assert_array_equal(actual_radii, expected_radii)
 
 @pytest.mark.parametrize(
-    "input_df, n_centroids, exp_nodes, exp_neighbor_dist, exp_mean_nnd, exp_mva",
+    "input_df, n_centroids, exp_nodes, exp_neighbor_dist, exp_mean_nnd, exp_mva, exp_coverage",
     [
-        ("real_blobs", 5, 5, 307.1795051057866, 194.92048461932964, 796194.8341103308),
-        ("real_blobs", 1, 0, np.nan, np.nan, np.nan),
-        ("real_blobs", 2, 2, np.nan, 207.663189, np.nan),
-        ("real_blobs", 3, 3, 295.04877222436266, 217.1971962781283, np.nan),
-        ("real_blobs", 4, 4, 301.3597542865437, 172.05582593652304, 302694.9412916275),
-        (None, 0, 0, np.nan, np.nan, np.nan),
+        ("real_blobs", 5, 5, 307.1795051057866, 194.92048461932964, 796194.8341103308, 0.1890391825332647),
+        ("real_blobs", 1, 0, np.nan, np.nan, np.nan, 0.07652723663897669),
+        ("real_blobs", 2, 2, np.nan, 207.663189, np.nan, 0.10060280820407264),
+        ("real_blobs", 3, 3, 295.04877222436266, 217.1971962781283, np.nan, 0.13166213335293686),
+        ("real_blobs", 4, 4, 301.3597542865437, 172.05582593652304, 302694.9412916275, 0.15933985150334484),
+        (None, 0, 0, np.nan, np.nan, np.nan, 0.0),
     ]
 )
 def test_calculate_all_spatial_metrics(
@@ -231,12 +227,24 @@ def test_calculate_all_spatial_metrics(
     exp_neighbor_dist,
     exp_mean_nnd,
     exp_mva,
+    exp_coverage,
 ):
     caplog.set_level(logging.WARNING)
     if input_df == "real_blobs":
         df = real_blobs[:n_centroids]
     else:
-        df = pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"])
+        df = pd.DataFrame(
+            columns=[
+                "center_x",
+                "center_y",
+                "area",
+                "radius",
+                "bbox_xmax",
+                "bbox_xmin",
+                "bbox_ymax",
+                "bbox_ymin",
+            ]
+       )
 
     actual = da._calculate_all_spatial_metrics(df, graph_method="delaunay", img_shape=[2440, 1115])
 
@@ -247,6 +255,7 @@ def test_calculate_all_spatial_metrics(
     assert_allclose(actual["graph_avg_neighbor_distance"], exp_neighbor_dist)
     assert_allclose(actual["mean_nnd"], exp_mean_nnd)
     assert_allclose(actual["mean_voronoi_area"], exp_mva)
+    assert_allclose(actual["coverage_percentage"], exp_coverage)
     # assert that no warnings were logged, indicating that the voronoi stats
     # were not calculated for any array < length 4
     assert caplog.text == ''
@@ -254,7 +263,18 @@ def test_calculate_all_spatial_metrics(
 @pytest.mark.parametrize(
     "df_empty",
     [
-        pd.DataFrame(columns=["center_x", "center_y", "area", "radius", "bbox"]),
+        pd.DataFrame(
+            columns=[
+                "center_x",
+                "center_y",
+                "area",
+                "radius",
+                "bbox_xmax",
+                "bbox_xmin",
+                "bbox_ymax",
+                "bbox_ymin",
+            ]
+        ),
         pd.DataFrame(
             {
                 "center_x": [10.0, 30.0],
@@ -292,6 +312,9 @@ def test_calculate_all_spatial_metrics_else_branch_defaults(df_empty):
         "graph_avg_clustering",
         "graph_avg_neighbor_distance",
         "graph_avg_node_area_lcc",
+        "mean_voronoi_area",
+        "median_voronoi_area",
+        "std_voronoi_area",
     ):
         assert_allclose(out[key], np.nan, equal_nan=True)
 
@@ -354,7 +377,7 @@ def test_calculate_summary_statistics():
         group_cols=["Group"],
         carry_over_cols=["info"],
         exclude_numeric_cols=["other_metric"],
-        exclude_numeric_regex=["exclude"],
+        exclude_numeric_regex="exclude",
     )
     assert len(actual) == 2
     assert "metric_median" in actual.columns
@@ -393,7 +416,7 @@ def test_returns_groups_and_carry_when_all_numeric_excluded_by_regex():
         group_cols=["Group", "Label"],
         carry_over_cols=["Other"],
         exclude_numeric_cols=None,
-        exclude_numeric_regex=[r"^graph_.*"],
+        exclude_numeric_regex=r"^graph_.*",
     )
 
     expected = expected_df[["Group", "Label", "Other"]].drop_duplicates().reset_index(drop=True)
@@ -410,7 +433,7 @@ def test_merge_composition_data(mock_dir, method, drop_comp_row,):
     input_dir, output_dir, comp_csv = mock_dir
     per_img_df = da._process_parquet_files(
         input_dir,
-        mode="BubbleSAM",
+        mode=method,
         graph_method="delaunay",
         img_shape=[10, 10]
     )
@@ -433,11 +456,11 @@ def test_merge_composition_data(mock_dir, method, drop_comp_row,):
     ]
 )
 def test_process_parquet_files_errors(
-    tmp_path: Path,
-    mode: Literal["OpenCV", "BubbleSAM"],
-    img_shape: list,
-    err: type[Exception],
-    err_msg: str,
+    tmp_path,
+    mode,
+    img_shape,
+    err,
+    err_msg,
 ):
     with pytest.raises(err, match=err_msg):
         da._process_parquet_files(
@@ -544,6 +567,30 @@ def test_full_analysis_pipeline(
         assert_allclose(df_agg["mean_nnd_median"], 16.695406977528428) 
         assert_allclose(df_agg["mean_voronoi_area_std"], 0.0)
 
+
+def test_full_analysis_pipeline_cols_to_add_error(mock_dir):
+    """test that the appropriate error is raised when the user
+    fails to provide `cols_to_add` argument with `composition_csv`"""
+    input_dir, output_dir, comp_csv = mock_dir
+    per_image_csv = output_dir / "per_image_OpenCV.csv"
+    aggregate_csv = output_dir / "aggregate_OpenCV.csv"
+    group_cols = ["Group", "Label", "Time", "Class", "Offset"]
+    with pytest.raises(ValueError, match="Please provide `cols_to_add`"):
+        da.full_analysis(
+            input_dir=input_dir,
+            per_image_csv=per_image_csv,
+            aggregate_csv=aggregate_csv,
+            mode="OpenCV",
+            graph_method="radius",
+            r_param=30,
+            composition_csv=comp_csv,
+            time_label="1st",
+            group_cols=group_cols,
+            carry_over_cols=["Phase_Separation"],
+            img_shape=[90, 97],
+        )
+
+
 @pytest.mark.parametrize("summary_df_drop_key, comp_df_drop_key, err_msg",
     [
         # missing merge key in summary_df
@@ -590,10 +637,10 @@ def test_merge_composition_data_errors(
     ]
 )
 def test_process_parquet_files_warns_and_continues(
-    tmp_path: Path,
-    make_dummy_blobs: tuple, 
-    file_suff: str,
-    method: Literal["OpenCV", "BubbleSAM"],
+    tmp_path,
+    make_dummy_blobs, 
+    file_suff,
+    method,
 ):
     """
     test that ``process_parquet_files`` warns on unparsable
@@ -616,7 +663,7 @@ def test_process_parquet_files_warns_and_continues(
     df.to_parquet(input_dir / unparsable)
 
     with pytest.warns(UserWarning) as record:
-        df = da._process_parquet_files(
+        df_out = da._process_parquet_files(
             input_dir,
             mode=method,
             graph_method="delaunay",
@@ -626,8 +673,8 @@ def test_process_parquet_files_warns_and_continues(
     msgs = [str(w.message) for w in record.list]
     all_msgs = "\n".join(msgs)
     assert "Could not parse metadata from filename" in all_msgs
-    assert isinstance(df, pd.DataFrame)
-    assert df.shape == (1, 28)
+    assert isinstance(df_out, pd.DataFrame)
+    assert df_out.shape == (1, 28)
 
 
 def test_calculate_graph_metrics_bad_method(make_dummy_blobs):

@@ -83,10 +83,10 @@ def test_as_steps_set_normalizes_and_expands(steps_str, expected, err):
     ],
 )
 def test_get_path_structure_builds_expected_paths(
-    tmp_path: Path,
-    roots: dict,
-    ds: dict,
-    steps: list,
+    tmp_path,
+    roots,
+    ds,
+    steps,
 ):
     """
     test that `get_path_structure` builds the appropriate paths
@@ -111,8 +111,8 @@ def test_get_path_structure_builds_expected_paths(
     # Default analysis outputs
     if "analysis" in steps:
         analysis_dirs = base_ds.get("analysis")
-        per_img_path = analysis_dirs.get("per_image_csv")  # type: ignore[union-attr]
-        agg_path = analysis_dirs.get("aggregate_csv")  # type: ignore[union-attr]
+        per_img_path = analysis_dirs.get("per_image_csv")
+        agg_path = analysis_dirs.get("aggregate_csv")
         exp_per = (Path(per_img_path) if per_img_path is not None
             else tmp_path / "results" / "DS1" / "per_image.csv")
         exp_agg = (Path(agg_path) if agg_path is not None
@@ -129,7 +129,7 @@ def test_get_path_structure_results_error():
     with pytest.raises(ValueError, match="Please provide `results` path"):
         wf.get_path_structure(roots, input_ds, ["analysis"])
 
-def test_get_path_structure_fallbacks(tmp_path: Path):
+def test_get_path_structure_fallbacks(tmp_path):
     """
     test that `get_path_structure` uses input dict fallbacks
     when not explicitly defined by user. will fail if fallbacks are None.
@@ -464,8 +464,8 @@ def test_stage_detect_returns_empty_dataframe(
     assert df_out.empty
 
 def test_stage_analyze_features_warns_when_input_dir_unavailable(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path
+    caplog,
+    tmp_path
 ):
     """
     stage_analyze_features: logs warning when neither
@@ -485,7 +485,7 @@ def test_stage_analyze_features_warns_when_input_dir_unavailable(
 
 
 def test_stage_analyze_features_errors_when_composition_csv_missing(
-    tmp_path: Path
+    tmp_path
 ):
     """
     stage_analyze_features: raises FileNotFoundError if composition_csv
@@ -529,12 +529,12 @@ def test_stage_analyze_features_errors_when_composition_csv_missing(
     ]
 )
 def test_stage_analyze_features_happy_path_calls_full_analysis(
-    tmp_path: Path,
-    mock_dir: tuple[Path, Path, Path],
-    include_save_paths: bool,
-    include_ds_id: bool,
-    include_analysis_cfg: bool,
-    ds_id: str,
+    tmp_path,
+    mock_dir,
+    include_save_paths,
+    include_ds_id,
+    include_analysis_cfg,
+    ds_id,
 ):
     """
     stage_analyze_features: happy path creates output dirs
@@ -565,7 +565,7 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     if include_save_paths:
         out_per = output_dir / "per_image.csv"
         out_agg = output_dir / "aggregate.csv"
-        ds["analysis"].update( # type: ignore[attr-defined]
+        ds["analysis"].update(
             {
                 "per_image_csv": out_per,
                 "aggregate_csv": out_agg,
@@ -610,11 +610,11 @@ def test_stage_analyze_features_happy_path_calls_full_analysis(
     ]
 )
 def test_stage_analyze_features_input_dir_warnings(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-    mode: str,
-    input_exist: bool,
-    warn_msg: str,
+    caplog,
+    tmp_path,
+    mode,
+    input_exist,
+    warn_msg,
 ):
     """
     Input dir exists but contains no parquet files.
