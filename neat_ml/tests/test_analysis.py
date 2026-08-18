@@ -203,7 +203,7 @@ def test_extract_blob_properties(make_dummy_blobs, input_df):
         expected_radii = []
     actual_centers, actual_areas, actual_radii = da._extract_blob_properties(df)
     assert_allclose(actual_centers, expected_centers)
-    # compare outputs containing actual values
+    # compare outputs to expected integer values
     assert_array_equal(actual_areas, expected_areas)
     assert_array_equal(actual_radii, expected_radii)
 

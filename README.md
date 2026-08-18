@@ -66,9 +66,9 @@ CSV file for the `PEG20/DEX500` system is shown below:
 ...    ...  ...     ...      ...   ...   ...                                   ...                  ...                             ...               ...
 ```
 
-The example CSV above also contains additional columns denoting parameters of image acquisition,
-including the depth of the image (`Offset`), the location of the image tile (`Position`), as well as
-the weight percentages of each polymer in the composition.
+The example CSV above also contains additional columns denoting experimental/image acquisition parameters,
+including the depth of the image (`Offset`), the location of the image tile (`Position`), and
+the weight percentages of each polymer in the composition (i.e. `PEO 20 kg/mol (wt%)`, `Dextran 450 - 650 kg/mol (wt%)`).
 
 The user also provides a choice of method for calculating graph-based metrics of bubble connectivity
 (`knn`, `radius` or `delaunay`). With `graph_method == knn`, the user must provide
