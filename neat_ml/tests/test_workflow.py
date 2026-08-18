@@ -10,18 +10,27 @@ from numpy.testing import assert_allclose
 import neat_ml.workflow.lib_workflow as wf
 
 
-def test_get_path_structure_builds_expected_paths(tmp_path: Path):
+@pytest.mark.parametrize("ds, exp_paths",
+    [
+        (
+            {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"},
+            "DS1/OpenCV/pos/T01"
+        ),
+        ({"method": "OpenCV"}, "OpenCV"),
+    ]
+)
+def test_get_path_structure_builds_expected_paths(tmp_path, ds, exp_paths):
     """
     get_path_structure: builds proc_dir and det_dir using ds_id/method/class/time_label.
     """
     roots = {"work": str(tmp_path)}
-    ds = {"id": "DS1", "method": "OpenCV", "class": "pos", "time_label": "T01"}
+    time_label = ds.get("time_label", "")
 
     paths = wf.get_path_structure(roots, ds)
 
-    base = tmp_path / "DS1" / "OpenCV" / "pos" / "T01"
-    assert paths["proc_dir"] == base / "T01_Processed_OpenCV"
-    assert paths["det_dir"] == base / "T01_Processed_OpenCV_With_Blob_Data"
+    base = tmp_path / exp_paths
+    assert paths["proc_dir"] == base / f"{time_label}_Processed_OpenCV"
+    assert paths["det_dir"] == base / f"{time_label}_Processed_OpenCV_With_Blob_Data"
 
 
 def test_get_path_structure_missing_work_raises_keyerror(tmp_path: Path):
@@ -138,10 +147,16 @@ def test_run_detection_skips_if_output_already_exists(
             {"proc_dir": "proc_dir", "det_dir": "det_dir"},
             {"image_filepath", "num_blobs_opencv", "median_radii_opencv"},
         ),
+        (    
+            {"method": "bubblesam", "detection": {}},
+            {"det_dir": "det_dir"},
+            {"image_filepath", "num_blobs_SAM", "median_radii_SAM"},
+        ),
     ]
 )
 def test_stage_detect_pipeline_runs(
     tmpdir,
+    caplog,
     mask_settings,
     reference_images: tuple,
     ds: dict,
@@ -152,8 +167,10 @@ def test_stage_detect_pipeline_runs(
     test that ``stage_detect`` runs successfully
     when provided the appropriate directories.
     """
+    caplog.set_level(logging.INFO) 
     raw_image = Path(reference_images[3])
     method = ds.get("method")
+    ds_id = ds.get("id", "")
     with tmpdir.as_cwd():
         proc_dir = Path("proc_dir")
         det_dir = Path("det_dir")
@@ -217,6 +234,8 @@ def test_stage_detect_pipeline_runs(
     assert det_dir_exp.is_absolute()
     assert df_out.shape == (1, 3)
     assert exp_columns.issubset(df_out.columns)
+    # check that detection uses the appropriate fallback for `ds_id`
+    assert f"Detecting blobs with {method} -> {ds_id} Output" in caplog.text
 
 
 def test_stage_detect_unknown_method_error(

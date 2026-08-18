@@ -31,7 +31,7 @@ def get_path_structure(
         Paths keyed by step usage (proc_dir, det_dir).
     """
     paths = {}
-    ds_id = dataset_config.get("id", "unknown")
+    ds_id = dataset_config.get("id", "")
     method = dataset_config.get("method", "")
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
@@ -70,7 +70,7 @@ def run_detection(
     detection_cfg = dataset_config.get("detection", {})
     img_dir_str = detection_cfg.get("img_dir")
     debug = detection_cfg.get("debug", False)
-    ds_id = dataset_config.get("id", "unknown")
+    ds_id = dataset_config.get("id", "")
     method = dataset_config.get("method", "")
     # get method (``opencv`` or ``bubblesam``) and initialize
     # variables to guide function calls
@@ -110,7 +110,7 @@ def run_detection(
     else:
         proc_dir = img_dir
     
-    log.info(f"Detecting ({method}) for {ds_id} -> {det_dir}")
+    log.info(f"Detecting blobs with {method} -> {ds_id} Output folder: {det_dir}")
     # collect paths for preprocessed tiff image files, store in DataFrame
     # check if the path is a single file or a directory
     if proc_dir.is_file():
