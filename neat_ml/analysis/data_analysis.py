@@ -1,0 +1,781 @@
+import re
+import warnings
+from pathlib import Path
+from typing import Any, Optional, Sequence, Union, Literal
+
+import networkx as nx
+import numpy as np
+import pandas as pd
+from scipy.spatial import KDTree, Voronoi, Delaunay
+import logging
+from tqdm.auto import tqdm
+
+__all__ = [
+    "full_analysis"
+]
+
+log = logging.getLogger(__name__)
+
+
+def _merge_composition_data(
+    summary_df: pd.DataFrame,
+    composition_df: pd.DataFrame,
+    *,
+    cols_to_add: Sequence[str],
+    merge_key: str,
+) -> pd.DataFrame:
+    """
+    Merges a summary DataFrame with an external composition dataframe.
+
+    Performs a left merge to add columns from the composition 
+    dataframe to the summary metrics table based on a shared key.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        The per-image or aggregated metrics table, must contain 
+        merge_key.
+    composition_df : pd.DataFrame
+        The external table with composition data.
+    cols_to_add : Sequence[str]
+        A sequence of columns from composition_df to add to summary_df.
+    merge_key : str
+        The column name to use as the merge key.
+
+    Returns
+    -------
+    pd.DataFrame
+        The merged DataFrame with the added composition columns.
+    """
+    if merge_key not in summary_df.columns:
+        raise ValueError(f"Merge key '{merge_key}' not found in summary_df.")
+    missing_cols = set((merge_key, *cols_to_add)) - set(composition_df.columns)
+    if missing_cols:
+        raise ValueError(f"Columns {missing_cols} not found in composition_df.")
+
+    # perform "left" merge to keep per-image statistics even if missing composition information.
+    # image groups without phase separation status are removed after aggregation.
+    return summary_df.merge(
+        composition_df[[merge_key, *cols_to_add]], how="left"
+    )
+
+def _parse_filename(
+    fname: str,
+    method: Literal["BubbleSAM", "OpenCV"]
+) -> dict[str, Any]:
+    """
+    Parses a bubblesam or opencv detection-generated filename to extract metadata.
+
+    Parameters
+    ----------
+    fname : str
+        The filename, e.g., 'offset -1_center_A1_Bf_Raw_uuid_bubble_data.parquet.gzip'.
+    method : Literal["BubbleSAM", "OpenCV"]
+        The method used for detection (bubblesam or opencv)
+
+    Returns
+    -------
+    dict[str, Any]
+        A dictionary with 'UniqueID', 'Class', 'Offset', 'Position', and 'Label',
+        or an empty dictionary if the pattern does not match.
+    """
+    if method == "BubbleSAM":
+        tag = "masks_filtered"
+    else:
+        tag = "bubble_data"
+
+    _RE = re.compile(
+        r"offset\s*(-?\d+)_"
+        r"(bottom|top|left|right|center)_"
+        r"([A-Z]\d+)_"
+        r".+?_"
+        r"(Bf|Ph)_Raw_"
+        fr"([0-9a-f\-]+)_{tag}\.parquet\.gzip",
+        re.IGNORECASE | re.VERBOSE,
+    )
+    match = _RE.match(fname)
+    if not match:
+        # some files in the dataset do not contain ``position`` information in the filename
+        # because they were acquired using a 2X microscope objective without the use of image
+        # tiling and are also not used for performing automated analysis in the workflow.
+        # Returning an empty dictionary skips downstream analysis of these files.
+        return {}
+    offset, pos, label, cls, uid = match.groups()
+    return {
+        "UniqueID": uid,
+        "Class": cls,
+        "Offset": int(offset),
+        "Position": pos,
+        "Label": label,
+    }
+
+
+def _calculate_nnd_stats(
+    points: np.ndarray,
+    img_hyp: float,
+) -> dict[str, float]:
+    """Computes mean and median Nearest-Neighbor Distances (NND) for points.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        An (N, 2) array of (x, y) coordinates. 
+    img_hyp : float
+        The value of the image hypotenuse for setting the `distance_upper_bound` argument
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary with 'mean_nnd' and 'median_nnd'.
+    """
+    # construct the KDTree
+    tree = KDTree(points)
+    # query the closest two neighbors (the first neighbor is always itself)
+    distances, _ = tree.query(points, k=2, distance_upper_bound=img_hyp)
+    # ignore the first nearest neighbor (self)
+    nnd = distances[:, 1]
+
+    return {"mean_nnd": nnd.mean(), "median_nnd": np.median(nnd)}
+
+def _calculate_voronoi_stats(
+    points: np.ndarray
+) -> dict[str, float]:
+    """
+    Computes statistics from the areas of finite Voronoi cells.
+
+    This function calculates the mean, median, and standard deviation of
+    the areas of Voronoi cells that are fully contained within the point set.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        An (N, 2) array of (x, y) coordinates. Requires at least 4 points
+        for a stable Voronoi tessellation.
+
+    Returns
+    -------
+    dict[str, float]
+        A dictionary containing 'mean_voronoi_area', 'median_voronoi_area',
+        'std_voronoi_area'. If no finite areas are found, an empty dictionary
+        is returned.
+    """
+    vor = Voronoi(points) 
+
+    # iterate through regions, filtering out edge regions
+    finite_areas = []
+    for region_id in vor.point_region:
+        verts = vor.regions[region_id]
+        # for all valid regions calculate the area of the region
+        # using the shoelace formula, filtering out infinite area
+        # regions.
+        if all(v >= 0 for v in verts):
+            poly = vor.vertices[verts]
+            x, y = poly[:, 0], poly[:, 1]
+            area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) -
+                                np.dot(y, np.roll(x, 1)))
+            finite_areas.append(area)
+    
+    if not finite_areas:
+        log.warning("No finite areas found in Voronoi regions.")
+        return {} 
+
+    # calculate statistics from finite areas
+    areas_arr = np.asarray(finite_areas)
+    mean_area = areas_arr.mean()
+    # calculate the sample standard deviation `ddof=1` because
+    # per-image statistics represent a sample of data points from
+    # a group of images obtained from a single  well-plate.
+    std_area = areas_arr.std(ddof=1)
+    stats = {
+        "mean_voronoi_area": mean_area,
+        "median_voronoi_area": np.median(areas_arr),
+        "std_voronoi_area": std_area,
+    }
+    return stats
+
+def _calculate_graph_metrics(
+    points: np.ndarray,
+    areas: pd.Series,
+    *,
+    method: Literal["delaunay", "knn", "radius"],
+    r_param: Optional[Union[int, float]] = None,
+    k_param: Optional[int] = None,
+    img_hyp: float,
+) -> dict[str, Any]:
+    """Builds a spatial graph from points and calculates network metrics.
+
+    Constructs a graph using Delaunay triangulation, radius search, or k-nearest
+    neighbors, then computes metrics like degree, clustering, and component sizes.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        An (N, 2) array of node coordinates.
+    areas : pd.Series
+        A pandas series of detected blob areas, used for Largest Connected
+        Component (LCC) area statistics.
+    method : Literal["delaunay", "knn", "radius"]
+        The graph construction method: 'delaunay', 'radius', or 'knn'.
+        Descriptions of each method are provided below:
+
+        - ``delaunay``: the set of nodes and edges is defined by the Delaunay
+                        triangulation of the input points, i.e. the circumcircle of the
+                        nodes forming each triangle contains no other node inside.
+                        Generates comprehensive graph of node connectivity. Delaunay
+                        triangulation cannot be performed for any input with less than 3
+                        data points, and analysis of such inputs will results in an
+                        output graph with no edges.
+
+        - ``knn``: maps the connections between the k nearest neighboring nodes
+                   regardless of the density of the nodes. Will connect sparse
+                   nodes but also does not strictly account for all connections within
+                   groups of dense nodes, depending on k. The input parameter `k` is
+                   modified if the maximum number of neighboring nodes is less than
+                   k such that the value of k becomes the number of nodes minus 1.
+                   The user controls the value of `k_param` via the input yaml file. 
+
+        - ``radius``: finds all the connections between nodes within the radius
+                      parameter r, which requires user estimation of the relative distance
+                      between nodes. The size of the graph depends on the sparsity/density
+                      of the nodes in relation to the r parameter. The user controls the
+                      value of `r_param` via the input yaml file, which can be adjusted to
+                      accommodate user specifications.
+    r_param : Optional[Union[int, float]]
+        The radius (in pixels) for 'radius' graphs.
+    k_param : Optional[int]
+        The k value for 'knn' graphs. k is the maximum number of nearest
+        neighbors to use when building the graph. k is overridden when it
+        exceeds the number of nodes for a given input to avoid empty dict
+        when n_nodes < k.
+    img_hyp : float
+        The value of the image hypotenuse (in pixels) for setting the `distance_upper_bound`
+        argument when performing KDTree query with the `knn` graph method
+
+    Returns
+    -------
+    dict[str, Any]
+        A dictionary of graph metrics. Defaults to 0 for integer values and NaN for
+        floating point statistical measures if calculation is not possible.
+    """
+    metrics = {}
+
+    # check if input method is valid
+    if method not in ["knn", "delaunay", "radius"]:
+        raise ValueError(
+            f"Invalid input parameter for `method`: {method}"
+        )
+    
+    # check that the input parameters for the graph are acceptable for each method
+    if method == "knn":
+        if not isinstance(k_param, int):
+            raise ValueError("`k_param` must be an integer value")
+        elif not k_param > 0:
+            raise ValueError("`k_param` must be a positive, non-zero integer")
+    elif method == "radius":
+        if not isinstance(r_param, (int, float)):
+            raise ValueError("`r_param` must be either an integer or floating point value")
+        elif not r_param > 0:
+            raise ValueError("`r_param` must be a positive, non-zero value")
+
+    # initialize `networkx` graph, and add nodes from input data
+    n_nodes = points.shape[0]
+    graph = nx.Graph()
+    graph.add_nodes_from((i, {"area": areas[i], "pos": points[i]})
+                         for i in range(n_nodes))
+    
+    # calculate graph for any of the three input methods
+    # calculate the graph using the KDTree to find the
+    # closest points within radius set by `r_param`
+    if method == "radius":
+        tree = KDTree(points)
+        # gather point pairs from tree with radius param
+        pairs = tree.query_pairs(r=r_param, output_type='ndarray')
+        # find difference between pairs of points
+        diff = np.diff(points[pairs], axis=1)
+        # calculate the euclidean distance between pairs of points 
+        dist = np.linalg.norm(diff, axis=2).flatten()
+        # add point, distance pairs to graph edges
+        graph.add_edges_from((i, j, {"distance": d}) for (i, j), d in zip(pairs, dist))
+    # alternatively calculate the graph using the KDTree
+    # to find the k-nearest neighbors of the points as determined
+    # by the input `k_param`
+    elif method == "knn":
+        # k is the minimum of the input parameter
+        # and the maximal number of neighbors (nodes-1) 
+        # to avoid empty dict entries when n_nodes < k
+        k = min(k_param, n_nodes - 1)  # type: ignore[type-var] 
+        tree = KDTree(points)
+        # gather point pairs from tree with knn 
+        # index k by 1 because closest node is always itself
+        dists, idxs = tree.query(points, k=k + 1, distance_upper_bound=img_hyp)  # type: ignore[operator]
+        # broadcast the first column (node indices) to the shape of the
+        # knn array so that we can group the nodes with each of their
+        # nearest neighbors
+        node_idx = np.broadcast_to(idxs[:, [0]], idxs[:, 1:].shape)
+        # group the node, neighbor pairs then stack
+        # pairs with their respective distances
+        pairs_idx = np.column_stack((node_idx.ravel(), idxs[:, 1:].ravel()))
+        pairs_dists = np.column_stack((pairs_idx, dists[:, 1:].ravel()))
+        # add all the edges to the graph
+        new_edges = (
+            (
+                pairs_dists[n, 0],
+                pairs_dists[n, 1],
+                {"distance": pairs_dists[n, 2]}
+            ) for n in range(len(pairs_dists))
+        ) 
+        graph.add_edges_from(new_edges)
+
+    # alternatively calculate the graph using Delaunay triangulation
+    elif method == "delaunay" and n_nodes >= 3:
+        # calculate the Delaunay triangulation of input points
+        tri = Delaunay(points)
+        # get the indices of the points forming the triangles
+        tri_sim = tri.simplices
+        # shift all points so that we can calculate
+        # the distance between adjacent points
+        tri_sim_shift = np.roll(tri_sim, shift=-1, axis=1)
+        # stack points with neighbors and calculate the
+        # euclidean distance between the points
+        point_pairs = np.column_stack((tri_sim.ravel(), tri_sim_shift.ravel()))
+        diff = np.diff(points[point_pairs], axis=1)
+        dist = np.linalg.norm(diff, axis=2).flatten()
+        # add new edges to the graph
+        new_edges = (
+            (
+                point_pairs[n, 0],
+                point_pairs[n, 1],
+                {"distance": dist[n]}
+            ) for n in range(len(point_pairs))
+        )
+        graph.add_edges_from(new_edges)
+    
+    # index graph-based features
+    metrics["graph_num_nodes"] = n_nodes
+    metrics["graph_num_edges"] = graph.number_of_edges()
+
+    degrees = np.fromiter((d for _, d in graph.degree()), dtype=float)
+    metrics["graph_avg_degree"] = degrees.mean()
+    # calculate the sample standard deviation with `ddof=1` because
+    # per-image statistics represent sample data points for individual
+    # images comprising a group of images taken from a single image well.
+    metrics["graph_degree_std"] = degrees.std(ddof=1)
+    
+    metrics["graph_avg_clustering"] = nx.average_clustering(graph)
+    nbr_dists = np.fromiter((d["distance"] for _, _, d in
+                             graph.edges(data=True)), dtype=float)
+    metrics["graph_avg_neighbor_distance"] = nbr_dists.mean()
+
+    components = list(nx.connected_components(graph))
+    metrics["graph_num_components"] = len(components)
+    lcc = max(components, key=len)
+    metrics["graph_lcc_node_fraction"] = len(lcc) / n_nodes  # type: ignore[assignment]
+    lcc_areas = [graph.nodes[n]["area"] for n in lcc]
+    metrics["graph_avg_node_area_lcc"] = np.mean(lcc_areas)
+
+    return metrics
+
+def _extract_blob_properties(
+    df: pd.DataFrame,
+) -> tuple[np.ndarray, pd.Series, pd.Series]:
+    """Extracts geometric properties and image size from a blob DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame loaded from a blob data parquet file.
+
+    Returns
+    -------
+    tuple[np.ndarray, pd.Series, pd.Series]
+        A tuple containing: (centroids, areas, radii).
+        Returns empty arrays/pandas series values if data is missing.
+    """
+    required_cols = {
+        "center_x",
+        "center_y",
+        "area",
+        "radius",
+        "bbox_xmax",
+        "bbox_xmin",
+        "bbox_ymax",
+        "bbox_ymin",
+    }
+    if not required_cols.issubset(df.columns) or df.empty:
+        return np.array([]), pd.Series(), pd.Series()
+
+    centroids = df[["center_x", "center_y"]].to_numpy()
+    areas = df["area"]
+    radii = df["radius"]
+
+    return centroids, areas, radii
+
+def _calculate_all_spatial_metrics(
+    df_blobs: pd.DataFrame,
+    *,
+    graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: Sequence[int],
+    k_param: Optional[int] = None,
+    r_param: Optional[Union[int, float]] = None,
+) -> dict[str, Any]:
+    """Runs the end-to-end spatial metric calculation for a single image.
+
+    This function serves as a wrapper to extract blob properties and compute
+    all blob, coverage, NND, Voronoi, and graph-based metrics.
+
+    Parameters
+    ----------
+    df_blobs : pd.DataFrame
+        The per-blob data table for a single image.
+    graph_method : Literal["delaunay", "radius", "knn"]
+        The graph construction method ('delaunay', 'radius', or 'knn').
+    img_shape : Sequence[int]
+        User provided image shape dimensions, i.e. [height, width]
+    k_param : Optional[int]
+        The k value for graph construction when method == "knn".
+    r_param : Optional[Union[int, float]]
+        The radius value for graph construction when method == "radius".
+
+    Returns
+    -------
+    dict[str, Any]
+        A dictionary containing all calculated metrics for the image.
+    """
+    metrics = {
+        "graph_num_nodes": 0,
+        "graph_num_edges": 0,
+        "graph_avg_degree": np.nan,
+        "graph_degree_std": np.nan,
+        "graph_num_components": np.nan,
+        "graph_lcc_node_fraction": np.nan,
+        "graph_avg_clustering": np.nan,
+        "graph_avg_neighbor_distance": np.nan,
+        "graph_avg_node_area_lcc": np.nan,
+        "mean_nnd": np.nan,
+        "median_nnd": np.nan,
+        "mean_voronoi_area": np.nan,
+        "median_voronoi_area": np.nan,
+        "std_voronoi_area": np.nan,
+    }
+    centroids, areas, radii = _extract_blob_properties(df_blobs)
+    h, w = img_shape
+    img_area = w * h
+    img_hyp = np.hypot(h, w)
+    
+    # calculate sample standard deviation below with `ddof=1`
+    # because per-image statistics represent sample data points
+    # for individual images comprising a group of images taken
+    # from a single well-plate.
+    metrics.update(
+        num_blobs = areas.size,
+        mean_blob_area = areas.mean(),
+        median_blob_area = np.median(areas),
+        std_blob_area = areas.std(ddof=1),
+        total_blob_area = areas.sum(),
+        mean_blob_radius = radii.mean(),
+        median_blob_radius = np.median(radii),
+    )  # type: ignore[call-overload]
+
+    tba = metrics["total_blob_area"]
+    coverage = 100.0 * tba / img_area
+    metrics["coverage_percentage"] = coverage
+    
+    if len(centroids) >= 2:
+        metrics.update(_calculate_nnd_stats(centroids, img_hyp))
+        metrics.update(
+            _calculate_graph_metrics(
+                centroids,
+                areas,
+                method=graph_method,
+                k_param=k_param,
+                r_param=r_param,
+                img_hyp=img_hyp,
+            )
+        )
+        if len(centroids) >= 4:
+            metrics.update(_calculate_voronoi_stats(centroids))
+    
+    return metrics
+
+def _calculate_summary_statistics(
+    df: pd.DataFrame,
+    group_cols: Sequence[str],
+    carry_over_cols: Sequence[str],
+    *,
+    exclude_numeric_cols: Sequence[str] | None = None,
+    exclude_numeric_regex: str | None = None,
+) -> pd.DataFrame:
+    """
+    Aggregate numeric metrics per group, excluding selected numeric columns.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Table of per-image metrics.
+    group_cols : Sequence[str]
+        Columns to group by; must exist in df.
+    carry_over_cols : Sequence[str]
+        Columns to preserve per group by taking the value of the
+        'first' instance as the value for the entire group.
+    exclude_numeric_cols : Sequence[str] | None
+        Exact numeric column names to exclude (e.g., ['Offset']).
+    exclude_numeric_regex : str | None
+        Regex patterns; numeric columns matching any are excluded.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per group with min/max/median/std for allowed numeric cols.
+        Carry-over columns are included without aggregation.
+    """
+    # check that any of the grouping columns exist in df
+    valid_cols = pd.Index(group_cols).intersection(df.columns).to_list()
+    if not valid_cols:
+        raise ValueError(f"None of the grouping columns {group_cols} exist.")
+    # output warning if some of the grouping columns are not in the df
+    elif set(valid_cols) != set(group_cols):
+        missing_cols = set(group_cols) - set(valid_cols)
+        log.warning(
+            f"Some provided group columns missing from input dataframe: {missing_cols}"
+        )
+
+    # ignore unwanted columns based on user input
+    df_out = df.loc[
+        :, (~df.columns.isin([*(exclude_numeric_cols
+            if exclude_numeric_cols else []), *group_cols]))
+        & (~df.columns.str.contains(exclude_numeric_regex or "$^"))
+    ]
+
+    # collect all remaining columns that contain numerical data
+    df_num = df_out.select_dtypes(include="number")
+
+    # find the carry over columns in ``df``
+    carry = df.columns.intersection(carry_over_cols)  # type: ignore[arg-type]
+
+    # initialize dictionary keys for aggregation. pandas built in `std` function
+    # calculates standard deviation with `ddof=1`, which implies calculation of
+    # the sample standard deviation, but we want `ddof=0` for calculation of the
+    # population standard deviation when performing aggregation over all metrics.
+    # pandas < 3.X ignores provided callable functions, so to support multiple
+    # versions, use lambda function and change column name after calculation.
+    # TODO: replace "lambda" with `np.std` callable function when we require pandas >= 3.X
+    agg_spec = {c: ["min", "max", "median", lambda x: np.std(x)] for c in df_num.columns}
+    agg_spec.update({c: ["first"] for c in df[carry].columns})
+
+    grouped = df.groupby(
+        valid_cols, as_index=False
+    ).agg(agg_spec)  # type: ignore[arg-type]
+
+    grouped.columns = ['_'.join(filter(None, map(str, col))) for col in grouped.columns]
+    # remove `_first` decorator from carry over columns that was used for grouping
+    # TODO: pandas>=3.X has more idiomatic methods of performing multiple string
+    #       replacements with i.e. `pat` argument. fix when we require pandas>=3.X
+    grouped.columns = grouped.columns.str.replace("_first", "")
+    # modify `std` column name from lambda function to allow for downstream feature analysis 
+    grouped.columns = grouped.columns.str.replace("<lambda_0>", "std")
+
+    return grouped
+
+def _process_parquet_files(
+    input_dir: Path,
+    *,
+    mode: Literal["OpenCV", "BubbleSAM"],
+    graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: Sequence[int],
+    k_param: int | None = None,
+    r_param: int | float | None = None,
+    time_label: str | None = None,
+) -> pd.DataFrame:
+    """
+    Scans a directory, computes spatial metrics for 
+    each file, and returns a DataFrame.
+
+    This function recursively searches for parquet files, 
+    parses metadata from their filenames, loads them, 
+    and computes a suite of spatial metrics.
+
+    Parameters
+    ----------
+    input_dir : Path
+        The root directory to search for parquet files.
+    mode : Literal["OpenCV", "BubbleSAM"]
+        Processing mode, 'OpenCV' or 'BubbleSAM', which determines
+        which files to look for and how to parse them.
+    graph_method : Literal["delaunay", "radius", "knn"]
+        The graph construction method to use ('delaunay', 'radius', 'knn').
+    img_shape : Sequence[int]
+        User provided image shape dimensions, i.e. [height, width]
+    k_param : Optional[int]
+        Parameter for ``knn`` graph construction.
+    r_param : Optional[int | float]
+        Parameter for the ``radius`` graph construction.
+    time_label : Optional[str]
+        A label to assign to the 'Time' column for all processed files.
+        `Time` denotes the collection period for the data point, either
+        immediately after mixing (1st) or 4 hours after mixing (2nd)
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where each row contains the metrics for one processed image.
+    """
+    rows = []
+
+    if mode == "OpenCV":
+        glob_pattern = "*_bubble_data.parquet.gzip"
+    elif mode == "BubbleSAM":
+        glob_pattern = "*_masks_filtered.parquet.gzip"
+    else:
+        raise ValueError("Mode must be either 'OpenCV' or 'BubbleSAM'.")
+
+    all_parquets = list(input_dir.rglob(glob_pattern)) 
+    for parquet_path in tqdm(
+        all_parquets,
+        total=len(all_parquets),
+        desc="Processing Parquet Files"
+    ):
+        metadata = _parse_filename(parquet_path.name, mode)
+        if not metadata:
+            warnings.warn(f"Could not parse metadata from filename: {parquet_path.name}")
+            continue
+        if time_label:
+            metadata["Time"] = time_label
+        # load the parquet storing the dataframe of blob data
+        # and calculate the per-image metrics
+        df_blobs = pd.read_parquet(parquet_path)
+        metrics = _calculate_all_spatial_metrics(
+            df_blobs,
+            graph_method=graph_method,
+            k_param=k_param,
+            r_param=r_param,
+            img_shape=img_shape,
+        )
+        metrics["image_name"] = parquet_path.name.replace("parquet.gzip", "tiff")
+        metrics.update(metadata)
+        rows.append(metrics)
+
+    if not rows:
+        raise FileNotFoundError(
+            f"No valid files were processed in {input_dir} "
+            f"for mode '{mode}'.")
+    return pd.DataFrame(rows)
+
+def full_analysis(
+    *,
+    input_dir: Path,
+    per_image_csv: Path,
+    aggregate_csv: Path,
+    mode: Literal["OpenCV", "BubbleSAM"],
+    graph_method: Literal["delaunay", "radius", "knn"],
+    img_shape: Sequence[int],
+    r_param: int | float | None = None,
+    k_param: int | None = None,
+    composition_csv: Path | None = None,
+    cols_to_add: Sequence[str] | None = None,
+    group_cols: Sequence[str] | None = None,
+    carry_over_cols: Sequence[str] | None = None,
+    time_label: str | None = None,
+    exclude_numeric_cols: list[str] | None = None,
+    exclude_numeric_regex: str | None = None,
+) -> None:
+    """Executes the complete data analysis pipeline.
+
+    This function orchestrates the entire workflow:
+    1. Processes a directory of blob data to get per-image metrics.
+    2. Saves the per-image metrics to a CSV file.
+    3. Merges blob data with user provided composition data including
+       values for the weight percentages of each polymer in the
+       composition as well as the phase separation ground-truth label
+       of the input image.
+    4. Aggregates the metrics into summary statistics.
+    5. Cleans the final aggregated data and saves it to another CSV.
+
+    Parameters
+    ----------
+    input_dir : Path
+        The root directory containing the raw per-image parquet files.
+    per_image_csv : Path
+        The path to save the per-image metrics CSV file.
+    aggregate_csv : Path
+        The path to save the final aggregated metrics CSV file.
+    mode : Literal["OpenCV", "BubbleSAM"]
+        The processing mode, either 'OpenCV' or 'BubbleSAM'.
+    graph_method : Literal["delaunay", "radius", "knn"]
+        The graph topology method ('delaunay', 'radius', 'knn').
+    img_shape: Sequence[int]
+        User provided image shape, i.e. [height, width]
+    r_param : Optional[Union[int, float]]
+        The radius (in pixels) for 'radius' graphs.
+    k_param : Optional[int]
+        The k value for 'knn' graphs. k is the maximum number of nearest
+        neighbors to use when building the graph. k is overridden when it
+        exceeds the number of nodes for a given input to avoid empty dict
+        when n_nodes < k.
+    composition_csv : Optional[Path]
+        Path to an external composition data table to merge.
+    cols_to_add : Optional[Sequence[str]]
+        A list of columns from `composition_csv` to add.
+    group_cols : Optional[Sequence[str]]
+        Columns to group by for aggregation.
+    carry_over_cols : Optional[Sequence[str]]
+        Non-numeric columns to preserve during aggregation.
+    time_label : Optional[str]
+        A label to assign to the 'Time' metadata column, denoting the
+        collection time-point of the sample data.
+    exclude_numeric_cols : list[str] | None
+        Exact numeric columns to exclude from aggregation.
+    exclude_numeric_regex : str | None
+        Regex patterns; matching numeric columns are excluded.
+    """
+    # iterate through all parquet files and return a dataframe
+    # containing per image statistics
+    per_img_df = _process_parquet_files(
+        input_dir,
+        mode=mode,
+        graph_method=graph_method,
+        k_param=k_param,
+        r_param=r_param,
+        time_label=time_label,
+        img_shape=img_shape
+    )
+
+    # re-order df columns to put the file information first
+    id_cols = ["image_name", "Offset", "Position", "Label", "Class", "Time", "UniqueID"]
+    id_cols = [c for c in id_cols if c in per_img_df.columns]
+    ordered_cols = id_cols + [c for c in per_img_df.columns if c not in id_cols]
+    per_img_df = per_img_df[ordered_cols]  # type: ignore[assignment]
+    per_image_csv.parent.mkdir(parents=True, exist_ok=True)
+    per_img_df.to_csv(per_image_csv, index=False)
+    log.info(f"Per-image metrics saved to: {per_image_csv}")
+
+    # merge the per image dataframe with user specified columns
+    # from the composition dataframe on ``UniqueID``
+    if composition_csv and cols_to_add:
+        comp_df = pd.read_csv(composition_csv)
+        per_img_df = _merge_composition_data(
+            per_img_df, comp_df, cols_to_add=cols_to_add, merge_key="UniqueID"
+        )
+    elif composition_csv and not cols_to_add:
+        # if user provides a composition CSV file, they must also explicitly
+        # state which columns from the CSV file to add to the per_img_df
+        raise ValueError("Please provide `cols_to_add` argument for merging dataframes.")
+
+    # determine the df columns on which to aggregate statistics (user specified
+    # or default) and which columns to preserve without aggregating
+    final_group_cols = group_cols or ["Group", "Label", "Time", "Class"]
+    final_carry_cols = carry_over_cols or []
+    # aggregate per image statistics 
+    agg_df = _calculate_summary_statistics(
+        per_img_df,
+        group_cols=final_group_cols,
+        carry_over_cols=final_carry_cols,
+        exclude_numeric_cols=exclude_numeric_cols,
+        exclude_numeric_regex=exclude_numeric_regex,
+    )
+
+    # remove rows with NaN or empty values and save aggregated df
+    if "Phase_Separation" in agg_df.columns:
+        agg_df.dropna(subset=["Phase_Separation"], inplace=True)
+    aggregate_csv.parent.mkdir(parents=True, exist_ok=True)
+    agg_df.to_csv(aggregate_csv, index=False)
+    log.info(f"Aggregated metrics saved to: {aggregate_csv}")
