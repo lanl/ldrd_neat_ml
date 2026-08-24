@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import Sequence, Any
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.feature_selection import SelectKBest
 
 import shap
 from interpret.glassbox import ExplainableBoostingClassifier
@@ -76,7 +75,7 @@ def _run_shap(
     )
     vals = explainer(X.values).values
     vals = vals[:, :, 1] if vals.ndim == 3 else vals
-    imp = pd.Series(np.abs(vals).mean(0), index=X.columns).sort_values(ascending=False)
+    imp = pd.Series(np.abs(vals).mean(0), index=X.columns)
 
     # TODO: fix shap summay plot fig, ax handling in line with issue #29
     fig = plt.figure()
@@ -185,38 +184,6 @@ def _run_lime(
     # return the sorted average absolute importance per feature        
     return pd.Series(agg / len(X), index=X.columns).sort_values(ascending=False)
 
-def get_k_best_scores(
-    X: pd.DataFrame,
-    y: pd.Series,
-    k: int,
-    metrics: Sequence,
-) -> list[np.ndarray]:
-    """
-    Run several SelectKBest filters and return their raw feature scores.
-
-    Parameters
-    ----------
-    X : pd.DataFrame
-        dataframe containing training data
-    y : pd.Series
-        pandas series containing training targets
-    k : int
-        Number of top features each filter should select (used during fitting).
-    metrics : Sequence
-        Iterable of scoring callables from sklearn.feature_selection (e.g.
-        f_classif, mutual_info_classif).
-
-    Returns
-    -------
-    list[np.ndarray]
-        Each array contains n_features scores for one metric.
-    """
-    scores = []
-    for metric in metrics:
-        sel = SelectKBest(metric, k=k).fit(X, y)
-        scores.append(sel.scores_)
-    return scores
-
 def feature_importance_consensus(
     pos_class_feat_imps: np.ndarray[Any, np.dtype[np.float64]],
     feature_names: np.ndarray[Any, np.dtype[np.str_]],
@@ -252,7 +219,7 @@ def feature_importance_consensus(
         # find top indices using numpy argpartition algorithm based on
         # logic used here: https://stackoverflow.com/a/23734295
         top_idx = np.argpartition(imp, -top_feat_count)[-top_feat_count:]
-        top_idx = top_idx[np.argsort(imp[top_idx])][::-1]
+        top_idx = top_idx[np.argsort(imp[top_idx])]
         for name in feature_names[top_idx]:
             votes[name] += 1
 
@@ -339,8 +306,10 @@ def compare_methods(
     ebm_imp  = _run_ebm(X, y, out_dir, top=top)
     lime_imp = _run_lime(model, X)
 
-    feats = sorted(set(shap_imp.index) | set(ebm_imp.index) | set(lime_imp.index))
-    comp = pd.DataFrame(index=feats)
+    # all feature importance dataframes have the same index values
+    # so we just use the shap_imp.index values for initializing the
+    # comparison dataframe
+    comp = pd.DataFrame(index=shap_imp.index)
     comp["SHAP"] = shap_imp
     comp["EBM"] = ebm_imp
     comp["LIME"] = lime_imp

@@ -14,23 +14,6 @@ and optional dependencies by calling:
 ```
 python -m pip install -v ".[dev]" 
 ```
-### Supported versions
-
-This project has been tested with Python 3.11–3.14.
-
-Supported dependency ranges are declared in `pyproject.toml`. The following dependency versions are known to be incompatible with the workflow:
-
-| Dependency | Incompatible version(s) | Reason |
-| ----- | ----- | ----- |
-| `matplotlib` | `>=3.11.0` | Produces inconsistent image-comparison test results across operating systems. |
-| `numpy` | `<=1.26.3`, `>=2.1.3` | Required to maintain `mypy` type compatibility with legacy code. See issue #38. |
-| `xgboost` | `<2.1.4` | Incompatible with `scikit-learn >1.5.0`. |
-| `shap` | `<0.47.0` | Does not support the `rng` argument used by `summary_plot`. |
-| `torch` | `<2.5.1` | Does not meet the minimum version required by SAM 2. |
-| `torchvision` | `<0.21.1` | Does not meet the minimum version required by SAM 2. |
-| `scipy` | `1.17.0` | Contains a bug that affects LIME explainer outputs. |
-
-These incompatible dependency versions are detected during import and raise an `ImportError`, preventing the workflow from running.
 
 ## Writing a `.yaml` input file for OpenCV or SAM2 detection
 
@@ -199,12 +182,22 @@ For the `analysis` step, the lines provided in `opencv_analysis_test.yaml` also 
 input `yaml` file (a description of which can also be found above). These steps process the output bubble
 detection data and save an `csv` file of aggregated metrics.
 
-Detection and analysis must be run for every dataset to be used for training, validation and inference. For running the `train`, `infer`, `explain` and `plot` steps, a separate `dataset: -id:` must be used for each input dataset with the appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for saving the model, training/inference results can be set with `root: model` and `root: results` respectively, and `inference_model` can be set to explicitly provide the path to the trained model when performing inference separately from training. 
+Detection and analysis must be run for every dataset to be used for training,
+validation and inference. For running the `train`, `infer`, `explain` and `plot`
+steps, a separate `dataset: -id:` must be used for each input dataset with the
+appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for
+saving the model, training/inference results can be set with `root: model` and
+`root: results` respectively, and `inference_model` can be set to explicitly
+provide the path to the trained model when performing inference separately from training. 
 
 The user can also determine whether or not to perform machine learning classifier
 hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt`
-to True or False (the default is True if no parameter is specified), and set the
+to True or False (the default is True if no parameter is specified). The validation
+dataset is only required when performing hyperparameter optimization, and the user
+should organize their dataset folders/composition csv to correspond to the input
+training and validation datasets accordingly. The user can also optionally set the
 number of parallel processes to use when performing ML classifier training with `n_jobs`. 
+The default value is `-1`, which uses all available cores for training the ML classifier.
 
 For information relevant to running the workflow:  
 

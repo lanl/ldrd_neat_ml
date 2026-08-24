@@ -1,10 +1,9 @@
-from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from numpy.testing import assert_allclose, assert_equal
+from numpy.testing import assert_allclose, assert_array_equal
 
 import matplotlib
 matplotlib.use("Agg")
@@ -21,7 +20,7 @@ from neat_ml.model.train import (
 )
 
 
-def test_preprocess(sample_data: pd.DataFrame):
+def test_ml_preprocess(sample_data):
     actual_X, actual_y = ml_preprocess(
         sample_data,
         target="target",
@@ -30,17 +29,26 @@ def test_preprocess(sample_data: pd.DataFrame):
 
     assert isinstance(actual_X, pd.DataFrame)
     assert isinstance(actual_y, pd.Series)
-    assert actual_X.shape[0] == actual_y.shape[0] == 99 
+    assert actual_X.shape[0] == actual_y.shape[0] == 100 
     assert "target" not in actual_X.columns
     assert "exclude_col" not in actual_X.columns
+    assert "feature3" not in actual_X.columns
     assert actual_X.isnull().sum().sum() == 0
     assert not actual_y.isnull().any()
     assert actual_y.dtype == int
 
-def test_preprocess_no_exclude(sample_data: pd.DataFrame):
+def test_ml_preprocess_no_exclude(sample_data):
     actual_X, _ = ml_preprocess(sample_data, target="target")
     assert "exclude_col" in actual_X.columns
     assert "target" not in actual_X.columns
+
+def test_ml_preprocess_missing_target_error(sample_data):
+    """test that appropriate error raises when missing target
+    label in input dataframe"""
+    input_df = sample_data.copy()
+    input_df.loc[10, "target"] = np.nan
+    with pytest.raises(ValueError, match="Missing target label"):
+        ml_preprocess(input_df, target="target")
 
 
 @pytest.mark.parametrize("y_in, exp",
@@ -51,11 +59,10 @@ def test_preprocess_no_exclude(sample_data: pd.DataFrame):
     ]
 )
 def test_scale_pos_weight(y_in, exp):
-    y_out = pd.Series(y_in)
-    assert_allclose(_scale_pos_weight(y_out), exp)
+    assert_allclose(_scale_pos_weight(y_in), exp)
 
 
-def test_train_model(sample_data: pd.DataFrame):
+def test_train_model(sample_data):
     X, y = ml_preprocess(sample_data, target="target")
     # perfectly align all the feature data with the target
     rng = np.random.default_rng(123)
@@ -85,13 +92,13 @@ def test_train_model(sample_data: pd.DataFrame):
     assert all((actual_proba > 0.5) == y_train)
 
 
-def test_plot_roc(tmp_path: Path, baseline_dir):
+def test_plot_roc(tmp_path, baseline_dir):
     y_true = np.array([0, 0, 1, 1, 0, 1])
     y_prob = np.array([0.1, 0.4, 0.35, 0.8, 0.2, 0.6])
     expected_image_path = baseline_dir / "expected_train_roc.png"
     actual_image_path = tmp_path / "actual_train_roc.png"
-    plot_roc(y_true, y_prob, out_png=str(actual_image_path), label="Test")
-    result = compare_images(expected_image_path, actual_image_path, tol=1e-4) # type: ignore[call-overload]
+    plot_roc(y_true, y_prob, out_png=actual_image_path, label="Test")
+    result = compare_images(expected_image_path, actual_image_path, tol=1e-4)
     assert result is None
 
 @pytest.mark.parametrize("ml_hyper_opt, roc_auc, pr_auc",
@@ -132,9 +139,9 @@ def test_save_model_bundle(
     expected_metrics = {'roc_auc': roc_auc, 'pr_auc': pr_auc}
 
     assert isinstance(actual_bundle, dict)
-    assert_equal(
-        sorted(list(actual_bundle.keys())),
-        sorted(["model", "features", "metrics", "best_params"]),
+    assert_array_equal(
+        list(actual_bundle.keys()),
+        ["model", "features", "metrics", "best_params"]
     )
     assert isinstance(actual_bundle["model"], Pipeline)
     assert actual_bundle["features"] == ['feature1', 'feature2', 'exclude_col']

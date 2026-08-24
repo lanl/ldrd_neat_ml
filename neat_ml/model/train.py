@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ml_preprocess",
     "train_model",
+    "plot_roc",
     "save_model_bundle",
 ]
 
@@ -33,9 +34,8 @@ def ml_preprocess(
 
     This function takes a raw DataFrame, separates
     the features from the target variable, and performs
-    initial cleaning. Rows with missing target values
-    are dropped. All feature columns are converted 
-    to numeric types, and any remaining missing values 
+    initial cleaning. All feature columns are converted
+    to numeric types, and any remaining missing values
     in the features are imputed using the median.
 
     Parameters
@@ -56,20 +56,17 @@ def ml_preprocess(
         DataFrame (X) and the target Series (y).
     """
     y = pd.Series(dtype=int)
-    mask = pd.Series(True, index=df.index)
     cols_to_drop = exclude if exclude is not None else []
 
     if target:
-        y = pd.to_numeric(df[target], errors="coerce")
-        mask = y.notna()
-        y = y[mask].astype(int)
+        # raise an error if any targets are missing from the input dataset
+        if any(df[target].isna()):
+            raise ValueError("Missing target label in input dataframe.")
+        y = df[target].astype(int)
         cols_to_drop.append(target)
     
-    X = df.loc[mask].drop(columns=cols_to_drop, errors="ignore")
+    X = df.drop(columns=cols_to_drop, errors="ignore")
     X = X.apply(pd.to_numeric, errors="coerce")
-
-    # drop columns that are entirely NaN
-    X = X.dropna(axis=1, how='all')
 
     imputer = SimpleImputer(strategy="median").set_output(transform="pandas")
     X_imp = imputer.fit_transform(X)
@@ -106,7 +103,8 @@ def train_model(
     y_train: pd.Series,
     X_val: pd.DataFrame | None = None,
     y_val: pd.Series | None = None,
-    n_jobs: int = -1,
+    *,
+    n_jobs: int,
     random_state: int = 42,
     ml_hyper_opt: bool = True,
 ) -> tuple[
@@ -143,7 +141,7 @@ def train_model(
     n_jobs : int
         The number of parallel processes to run
         when training the classifier. Default = -1
-        aka use all available cores.
+        aka use all available cores (set in `run_workflow`).
     random_state: int
         random seed variable for initializing
         machine learning classifiers
@@ -252,25 +250,24 @@ def train_model(
 
 
 def plot_roc(
-    y_true: np.ndarray | Sequence[int],
-    y_prob: np.ndarray | Sequence[float],
-    out_png: str,
+    y_true: np.ndarray | Sequence[int] | pd.Series,
+    y_prob: np.ndarray | Sequence[float] | pd.Series,
+    out_png: Path,
     label: str = "Validation",
 ) -> None:
     """
-    Generate and save a Receiver Operating Characteristic
-    (ROC) curve plot.
+    Generate and save a Receiver Operating Characteristic (ROC) plot.
 
     Calculates and plots the ROC curve and the Area Under
     the Curve (AUC) score, then saves the figure to a PNG file.
 
     Parameters
     ----------
-    y_true : np.ndarray | Sequence[int]
+    y_true : np.ndarray | Sequence[int] | pd.Series
         The true binary labels.
-    y_prob : np.ndarray | Sequence[float]
+    y_prob : np.ndarray | Sequence[float] | pd.Series  
         The predicted probabilities for the positive class.
-    out_png : str
+    out_png : Path
         The file path where the output PNG image will be saved.
     label : str, optional
         The label for the ROC curve in the plot title, by 
@@ -300,7 +297,7 @@ def save_model_bundle(
 ) -> None:
     """
     Serialize and save the trained model and associated 
-    metadata to a file.
+    metadata to a joblib file.
 
     This function bundles the trained pipeline, feature 
     list, performance metrics, and best hyperparameters 
@@ -313,7 +310,7 @@ def save_model_bundle(
     features : list[str]
         The list of feature names used by the model.
     metrics : dict[str, float]
-        A dictionary of performance metrics (e.g., {'val_roc_auc': 0.85}).
+        A dictionary of performance metrics .
     best_params : dict[str, int | float | None]
         A dictionary of the best hyperparameters found during training.
     path : Path
