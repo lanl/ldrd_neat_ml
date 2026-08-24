@@ -1,15 +1,12 @@
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
-from numpy.testing import assert_array_equal, assert_allclose, assert_equal
-from pandas.testing import assert_frame_equal, assert_index_equal
+from numpy.testing import assert_array_equal, assert_allclose
 
 from neat_ml.model.inference import run_inference, save_predictions
 
 
-def test_save_predictions(tmp_path: Path):
+def test_save_predictions(tmp_path):
     input_df = pd.DataFrame(
         {
             "id": [1, 2, 3],
@@ -25,12 +22,18 @@ def test_save_predictions(tmp_path: Path):
         pred_prob,
         actual_out_csv
     )
-
-    assert_index_equal(input_df.columns, pd.Index(["id", "data"]))
+    
+    # assert that the input_df is not mutated by the function
+    assert_array_equal(input_df.columns, ["id", "data"])
     actual_df = pd.read_csv(actual_out_csv)
+    # assert that `Pred_Prob` was added to the input df 
     assert_allclose(actual_df["Pred_Prob"], pred_prob)
-    assert_equal(actual_df["Pred_Label"].to_list(), [0, 1, 1])
-    assert_frame_equal(actual_df[["id", "data"]], input_df)
+    # assert that predicted labels were calcualted correctly
+    # based on the predicted probability of the ML classifier
+    assert_array_equal(actual_df["Pred_Label"], [0, 1, 1])
+    # assert that the output df still contains the columns
+    # from the input df
+    assert_array_equal(actual_df[["id", "data"]], input_df)
 
 @pytest.mark.parametrize("target, roc_plot",
     [
@@ -39,9 +42,9 @@ def test_save_predictions(tmp_path: Path):
     ]
 )
 def test_run_inference(
-    trained_model_bundle: Path,
-    sample_inference_data: Path,
-    tmp_path: Path,
+    trained_model_bundle,
+    sample_inference_data,
+    tmp_path,
     target,
     roc_plot
 ):
@@ -63,16 +66,17 @@ def test_run_inference(
 
     actual_preds_df = pd.read_csv(actual_pred_csv_path)
     assert len(actual_preds_df) == 50
-    # check a subset of expected output probability values
-    assert_allclose(actual_preds_df["Pred_Prob"].iloc[:5], np.array([0.27, 0.21, 0.33, 0.33, 0.33])) 
-    assert set(["Pred_Prob", "Pred_Label"]).issubset(actual_preds_df.columns)
+    # check a subset of expected output probability values/predictions
+    assert_allclose(
+        actual_preds_df["Pred_Prob"].iloc[:5],
+        np.array([0.27, 0.21, 0.33, 0.33, 0.33])
+    ) 
+    assert_array_equal(actual_preds_df["Pred_Label"].iloc[:5], [0] * 5)
     if target is not None:
         assert (tmp_path / "roc.png").exists()
 
 
-def test_run_inference_handles_missing_feature(
-    trained_model_bundle: Path, tmp_path: Path
-):
+def test_run_inference_handles_missing_feature(trained_model_bundle, tmp_path):
     """
     test that the model predictions are still made
     even when one of the training feature columns

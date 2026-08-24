@@ -375,6 +375,10 @@ def plot_phase_diagram(
         line_handles.append(
             Line2D([0], [0], color="black", lw=2.5, label="Binodal Fit (Silverio et al.)")
         )
+    elif binodal_curve and xrange is None and yrange is None:
+        raise ValueError(
+            "Plotting `binodal_curve` requires explicit `xrange` and `yrange` parameters."
+        )
     
     if model_boundary:
         if boundary_exp is not None:

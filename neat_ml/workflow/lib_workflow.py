@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Any, Optional, Sequence, Literal
 import pandas as pd
 import joblib
-import numpy as np
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
 from neat_ml.opencv.detection import run_opencv
@@ -365,6 +364,7 @@ def stage_train_model(
     train_paths: dict[str, Path],
     val_ds: dict[str, Any],
     val_paths: dict[str, Path],
+    n_jobs: int,
     target: str = "Phase_Separation",
     ml_hyper_opt: bool = True,
 ) -> Path:
@@ -384,6 +384,9 @@ def stage_train_model(
         parameters when performing hyperparameter optimization.
     val_paths : dict[str, Path]
         Paths for validation; needs 'agg_csv'.
+    n_jobs: int
+        number of parallel processes/threads to use during ML training
+        default is -1 (set in `run_workflow`, i.e. use all available cores).
     target : str
         name of the target variable for training the ML model
     ml_hyper_opt: bool
@@ -436,18 +439,20 @@ def stage_train_model(
             )
         X_val = X_val[common_cols]
         X_tr = X_tr[common_cols]
+        roc_label = "Validation"
     else:
         # We dont pass a validation dataset if not performing hyperparameter optimization
         common_cols = X_tr.columns  # type: ignore[assignment]
         X_val = None
         y_val = None
+        roc_label = "Training"
 
     # perform model training and save trained model
     model_dir = train_paths["model_dir"]
     model_dir.mkdir(parents=True, exist_ok=True)
     model_path = model_dir / f"{ds_id}_model.joblib"
     model, metrics, best_params, val_proba = train_model(
-        X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt
+        X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt, n_jobs=n_jobs,
     )
     save_model_bundle(
         model=model,
@@ -458,9 +463,9 @@ def stage_train_model(
     )
     roc_png = model_dir / f"{ds_id}_roc.png"
     y_out = y_val if y_val is not None else y_tr
-    plot_roc(y_true=y_out.to_numpy(), y_prob=val_proba, out_png=str(roc_png))
-    roc_metric = metrics.get("roc_auc", np.nan)
-    pr_metric = metrics.get("pr_auc", np.nan)
+    plot_roc(y_true=y_out, y_prob=val_proba, out_png=roc_png, label=roc_label)
+    roc_metric = metrics.get("roc_auc")
+    pr_metric = metrics.get("pr_auc")
     log.info(
         f"--> Model saved: {model_path} | ROC: {roc_png} | " 
         f"AUC={roc_metric:.3f} | PR-AUC={pr_metric:.3f}"
@@ -563,7 +568,7 @@ def stage_run_inference_and_plot(
     """
     ds_id = infer_dataset_config['id']
     paths["pred_csv"].parent.mkdir(parents=True, exist_ok=True)
-    composition_cols = list(infer_dataset_config.get("composition_cols", []))
+    composition_cols = infer_dataset_config.get("composition_cols", [])
     exclude_cols = ["Group", "Label", "Time", "Class", "Offset"] + composition_cols
 
     if "infer" in steps:

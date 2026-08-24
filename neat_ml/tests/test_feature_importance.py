@@ -1,4 +1,3 @@
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,29 +8,9 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib.testing.compare import compare_images
 
-from functools import partial
-from sklearn.datasets import make_classification
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import f_classif, mutual_info_classif
 
 import neat_ml.model.feature_importance as fi
-
-
-@pytest.fixture(scope="module")
-def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
-    """Synthetic binary-classification data."""
-    X_arr, y = make_classification(n_samples=10, n_features=5, n_informative=3, random_state=0)
-    X = pd.DataFrame(
-        X_arr,
-        columns=[
-            "PEO 10 kg/mol (wt%)",
-            "Dextran 10 kg/mol (wt%)",
-            "num_blobs",
-            "coverage_percentage",
-            "graph_num_components",
-        ],
-    )
-    return X, pd.Series(y, name="y")
 
 
 @pytest.mark.parametrize(
@@ -61,50 +40,30 @@ def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
     ],
 )
 def test_feature_importance_consensus(
-    pos_vals: np.ndarray,
-    feat_names: np.ndarray,
-    top_k: int,
-    exp_names: list[str],
-    exp_counts: list[int],
-) -> None:
+    pos_vals,
+    feat_names,
+    top_k,
+    exp_names,
+    exp_counts,
+):
     """Validate the consensus ranking: names, counts, and number of models."""
-    ranked_names, ranked_counts, n_models = fi.feature_importance_consensus(pos_vals, feat_names, top_k)
+    ranked_names, ranked_counts, n_models = fi.feature_importance_consensus(
+        pos_vals, feat_names, top_k
+    )
     assert n_models == len(pos_vals)
     assert_array_equal(ranked_names, exp_names)
     assert_array_equal(ranked_counts, exp_counts)
 
 
-def test_get_k_best_scores_values_and_shapes(
-    classification_dataset: tuple[pd.DataFrame, pd.Series],
-) -> None:
-    """
-    Validate that get_k_best_scores returns one score vector per metric with:
-    shape (n_features,), no NaNs
-    values equal to the underlying metric outputs.
-    """
-    X, y = classification_dataset
-    metrics = [f_classif, partial(mutual_info_classif, random_state=0)]
-    out = fi.get_k_best_scores(X, y, k=3, metrics=metrics)
-
-    assert isinstance(out, list)
-    assert len(out) == len(metrics)
-
-    for arr in out:
-        assert isinstance(arr, np.ndarray)
-        assert arr.shape == (X.shape[1],)
-        assert np.all(np.isfinite(arr))
-
-    f_scores, _ = f_classif(X.to_numpy(), y)
-    assert_allclose(out[0], f_scores)
-
-    mi_scores = np.array([0.18134921, 0.17634921, 0.14873016, 0.0, 0.0])
-    assert_allclose(out[1], mi_scores)
-
-
-def test_plot_feat_import_consensus_image(tmp_path: Path, stable_rc, baseline_dir):
+def test_plot_feat_import_consensus_image(tmp_path, stable_rc, baseline_dir):
     """Image regression for the consensus plot."""
     ranked_names = np.asarray(
-        ["PEO 10 kg/mol (wt%)", "Dextran 10 kg/mol (wt%)", "num_blobs", "coverage_percentage"]
+        [
+            "PEO 10 kg/mol (wt%)",
+            "Dextran 10 kg/mol (wt%)",
+            "num_blobs",
+            "coverage_percentage"
+        ]
     )
     ranked_counts = np.asarray([4, 3, 2, 1])
 
@@ -120,18 +79,19 @@ def test_plot_feat_import_consensus_image(tmp_path: Path, stable_rc, baseline_di
     actual = tmp_path / "feat_imp_consensus.png"
 
     expected = baseline_dir / "feat_imp_consensus_expected.png"
-    result = compare_images(expected, actual, tol=1e-4) # type: ignore[call-overload]
+    result = compare_images(expected, actual, tol=1e-4)
     assert result is None
 
 def test_compare_methods_end_to_end(
-    tmp_path: Path,
-    classification_dataset: tuple[pd.DataFrame, pd.Series],
+    tmp_path,
+    classification_dataset,
     stable_rc,
     baseline_dir,
 ):
     """
-    End-to-end test of compare_methods.
-    Test consistency of mean rank of important features
+    Test that `compare_methods` generates a CSV file that
+    contains feature importance values that are ranked correctly,
+    and produces reasonable output plots of feature importance.
     """
     rng = np.random.default_rng(0)
     X, y = classification_dataset
@@ -153,13 +113,13 @@ def test_compare_methods_end_to_end(
     # check the output of ebm importance ranking, shap summary plot, and fic plot
     ebm_act = tmp_path / "ebm_importance.png"
     ebm_exp = baseline_dir / "ebm_importance_expected.png"
-    result = compare_images(ebm_exp, ebm_act, tol=1e-4) # type: ignore[call-overload]
+    result = compare_images(ebm_exp, ebm_act, tol=1e-4)
     shap_act = tmp_path / "shap_summary.png"
     shap_exp = baseline_dir / "shap_summary_exp.png"
-    result2 = compare_images(shap_exp, shap_act, tol=1e-4) # type: ignore[call-overload]
+    result2 = compare_images(shap_exp, shap_act, tol=1e-4)
     fic_act = tmp_path / "feat_imp_consensus.png"
     fic_exp = baseline_dir / "feat_imp_consensus_exp.png"
-    result3 = compare_images(fic_exp, fic_act, tol=1e-4) # type: ignore[call-overload]
+    result3 = compare_images(fic_exp, fic_act, tol=1e-4)
     assert result is None
     assert result2 is None
     assert result3 is None

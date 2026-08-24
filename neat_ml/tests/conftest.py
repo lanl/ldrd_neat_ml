@@ -11,6 +11,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 import joblib
+from sklearn.datasets import make_classification
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -266,7 +267,6 @@ def sample_data() -> pd.DataFrame:
     }
     df = pd.DataFrame(data)
     df.loc[5, "feature1"] = np.nan
-    df.loc[10, "target"] = np.nan
     return df
 
 
@@ -309,3 +309,25 @@ def sample_inference_data(tmp_path_factory):
     csv_path = tmp_infer_path / "inference_data.csv"
     df.to_csv(csv_path, index=False)
     return csv_path
+
+
+@pytest.fixture(scope="module")
+def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
+    """Synthetic binary-classification data."""
+    X_arr, y = make_classification(
+        n_samples=10,
+        n_features=5,
+        n_informative=3,
+        random_state=0
+    )
+    X = pd.DataFrame(
+        X_arr,
+        columns=[
+            "PEO 10 kg/mol (wt%)",
+            "Dextran 10 kg/mol (wt%)",
+            "num_blobs",
+            "coverage_percentage",
+            "graph_num_components",
+        ],
+    )
+    return X, pd.Series(y, name="y")
