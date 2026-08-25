@@ -94,10 +94,9 @@ def get_path_structure(
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
     steps_set = set(steps)
+    results_root = roots.get("results")  
 
     base_proc = work_root / ds_id / method / class_label / time_label
-    results_root = Path(roots.get("results", ""))
-    model_root = Path(roots.get("model", results_root / "model"))
 
     if method == 'OpenCV':
         paths["proc_dir"] = base_proc / f"{time_label}_Processed_{method}"
@@ -111,7 +110,6 @@ def get_path_structure(
         # if either of the paths are missing from the analysis config
         # assign the default dir to whichever paths are missing
         if not (per_img_path and agg_path):
-            results_root = roots.get("results")  
             if results_root is None:
                 raise ValueError("Please provide `results` path via input yaml file")
             per_img_path = per_img_path or Path(results_root) / ds_id / "per_image.csv"
@@ -123,9 +121,12 @@ def get_path_structure(
             paths["composition_csv"] = Path(comp_choice)
 
     if any(s in steps_set for s in {"train", "infer", "explain"}):
-        infer_dir = results_root / f"infer_{ds_id}"
+        if results_root is None:
+            raise ValueError("Please provide `results` path via input yaml file")
+        model_root = Path(roots.get("model", Path(results_root) / "model"))
+        infer_dir = Path(results_root) / f"infer_{ds_id}"
         paths["model_dir"] = model_root
-        paths["explain_dir"] = results_root / ds_id / "explain"
+        paths["explain_dir"] = Path(results_root) / ds_id / "explain"
         paths["pred_csv"] = infer_dir / "pred.csv"
         paths["phase_dir"] = infer_dir / "phase_plots"
         paths["roc_png"] = infer_dir / "roc.png"

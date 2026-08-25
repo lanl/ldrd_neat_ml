@@ -126,13 +126,21 @@ def test_get_path_structure_builds_expected_paths(
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
-def test_get_path_structure_results_error():
+@pytest.mark.parametrize("steps, paths",
+    [
+        ("analysis", None),
+        ("train", "path.csv")
+    ]
+)
+def test_get_path_structure_results_error(steps, paths):
     """test that get_path_structure raises error when no
     explicit `results` path is provided by the user"""
     roots = {"work": "work_path"}
     input_ds = {"method": "BubbleSAM"}
+    if paths is not None:
+        input_ds.update({"analysis": {"per_image_csv": paths, "aggregate_csv": paths}})
     with pytest.raises(ValueError, match="Please provide `results` path"):
-        wf.get_path_structure(roots, input_ds, ["analysis"])
+        wf.get_path_structure(roots, input_ds, [steps])
 
 def test_get_path_structure_fallbacks(tmp_path):
     """
