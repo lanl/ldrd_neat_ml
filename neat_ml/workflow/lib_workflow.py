@@ -438,8 +438,8 @@ def stage_train_model(
                 f"Feature mismatch: using {len(common_cols)}"
                 f" common features (train={X_tr.columns}, val={X_val.columns})."
             )
-        X_val = X_val[common_cols]
-        X_tr = X_tr[common_cols]
+        X_val = X_val[common_cols]  # type: ignore[assignment]
+        X_tr = X_tr[common_cols]  # type: ignore[assignment]
         roc_label = "Validation"
     else:
         # We dont pass a validation dataset if not performing hyperparameter optimization

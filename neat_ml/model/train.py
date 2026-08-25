@@ -62,11 +62,11 @@ def ml_preprocess(
         # raise an error if any targets are missing from the input dataset
         if any(df[target].isna()):
             raise ValueError("Missing target label in input dataframe.")
-        y = df[target].astype(int)
+        y = df[target].astype(int)  # type: ignore[assignment]
         cols_to_drop.append(target)
     
     X = df.drop(columns=cols_to_drop, errors="ignore")
-    X = X.apply(pd.to_numeric, errors="coerce")
+    X = X.apply(pd.to_numeric, errors="coerce")  # type: ignore[assignment]
 
     imputer = SimpleImputer(strategy="median").set_output(transform="pandas")
     X_imp = imputer.fit_transform(X)
@@ -211,7 +211,7 @@ def train_model(
         }
 
         X = np.concatenate((X_train, X_val), axis=0)
-        y = np.concatenate((y_train, y_val), axis=0)
+        y = np.concatenate((y_train, y_val), axis=0)  # type: ignore[var-annotated]
 
         train_val_split = [-1] * len(X_train) + [0] * len(X_val)
         ps = PredefinedSplit(train_val_split)

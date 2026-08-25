@@ -313,10 +313,10 @@ def compare_methods(
     comp["SHAP"] = shap_imp
     comp["EBM"] = ebm_imp
     comp["LIME"] = lime_imp
-    comp = comp.fillna(0)
+    comp = comp.fillna(0)  # type: ignore[assignment]
 
     comp["mean_rank"] = comp.rank(ascending=False, method="average").mean(axis=1)
-    comp = comp.sort_values("mean_rank")
+    comp = comp.sort_values("mean_rank")  # type: ignore[assignment]
 
     comp.to_csv(out_dir / "feature_importance_comparison.csv")
     
