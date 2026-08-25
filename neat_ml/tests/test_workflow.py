@@ -5,9 +5,8 @@ import os
 import shutil
 import torch
 import pandas as pd
+from numpy.testing import assert_allclose
 import copy
-import re
-from numpy.testing import assert_allclose, assert_array_equal
 import numpy as np
 from matplotlib.testing.compare import compare_images
 import joblib

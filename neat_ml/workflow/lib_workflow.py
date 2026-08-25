@@ -24,7 +24,7 @@ __all__ = [
     "get_path_structure",
     "run_detection",
     "stage_detect",
-    "stage_analyze_features"
+    "stage_analyze_features",
     "stage_train_model",
     "stage_run_inference_and_plot",
     "stage_explain"

@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main, nidhin_data_analysis_backup ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -62,7 +62,6 @@ jobs:
     - name: refresh font cache
       if: runner.os == 'Linux'
       run: sudo fc-cache -f -v
-        sudo fc-cache -f -v
     - name: install openmp
       if: runner.os == 'macOS'
       run: |

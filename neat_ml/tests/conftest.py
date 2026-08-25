@@ -230,7 +230,7 @@ def real_blobs():
     }
     return pd.DataFrame(blob_dict)
 
-
+@pytest.fixture(scope="session")
 def stable_rc():
     STABLE_RC = {
         "figure.figsize": (6.0, 4.0),
