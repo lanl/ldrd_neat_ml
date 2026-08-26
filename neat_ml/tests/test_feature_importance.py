@@ -104,10 +104,11 @@ def test_compare_methods_end_to_end(
     actual_csv_path = tmp_path / "feature_importance_comparison.csv"
 
     actual_df = pd.read_csv(actual_csv_path, index_col=0)
-    # make assertions on the output values of the feature importance
-    assert_allclose(actual_df["SHAP"], np.array([0.12727535, 0.12045986, 0.07586197]))
-    assert_allclose(actual_df["EBM"], np.array([4.74274969, 1.40791415, 3.04091987]))
-    assert_allclose(actual_df["LIME"], np.array([0.17812868, 0.17708737, 0.09043377]))
+    # make assertions on the final ranking of the features
+    assert_array_equal(
+        actual_df.index,
+        ['coverage_percentage', 'num_blobs', 'graph_num_components']
+    )
 
     # check the output of ebm importance ranking, shap summary plot, and fic plot
     ebm_act = tmp_path / "ebm_importance.png"

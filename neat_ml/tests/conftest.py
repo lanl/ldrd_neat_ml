@@ -311,7 +311,7 @@ def sample_inference_data(tmp_path_factory):
     return csv_path
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
     """Synthetic binary-classification data."""
     X_arr, y = make_classification(

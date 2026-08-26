@@ -108,15 +108,18 @@ def test_plot_roc(tmp_path, baseline_dir):
 )
 def test_save_model_bundle(
     tmp_path,
-    sample_data,
+    classification_dataset,
     ml_hyper_opt,
     roc_auc,
     pr_auc,
 ):
-    X, y = ml_preprocess(sample_data, target="target")
-    X_train, y_train = X.iloc[:80], y.iloc[:80]
-    if ml_hyper_opt:
-        X_val, y_val = X.iloc[80:], y.iloc[80:]
+    # clean up/organize input dataset                                                                                         
+    X, y = classification_dataset
+    X.drop(columns=["PEO 10 kg/mol (wt%)", "Dextran 10 kg/mol (wt%)"], inplace=True)                                          
+    # split data into training/validation when `ml_hyper_opt==True`                                                           
+    X_train, y_train = X.iloc[:5], y.iloc[:5]                                                                                 
+    if ml_hyper_opt: 
+        X_val, y_val = X.iloc[5:], y.iloc[5:]        
     else:
         X_val = y_val = None
     model, metrics, params, _ = train_model(
@@ -143,7 +146,11 @@ def test_save_model_bundle(
         ["model", "features", "metrics", "best_params"]
     )
     assert isinstance(actual_bundle["model"], Pipeline)
-    assert actual_bundle["features"] == ['feature1', 'feature2', 'exclude_col']
+    assert actual_bundle["features"] == [
+        'num_blobs',
+        'coverage_percentage',
+        'graph_num_components'
+    ]
     # compare output metrics (ROC-AUC, PR-AUC) 
     actual_metrics = actual_bundle["metrics"]
     assert actual_metrics.keys() == expected_metrics.keys()
@@ -155,7 +162,7 @@ def test_save_model_bundle(
         assert actual_params['ensemble__xgb__max_depth'] == 3 
         assert actual_params['ensemble__xgb__n_estimators'] == 10
     else:
-        assert_allclose(actual_params["ensemble__xgb__scale_pos_weight"], 0.9512195121951219)
+        assert_allclose(actual_params["ensemble__xgb__scale_pos_weight"], 1.5)
         # spot check output values against expected parameters
         assert actual_params["ensemble__xgb__subsample"] == 0.8
         assert actual_params["ensemble__rf__n_estimators"] == 500

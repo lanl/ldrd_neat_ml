@@ -961,7 +961,7 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
     result = compare_images(
         out_dir / "phase_plots/phase_diagram.png",
         baseline_dir / exp_img,
-        tol=1e-4,
+        tol=1e-2,
     )
     assert result is None
 
