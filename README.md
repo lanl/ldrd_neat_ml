@@ -35,10 +35,10 @@ mask parameters override the built-in parameters for the `SAM-2` model.
 
 When performing analysis/metric calculation of the resulting bubble detections,
 the `yaml` file provides the necessary paths for finding the detection parquet
-files; An optional composition CSV file containing per-image metadata about the
-experimental setup and data collection. This includes phase separateion ground-truth
-labels and compoisition weight percentages; the paths for storing per-image
-and aggregate metrics.
+files; the (optional) user generated composition CSV file that stores per-image sample
+information related to the experimental setup and data collection including
+phase separation ground-truth labels and composition weight percentages;
+the paths for storing per-image and aggregate metrics.
 
 The user provided composition CSV must contain two required columns:
 
