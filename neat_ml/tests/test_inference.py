@@ -28,7 +28,7 @@ def test_save_predictions(tmp_path):
     actual_df = pd.read_csv(actual_out_csv)
     # assert that `Pred_Prob` was added to the input df 
     assert_allclose(actual_df["Pred_Prob"], pred_prob)
-    # assert that predicted labels were calcualted correctly
+    # assert that predicted labels were calculated correctly
     # based on the predicted probability of the ML classifier
     assert_array_equal(actual_df["Pred_Label"], [0, 1, 1])
     # assert that the output df still contains the columns

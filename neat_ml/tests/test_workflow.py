@@ -25,6 +25,7 @@ import neat_ml.workflow.lib_workflow as wf
         ("ALL", None, True),  # 'ALL' raises error
         ("detect,", ["detect"], False),  # trailing comma ignored
         ("X,DETECT", None, True),  # unknown steps raise error
+        ("train,infer,explain,plot", ["train", "infer", "explain", "plot"], False) # subset of input steps
     ],
 )
 def test_as_steps_set_normalizes_and_expands(steps_str, expected, err):
@@ -968,10 +969,7 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
 
 def test_stage_run_inference_and_plot_skips_plot_when_wrong_num_composition_cols(
     tmp_path,
-    caplog,
 ):
-    caplog.set_level(logging.WARNING)
-
     pred_csv = tmp_path / "pred.csv"
     pred_csv.write_text("Phase_Separation,Pred_Label\n0,0\n1,1\n")
 
@@ -982,8 +980,7 @@ def test_stage_run_inference_and_plot_skips_plot_when_wrong_num_composition_cols
         "phase_dir": tmp_path / "phase",
     }
 
-    wf.stage_run_inference_and_plot(
-        ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"]
-    )
-
-    assert "Skipping plot for INFER2: requires 2 composition columns." in caplog.text
+    with pytest.raises(ValueError, match="Cannot plot phase diagram for"):
+        wf.stage_run_inference_and_plot(
+            ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"]
+        )

@@ -33,7 +33,7 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 def as_steps_set(
-    steps_str: Literal["detect", "analysis", "detect,analysis", "all"]
+    steps_str: str 
 ) -> list[str]:
     """
     Normalize a comma separated string of steps
@@ -54,7 +54,7 @@ def as_steps_set(
     raw = [s.strip() for s in steps_str.split(",") if s.strip()]
     # check that the list of provided steps is not empty and all steps
     # are contained in the list of allowable steps for the workflow.
-    steps_allowed = ["detect", "analysis", "all"]
+    steps_allowed = ["detect", "analysis", "train", "infer", "explain", "plot", "all"]
     raw_set = set(raw)
     if not raw_set or not raw_set.issubset(steps_allowed):
         raise ValueError(
@@ -68,7 +68,7 @@ def as_steps_set(
 def get_path_structure(
     roots: dict[str, str],
     dataset_config: dict[str, Any],
-    steps: Sequence[Literal["detect", "analysis"]]
+    steps: Sequence[Literal["detect", "analysis", "train", "infer", "plot"]]
 ) -> dict[str, Path]:
     """
     Build only the paths needed by active steps.
@@ -386,8 +386,8 @@ def stage_train_model(
     val_paths : dict[str, Path]
         Paths for validation; needs 'agg_csv'.
     n_jobs: int
-        number of parallel processes/threads to use during ML training
-        default is -1 (set in `run_workflow`, i.e. use all available cores).
+        number of parallel processes/threads to use during ML training.
+        (when n_jobs=-1: use all available cores).
     target : str
         name of the target variable for training the ML model
     ml_hyper_opt: bool
@@ -407,7 +407,7 @@ def stage_train_model(
     if not agg_tr.exists():
         raise FileNotFoundError(f"Train aggregate CSV not found: {agg_tr}")
     df_tr = pd.read_csv(agg_tr)
-    # initialize column names to exclude from training feature datatset
+    # initialize column names to exclude from the training feature dataset
     # and prepare data for ML training. 
     excl_tr = ["Group", "Label", "Time", "Class"] + train_ds.get("composition_cols", [])
     X_tr, y_tr = ml_preprocess(df_tr, target=target, exclude=excl_tr)
@@ -586,8 +586,9 @@ def stage_run_inference_and_plot(
     if "plot" in steps:
         log.info(f"Constructing phase diagram for {ds_id}")
         if len(composition_cols) != 2:
-            log.warning(
-                f"Skipping plot for {ds_id}: requires 2 composition columns."
+            raise ValueError(
+                f"Cannot plot phase diagram for {ds_id}: "
+                f"expected 2 composition columns, got {len(composition_cols)}"
             )
             return
         plot_phase_diagram(

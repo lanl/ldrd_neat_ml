@@ -35,10 +35,10 @@ mask parameters override the built-in parameters for the `SAM-2` model.
 
 When performing analysis/metric calculation of the resulting bubble detections,
 the `yaml` file provides the necessary paths for finding the detection parquet
-files; the (optional) user generated composition CSV file that stores per-image sample
-information related to the experimental setup and data collection including
-phase separation ground-truth labels and composition weight percentages;
-the paths for storing per-image and aggregate metrics.
+files; An optional composition CSV file containing per-image metadata about the
+experimental setup and data collection. This includes phase separateion ground-truth
+labels and compoisition weight percentages; the paths for storing per-image
+and aggregate metrics.
 
 The user provided composition CSV must contain two required columns:
 
@@ -110,8 +110,16 @@ datasets:
       - "PEO 20 kg/mol (wt%)"
     # list containing the height and width (in pixels) of the input images (required for `analysis` step)
     img_shape: [2456, 2052] 
-    role: train OR val OR infer (for determining how to use the specific dataset, i.e. training, validation, or inference with the ML model. Validation dataset only required if performing ML hyperparameter optimization.)
-    ml_hyper_opt: True or False (with `role: train` whether to perform hyperparameter optimization of the ML classifier. Validation dataset required for hyperparameter optimization.)
+    # Role of this dataset in the ML workflow.
+    # - train: Used for training the ML classifier
+    # - val: Used for hyperparameter optimization (required when ml_hyper_opt=True)
+    # - infer: Used for inference with trained model
+    role: train | val | infer
+
+    # Whether to perform ML hyperparameter optimization via grid search (optional).
+    # When True, a validation dataset (role: val) is required.
+    # Default: True
+    ml_hyper_opt: True | False
     top_n_features: number of features to consider when performing feature importance ranking (default is 20)
     n_jobs: number of parallel process to run for ML model training (default is to use all available CPUs)
 

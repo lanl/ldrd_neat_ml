@@ -78,7 +78,9 @@ def main(config_path: str, steps_str: str) -> None:
     if "train" in steps:
         if not train_list:
             raise ValueError("No role='train' dataset.")
-        if not val_list:
+        train_ds = train_list[0]
+        ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
+        if ml_hyper_opt and not val_list:
             raise ValueError("No role='validate' dataset.")
         if len(train_list) > 1:
             raise ValueError(
@@ -91,8 +93,7 @@ def main(config_path: str, steps_str: str) -> None:
                 "only one can be used at a time."
             )
 
-        train_ds = train_list[0]
-        val_ds = val_list[0]
+        val_ds = val_list[0] if val_list else None
         train_id = train_ds.get("id")
         trained_model = Path(model_path) / f"{train_id}_model.joblib"
         if not trained_model.exists():
@@ -101,7 +102,6 @@ def main(config_path: str, steps_str: str) -> None:
                 get_path_structure(
                     roots, val_ds, steps=["train"]) if val_ds else None
             )
-            ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
             n_jobs = train_ds.get("n_jobs", -1)
 
             model_path = stage_train_model(
@@ -116,10 +116,11 @@ def main(config_path: str, steps_str: str) -> None:
             model_path = trained_model
             log.info(f"Trained model already exists: {model_path}, skipping training...")
 
-    if model_path is not None and any(s in steps for s in ("explain", "infer", "plot")):
+    if any(s in steps for s in ("explain", "infer", "plot")):
+        if model_path is None or not Path(model_path).expanduser().resolve().exists():
+            raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
+
         model_path = Path(model_path).expanduser().resolve()
-        if not model_path.exists():
-            raise ValueError(f"Model not found at specified path: {model_path}")
         log.info(f"Using model from config: {model_path}")
         
         if "explain" in steps:
@@ -133,8 +134,6 @@ def main(config_path: str, steps_str: str) -> None:
             for ds in infer_list:
                 infer_paths = get_path_structure(roots, ds, steps)
                 stage_run_inference_and_plot(ds, infer_paths, model_path, steps)
-    else:
-        raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
 
     log.info("Workflow finished.")
 

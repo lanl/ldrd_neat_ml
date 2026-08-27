@@ -77,7 +77,7 @@ def _run_shap(
     vals = vals[:, :, 1] if vals.ndim == 3 else vals
     imp = pd.Series(np.abs(vals).mean(0), index=X.columns)
 
-    # TODO: fix shap summay plot fig, ax handling in line with issue #29
+    # TODO: fix shap summary plot fig, ax handling in line with issue #29
     fig = plt.figure()
     shap.summary_plot(vals, features=X, max_display=top, show=False, rng=rng)
     fig.set_size_inches(8, 6)
@@ -96,7 +96,7 @@ def _run_ebm(
     random_state: int = 42
 ) -> pd.Series:
     """
-    Train an ExplainableBoostingClassifier and extract main-effect importances.
+    Train an ExplainableBoostingClassifier and extract main effect importances.
 
     Parameters
     ----------
@@ -185,10 +185,10 @@ def _run_lime(
     return pd.Series(agg / len(X), index=X.columns).sort_values(ascending=False)
 
 def feature_importance_consensus(
-    pos_class_feat_imps: np.ndarray[Any, np.dtype[np.float64]],
-    feature_names: np.ndarray[Any, np.dtype[np.str_]],
+    pos_class_feat_imps: np.ndarray,
+    feature_names: np.ndarray,
     top_feat_count: int,
-) -> tuple[np.ndarray[Any, np.dtype[np.str_]], np.ndarray[Any, np.dtype[np.int64]], int]:
+) -> tuple[np.ndarray, np.ndarray, int]:
     """
     Majority-vote ranking of the top_feat_count features across models.
 
@@ -223,7 +223,7 @@ def feature_importance_consensus(
         for name in feature_names[top_idx]:
             votes[name] += 1
 
-    votes = dict(sorted(votes.items(), key=lambda kv: kv[1], reverse=True)) # type: ignore[assignment]
+    votes = dict(sorted(votes.items(), key=lambda kv: kv[1], reverse=True))
     ranked_names = np.asarray(list(votes.keys()))
     ranked_counts = np.asarray(list(votes.values()), dtype=int)
     return ranked_names, ranked_counts, num_models
@@ -252,15 +252,17 @@ def plot_feat_import_consensus(
     out_dir: Path
         Location for saving the PNG file.
     """
-    pct = (ranked_counts / num_models) * 100
-    y_pos = np.arange(ranked_names.size)
+    plot_names = ranked_names[:top_feat_count]
+    plot_counts = ranked_counts[:top_feat_count]
+    pct = (plot_counts / num_models) * 100
+    y_pos = np.arange(plot_names.size)
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 6))
     ax.barh(y_pos, pct)
     ax.invert_yaxis()
     ax.set_xlabel(f"% models with feature in top {top_feat_count}")
-    ax.set_yticks(y_pos, ranked_names.tolist())
-    ax.set_title(f"Feature importance consensus (n={num_models})")
+    ax.set_yticks(y_pos, plot_names)
+    ax.set_title(f"Feature importance consensus (# models={num_models})")
     fig.tight_layout()
     fig.savefig(out_dir / "feat_imp_consensus.png", dpi=300)
     plt.close(fig)

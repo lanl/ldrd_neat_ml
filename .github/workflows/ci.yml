@@ -67,9 +67,8 @@ jobs:
       run: |
         brew update
         brew install libomp
-    # explicitly set the `OMP_NUM_THREADS=1` (which is already the default for linux runners
-    # that use `libgomp`) environment variable for MacOS runners to prevent oversubscription
-    # of cpu threads when performing parallel operations.
+    # explicitly set the `OMP_NUM_THREADS=1` environment variable for MacOS runners
+    # to prevent oversubscription of cpu threads when performing parallel operations.
     - name: Set Thread Limit for macOS
       if: runner.os == 'macOS'
       run: |

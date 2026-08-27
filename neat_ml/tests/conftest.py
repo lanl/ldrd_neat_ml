@@ -253,7 +253,7 @@ def stable_rc():
 
 
 @pytest.fixture(scope="session")
-def sample_data() -> pd.DataFrame:
+def sample_data():
     """
     Provides a sample DataFrame for consistent testing.
     """
@@ -312,7 +312,7 @@ def sample_inference_data(tmp_path_factory):
 
 
 @pytest.fixture(scope="function")
-def classification_dataset() -> tuple[pd.DataFrame, pd.Series]:
+def classification_dataset():
     """Synthetic binary-classification data."""
     X_arr, y = make_classification(
         n_samples=10,

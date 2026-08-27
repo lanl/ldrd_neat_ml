@@ -125,7 +125,7 @@ def test_compare_methods_end_to_end(
     assert result3 is None
 
 
-def test_plot_feature_importance_comparsion(tmp_path, baseline_dir):
+def test_plot_feature_importance_comparison(tmp_path, baseline_dir):
     """
     regression test for the visual appearance of
     ``feature_importance_comparison.png``
