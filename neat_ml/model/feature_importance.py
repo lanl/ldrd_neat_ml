@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -194,19 +193,19 @@ def feature_importance_consensus(
 
     Parameters
     ----------
-    pos_class_feat_imps : np.ndarray[Any, np.dtype[np.float64]]
+    pos_class_feat_imps : np.ndarray
         Array containing absolute value importances calculated using
         each model (SHAP, EBM, LIME) across all features.
-    feature_names :  np.ndarray[Any, np.dtype[np.str_]]
+    feature_names :  np.ndarray
         Feature name for each index.
     top_feat_count : int
         Top-k features extracted from every importance vector.
 
     Returns
     -------
-    ranked_names : np.ndarray[str]
+    ranked_names : np.ndarray
         Features sorted by descending consensus count.
-    ranked_counts : np.ndarray[int]
+    ranked_counts : np.ndarray
         Occurrence counts corresponding to *ranked_names*.
     num_models : int
         Number of input importance sources.
@@ -229,8 +228,8 @@ def feature_importance_consensus(
     return ranked_names, ranked_counts, num_models
 
 def plot_feat_import_consensus(
-    ranked_names: np.ndarray[Any, np.dtype[np.str_]],
-    ranked_counts: np.ndarray[Any, np.dtype[np.int_]],
+    ranked_names: np.ndarray,
+    ranked_counts: np.ndarray,
     num_models: int,
     top_feat_count: int,
     out_dir: Path,

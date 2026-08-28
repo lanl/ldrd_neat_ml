@@ -1,7 +1,7 @@
 import argparse
 import logging
-from pathlib import Path
 import yaml
+from pathlib import Path
 import warnings
 
 from neat_ml.workflow.lib_workflow import (as_steps_set,
@@ -130,7 +130,7 @@ def main(config_path: str, steps_str: str) -> None:
             log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
             for ds in infer_list:
                 infer_paths = get_path_structure(roots, ds, steps)
-                stage_run_inference_and_plot(ds, infer_paths, model_path, steps)
+                stage_run_inference_and_plot(ds, infer_paths, model_path, steps, "Phase_Separation")
 
     log.info("Workflow finished.")
 

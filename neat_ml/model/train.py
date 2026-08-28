@@ -140,8 +140,7 @@ def train_model(
         ML hyperparameter optimizaton
     n_jobs : int
         The number of parallel processes to run
-        when training the classifier. Default = -1
-        aka use all available cores (set in `run_workflow`).
+        when training the classifier. 
     random_state: int
         random seed variable for initializing
         machine learning classifiers
@@ -155,7 +154,9 @@ def train_model(
     dict[str, int | float | None], np.ndarray]
         A tuple containing:
         - The final model pipeline, refit on 
-          the combined train+validation data.
+          the combined train+validation data
+          when  `ml_hyper_opt==True` or else just
+          on the training data.
         - A dictionary of performance metrics 
           (ROC-AUC, PR-AUC) on the evaluation
           dataset (training or validation).

@@ -125,6 +125,13 @@ def test_compare_methods_end_to_end(
     assert result3 is None
 
 
+def test_run_ebm_top(tmp_path, classification_dataset):
+    """bare test that checks `_run_ebm` uses the appropriate value
+    for `plot_top` when the default (20) is greater than the number of features"""
+    X, y = classification_dataset
+    fi._run_ebm(X, y, tmp_path)
+
+
 def test_plot_feature_importance_comparison(tmp_path, baseline_dir):
     """
     regression test for the visual appearance of

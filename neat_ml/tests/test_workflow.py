@@ -14,7 +14,6 @@ from sklearn.utils.validation import check_is_fitted
 
 import neat_ml.workflow.lib_workflow as wf
 
-
 @pytest.mark.parametrize(
     ("steps_str", "expected", "err"),
     [
@@ -743,7 +742,7 @@ def test_stage_train_model_requires_validation_args(
             train_paths,
             val_ds=val_ds,
             val_paths=val_paths,
-            n_jobs = 1,
+            n_jobs=1,
         )
 
 
@@ -779,7 +778,7 @@ def test_stage_train_model_missing_csv_raises(
             train_paths,
             val_ds={"id": "VAL"},
             val_paths={"agg_csv": val_path},
-            n_jobs = 1,
+            n_jobs=1,
             target="target"
         )
 
@@ -804,7 +803,7 @@ def test_stage_train_model_no_overlapping_features_raises(tmp_path, sample_data)
             train_paths,
             val_ds={"id": "VAL"},
             val_paths=val_paths,
-            n_jobs = 1,
+            n_jobs=1,
             target="target"
         )
 
@@ -825,7 +824,7 @@ def test_stage_train_model_column_mismatch(tmp_path, sample_data):
             train_paths,
             val_ds={"id": "VAL"},
             val_paths=val_paths,
-            n_jobs = 1,
+            n_jobs=1,
             target="target"
         )
 
@@ -967,13 +966,15 @@ def test_stage_run_inference_calls_inference_and_makes_pred_dir(
     assert result is None
 
 
-def test_stage_run_inference_and_plot_skips_plot_when_wrong_num_composition_cols(
+def test_stage_run_inference_and_plot_error_when_wrong_num_composition_cols(
     tmp_path,
 ):
+    """test that the appropriate error is raised when more than 2 composition
+    columns are provided to `stage_run_inference_and_plot`"""
     pred_csv = tmp_path / "pred.csv"
     pred_csv.write_text("Phase_Separation,Pred_Label\n0,0\n1,1\n")
 
-    ds = {"id": "INFER2", "composition_cols": ["A", "B", "C"]}  # 3 columns -> skip plot
+    ds = {"id": "INFER2", "composition_cols": ["A", "B", "C"]}
     paths = {
         "agg_csv": tmp_path / "agg.csv",  # not used here
         "pred_csv": pred_csv,

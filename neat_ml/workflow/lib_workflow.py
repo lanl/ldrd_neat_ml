@@ -93,7 +93,6 @@ def get_path_structure(
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
-    steps_set = set(steps)
     results_root = roots.get("results")  
 
     base_proc = work_root / ds_id / method / class_label / time_label
@@ -103,7 +102,7 @@ def get_path_structure(
 
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
-    if any(s in steps_set for s in {"analysis", "train", "infer", "explain"}):
+    if any(s in steps for s in {"analysis", "train", "infer", "explain"}):
         a_cfg = dataset_config.get("analysis", {})
         per_img_path = a_cfg.get("per_image_csv")
         agg_path = a_cfg.get("aggregate_csv")
@@ -120,7 +119,7 @@ def get_path_structure(
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)
 
-    if any(s in steps_set for s in {"train", "infer", "explain"}):
+    if any(s in steps for s in {"train", "infer", "explain"}):
         if results_root is None:
             raise ValueError("Please provide `results` path via input yaml file")
         model_root = Path(roots.get("model", Path(results_root) / "model"))
