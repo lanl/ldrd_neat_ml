@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_equal, assert_allclose
 
 import matplotlib
 matplotlib.use("Agg")
@@ -104,11 +104,12 @@ def test_compare_methods_end_to_end(
     actual_csv_path = tmp_path / "feature_importance_comparison.csv"
 
     actual_df = pd.read_csv(actual_csv_path, index_col=0)
-    # make assertions on the final ranking of the features
-    assert_array_equal(
-        actual_df.index,
-        ['coverage_percentage', 'num_blobs', 'graph_num_components']
-    )
+    # make assertions on the output values of the feature importance
+    assert_allclose(actual_df["SHAP"], np.array([0.12727535, 0.12045986, 0.07586197]))
+    # loosened floating point tolerance for EBM output comparison to
+    # accommodate cross-platform testing (i.e. `arm` vs. `x86` architectures)
+    assert_allclose(actual_df["EBM"], np.array([4.74274969, 1.40791415, 3.04091987]), rtol=1e-3)
+    assert_allclose(actual_df["LIME"], np.array([0.17812868, 0.17708737, 0.09043377]))
 
     # check the output of ebm importance ranking, shap summary plot, and fic plot
     ebm_act = tmp_path / "ebm_importance.png"
