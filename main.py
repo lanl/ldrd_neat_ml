@@ -18,6 +18,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils import check_array
+# NOTE: xgboost is leveraging the libomp from torch
+# on MacOS
+import torch
 import xgboost as xgb
 import matplotlib
 matplotlib.use("agg")

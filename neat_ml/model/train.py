@@ -8,6 +8,9 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
 from sklearn.pipeline import Pipeline
+# NOTE: xgboost is leveraging the libomp from torch
+# on MacOS
+import torch  # noqa: F401
 from xgboost import XGBClassifier
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 import logging
