@@ -62,18 +62,6 @@ jobs:
     - name: refresh font cache
       if: runner.os == 'Linux'
       run: sudo fc-cache -f -v
-    - name: install openmp
-      if: runner.os == 'macOS'
-      run: |
-        brew update
-        brew install libomp
-    # explicitly set the `OMP_NUM_THREADS=1` environment variable for MacOS runners
-    # to prevent oversubscription of cpu threads when performing parallel operations.
-    - name: Set Thread Limit for macOS
-      if: runner.os == 'macOS'
-      run: |
-        echo "Limiting OpenMP to 1 thread to prevent oversubscription on MacOS runners."
-        echo "OMP_NUM_THREADS=1" >> $GITHUB_ENV
     - name: test
       run: |
         source "$GITHUB_WORKSPACE/.venv/bin/activate"
