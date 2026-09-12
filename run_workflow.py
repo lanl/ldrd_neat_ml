@@ -7,7 +7,10 @@ import warnings
 from neat_ml.workflow.lib_workflow import (as_steps_set,
                                            get_path_structure, 
                                            stage_detect,
-                                           stage_analyze_features)
+                                           stage_analyze_features,
+                                           stage_train_model,
+                                           stage_run_inference_and_plot,
+                                           stage_explain)
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +32,8 @@ def main(config_path: str, steps_str: str) -> None:
         cfg = yaml.safe_load(fh)
 
     roots = cfg["roots"]
+    inference_model = cfg.get("inference_model")
+    random_seed = cfg.get("random_seed")
     log.info(f"Running steps: {steps}")
     
     datasets = cfg.get("datasets", [])
@@ -62,6 +67,71 @@ def main(config_path: str, steps_str: str) -> None:
             paths = get_path_structure(roots, ds, steps)
             stage_analyze_features(ds, paths)
     
+    model_path = roots.get("model", inference_model)
+    train_list = [d for d in datasets if d.get("role") == "train"]
+    val_list = [d for d in datasets if d.get("role") == "val"]
+    infer_list = [d for d in datasets if d.get("role") == "infer"]
+
+    if "train" in steps:
+        if not train_list:
+            raise ValueError("No role='train' dataset.")
+        train_ds = train_list[0]
+        ml_hyper_opt = train_ds.get("ml_hyper_opt", True)
+        if ml_hyper_opt and not val_list:
+            raise ValueError("No role='validate' dataset.")
+        if len(train_list) > 1:
+            raise ValueError(
+                "Multiple train datasets provided, "
+                "only one can be used at a time."
+            )
+        if len(val_list) > 1:
+            raise ValueError(
+                "Multiple validation datasets provided, "
+                "only one can be used at a time."
+            )
+
+        val_ds = val_list[0] if val_list else None
+        train_id = train_ds.get("id")
+        trained_model = Path(model_path) / f"{train_id}_model.joblib"
+        if not trained_model.exists():
+            train_paths = get_path_structure(roots, train_ds, steps=["train"])
+            val_paths = (
+                get_path_structure(
+                    roots, val_ds, steps=["train"]) if val_ds else None
+            )
+            n_jobs = train_ds.get("n_jobs", -1)
+
+            model_path = stage_train_model(
+                train_ds,
+                train_paths,
+                val_ds,
+                val_paths,
+                ml_hyper_opt=ml_hyper_opt,
+                n_jobs=n_jobs,
+            )
+        else:
+            model_path = trained_model
+            log.info(f"Trained model already exists: {model_path}, skipping training...")
+
+    if any(s in steps for s in ("explain", "infer", "plot")):
+        if model_path is None or not Path(model_path).expanduser().resolve().exists():
+            raise ValueError("No model available. Train first or set 'inference_model' in YAML.")
+
+        model_path = Path(model_path).expanduser().resolve()
+        log.info(f"Using model from config: {model_path}")
+        
+        if "explain" in steps:
+            log.info("\n--- STAGE: EXPLAIN ---")
+            train_ds = train_list[0] if train_list else datasets[0]
+            explain_paths = get_path_structure(roots, train_ds, ["train"])
+            stage_explain(train_ds, explain_paths, model_path, random_seed=random_seed)
+
+        if any(s in steps for s in ("infer", "plot")):
+            log.info("\n--- STAGE: INFERENCE & PLOTTING ---")
+            for ds in infer_list:
+                infer_paths = get_path_structure(roots, ds, steps)
+                stage_run_inference_and_plot(ds, infer_paths, model_path, steps, "Phase_Separation")
+
     log.info("Workflow finished.")
 
 if __name__ == "__main__":
@@ -81,8 +151,8 @@ if __name__ == "__main__":
         default="all",
         help=(
             "Comma-separated list of steps to run or 'all'. Defaults to 'all'.\n"
-            "Available steps: detect,analysis\n"
-            "Example: --steps \"detect,analysis\""
+            "Available steps: detect, analysis, train, explain, infer, plot.\n"
+            "Example: --steps \"detect,analysis,train,explain,infer,plot.\""
         )
     )
     args = parser.parse_args()

@@ -93,6 +93,11 @@ roots:
   # `results` key is required when performing `analysis`
   # or else path generation will fail and throw an error
   results: path/to/save/analysis/outputs
+  model: path/to/save/trained/model
+
+inference_model: path/to/saved/joblib/model/from/training (used when running inference separately)
+
+random_seed: (optional) integer value for setting random seed value for SHAP explainer
 
 datasets:
   - id: name_of_save_folder
@@ -105,6 +110,18 @@ datasets:
       - "PEO 20 kg/mol (wt%)"
     # list containing the height and width (in pixels) of the input images (required for `analysis` step)
     img_shape: [2456, 2052] 
+    # Role of this dataset in the ML workflow.
+    # - train: Used for training the ML classifier
+    # - val: Used for hyperparameter optimization (required when ml_hyper_opt=True)
+    # - infer: Used for inference with trained model
+    role: train | val | infer
+
+    # Whether to perform ML hyperparameter optimization via grid search (optional).
+    # When True, a validation dataset (role: val) is required.
+    # Default: True
+    ml_hyper_opt: True | False
+    top_n_features: number of features to consider when performing feature importance ranking (default is 20)
+    n_jobs: number of parallel process to run for ML model training (default is to use all available CPUs)
 
     detection:
       img_dir: path/to/image/data (Can be a directory of ``.tiff`` images or a path to a single ``.tiff`` image.)
@@ -197,7 +214,7 @@ https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794a
 
 To run the workflow with a given `.yaml` file: 
 
-`python run_workflow.py --config <YAML file> --steps detect,analysis OR all (which is the default for running the full workflow)` 
+`python run_workflow.py --config <YAML file> --steps detect,analysis,train,infer,explain,plot OR all (which is the default for running the full workflow)` 
 
 To run the workflow using ``opencv_detection_test.yaml`` (and similarly with ``bubblesam_detection_test.yaml``):
 
@@ -219,6 +236,23 @@ An example `yaml` file for performing the `analysis` step is provided in `opencv
 The lines contained there can also be added to those used for running `detection` (as shown in the example above)
 when running both steps with a single command (e.g. `--steps all`). The `analysis` step processes the output parquet files from
 bubble detection data, extracts features from the data, and saves CSV files containing per-image and aggregated metrics. 
+
+Detection and analysis must be run for every dataset to be used for training,
+validation and inference. For running the `train`, `infer`, `explain` and `plot`
+steps, a separate `dataset: -id:` must be used for each input dataset with the
+appropriate `role` for each dataset, i.e. `train`, `val` or `infer`. Paths for
+saving the model, training/inference results can be set with `root: model` and
+`root: results` respectively, and `inference_model` can be set to explicitly
+provide the path to the trained model when performing inference separately from training. 
+
+The user can also determine whether or not to perform machine learning classifier
+hyperparameter optimization via exhaustive grid search by setting the `ml_hyper_opt`
+to True or False (the default is True if no parameter is specified). The validation
+dataset is only required when performing hyperparameter optimization, and the user
+should organize their dataset folders/composition csv to correspond to the input
+training and validation datasets accordingly. The user can also optionally set the
+number of parallel processes to use when performing ML classifier training with `n_jobs`. 
+The default value is `-1`, which uses all available cores for training the ML classifier.
 
 For information relevant to running the workflow:  
 

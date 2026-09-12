@@ -13,22 +13,31 @@ from neat_ml.utils import lib_plotting as lp
 
 # TODO: enforce style consistency with ``black`` (issue #11)
 @pytest.mark.parametrize(
-    "writer, fname, binodal_curve",
+    "writer, fname, binodal_curve, range_values",
     [
         (
             lp.titration_diagram,
             "titration_diagram.png",
             False,
+            True,
         ),
         (
             lp.plot_phase_diagram,
             "phase_diagram_exp.png",
             False,
+            True,
         ),
         (
             lp.plot_phase_diagram,
             "mathematical_model.png",
             True,
+            True,
+        ),
+        (
+            lp.plot_phase_diagram,
+            "phase_diagram_exp.png",
+            False,
+            False,
         ),
     ],
 )
@@ -39,11 +48,20 @@ def test_visual_regression_on_helpers(
     writer: Callable,
     fname: str,
     binodal_curve: bool,
+    range_values: bool,
 ):
+    if range_values:
+        xrange = [0, 20]
+        yrange = [0, 20]
+    else:
+        xrange = None
+        yrange = None
     extra_kwargs = dict(x_col="Sodium Citrate (wt%)",
         y_col="PEO 8 kg/mol (wt%)",
         phase_col="Phase",
-        xrange=[0, 20], yrange=[0, 20])
+        xrange=xrange,
+        yrange=yrange,
+    )
     
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
@@ -282,22 +300,46 @@ def test_wrappers_and_pipeline(
         assert result is None
 
 
-def test_plot_phase_diagram_error(
-    tmp_path: Path,
-    baseline_dir: Path,
-    synthetic_df: pd.DataFrame,
+@pytest.mark.parametrize("phase_col, err_msg, json_path, ranges",
+    [
+        (None, "At least one", False, True),
+        ("Phase", "Must provide ``json_path``", False, True),
+        ("Phase", "Plotting", True, False)
+    ]
+)
+def test_plot_phase_diagram_errors(
+    tmp_path,
+    baseline_dir,
+    trained_model_bundle,
+    synthetic_df,
+    phase_col,
+    err_msg,
+    json_path,
+    ranges,
 ):
     csv = tmp_path / "input.csv"
     synthetic_df.to_csv(csv, index=False)
     out_png = tmp_path / "out" / "out.png"
+    if json_path:
+        json_path = trained_model_bundle
+    else:
+        json_path = None
+    if ranges:
+        xrange = [0, 20]
+        yrange = [0, 20]
+    else:
+        xrange = None
+        yrange = None
 
-    with pytest.raises(ValueError, match="Must provide ``json_path``"): 
+    with pytest.raises(ValueError, match=err_msg): 
         lp.plot_phase_diagram(
             file_path=csv,
+            json_path=json_path,
             output_path=out_png,
             x_col="Sodium Citrate (wt%)",
             y_col="PEO 8 kg/mol (wt%)",
-            phase_col="Phase",
-            xrange=[0, 20], yrange=[0, 20],
+            phase_col=phase_col,
+            xrange=xrange,
+            yrange=yrange,
             binodal_curve = True
         )

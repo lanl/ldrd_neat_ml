@@ -7,6 +7,11 @@ import pooch  # type: ignore[import-untyped]
 from matplotlib import rcParams
 from pathlib import Path
 import cv2
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+import joblib
+from sklearn.datasets import make_classification
 
 # try setting plot font to ``Arial``, if installed, 
 # otherwise default to standard matplotlib font
@@ -224,3 +229,105 @@ def real_blobs():
         },
     }
     return pd.DataFrame(blob_dict)
+
+@pytest.fixture(scope="session")
+def stable_rc():
+    STABLE_RC = {
+        "figure.figsize": (6.0, 4.0),
+        "figure.dpi": 100,
+        "savefig.dpi": 100,
+        "savefig.bbox": "standard",
+        "savefig.pad_inches": 0.0,
+        "font.family": ["DejaVu Sans"],
+        "font.size": 10.0,
+        "axes.titlesize": 12,
+        "axes.labelsize": 10,
+        "axes.linewidth": 1.0,
+        "xtick.labelsize": 9,
+        "ytick.labelsize": 9,
+        "path.simplify": False,
+        "text.antialiased": True,
+        "lines.antialiased": True,
+    }
+    return STABLE_RC
+
+
+@pytest.fixture(scope="session")
+def sample_data():
+    """
+    Provides a sample DataFrame for consistent testing.
+    """
+    rng = np.random.default_rng(42)
+    data = {
+        "feature1": rng.random(100),
+        "feature2": rng.random(100) * 10,
+        "feature3": ["A"] * 50 + ["B"] * 50,
+        "exclude_col": np.arange(100),
+        "target": rng.integers(0, 2, 100),
+    }
+    df = pd.DataFrame(data)
+    df.loc[5, "feature1"] = np.nan
+    return df
+
+
+@pytest.fixture(scope="session")
+def trained_model_bundle(tmp_path_factory):
+    """Creates and saves a dummy trained model bundle."""
+    tmp_model_path = tmp_path_factory.mktemp("model")
+    features = ["feat_a", "feat_b"]
+    model = Pipeline(
+        [
+            ("impute", SimpleImputer(strategy="median")),
+            ("clf", RandomForestClassifier(random_state=42)),
+        ]
+    )
+    rng = np.random.default_rng(7)
+    dummy_X = pd.DataFrame(rng.random((10, len(features))), columns=features)
+    dummy_y = pd.Series(rng.integers(0, 2, 10))
+    model.fit(dummy_X, dummy_y)
+
+    bundle = {"model": model, "features": features}
+    model_path = tmp_model_path / "model.joblib"
+    joblib.dump(bundle, model_path)
+    return model_path
+
+
+@pytest.fixture(scope="session")
+def sample_inference_data(tmp_path_factory):
+    """
+    Provides a sample CSV file for inference testing.
+    """
+    tmp_infer_path = tmp_path_factory.mktemp("infer")
+    rng = np.random.default_rng(123)
+    data = {
+        "feat_a": rng.random(50),
+        "feat_b": np.arange(50),
+        "id_col": [f"id_{i}" for i in range(50)],
+        "ground_truth": rng.integers(0, 2, 50),
+    }
+    df = pd.DataFrame(data)
+    csv_path = tmp_infer_path / "inference_data.csv"
+    df.to_csv(csv_path, index=False)
+    return csv_path
+
+
+@pytest.fixture(scope="function")
+def classification_dataset():
+    """Synthetic binary-classification data."""
+    X_arr, y = make_classification(
+        n_samples=10,
+        n_features=5,
+        n_informative=3,
+        random_state=0
+    )
+    X = pd.DataFrame(
+        X_arr,
+        columns=[
+            "PEO 10 kg/mol (wt%)",
+            "Dextran 10 kg/mol (wt%)",
+            "num_blobs",
+            "coverage_percentage",
+            "graph_num_components",
+        ],
+    )
+    return X, pd.Series(y, name="y")

@@ -2,11 +2,21 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, Sequence, Literal
 import pandas as pd
+import joblib
 
 from neat_ml.opencv.preprocessing import process_directory as cv_preprocess
 from neat_ml.opencv.detection import run_opencv
 from neat_ml.bubblesam.bubblesam import run_bubblesam
 from neat_ml.analysis.data_analysis import full_analysis
+from neat_ml.model.train import (
+    ml_preprocess,
+    train_model,
+    save_model_bundle,
+    plot_roc,
+)
+from neat_ml.model.inference import run_inference
+from neat_ml.model.feature_importance import compare_methods
+from neat_ml.utils.lib_plotting import plot_phase_diagram
 
 
 __all__ = [
@@ -14,13 +24,16 @@ __all__ = [
     "get_path_structure",
     "run_detection",
     "stage_detect",
-    "stage_analyze_features"
+    "stage_analyze_features",
+    "stage_train_model",
+    "stage_run_inference_and_plot",
+    "stage_explain"
 ]
 
 log = logging.getLogger(__name__)
 
 def as_steps_set(
-    steps_str: Literal["detect", "analysis", "detect,analysis", "all"]
+    steps_str: str 
 ) -> list[str]:
     """
     Normalize a comma separated string of steps
@@ -29,8 +42,9 @@ def as_steps_set(
     Parameters
     ----------
     steps_str : str
-        Comma-separated steps; accepts 'detect', 'analysis', 'all'.
-        'all' expands to full pipeline.
+        Comma-separated string of steps; accepts 'detect', 'analysis',
+        'train', 'infer', 'explain', 'plot', or 'all', which expands
+        to full pipeline.
 
     Returns
     -------
@@ -40,21 +54,21 @@ def as_steps_set(
     raw = [s.strip() for s in steps_str.split(",") if s.strip()]
     # check that the list of provided steps is not empty and all steps
     # are contained in the list of allowable steps for the workflow.
-    steps_allowed = ["detect", "analysis", "all"]
+    steps_allowed = ["detect", "analysis", "train", "infer", "explain", "plot", "all"]
     raw_set = set(raw)
     if not raw_set or not raw_set.issubset(steps_allowed):
         raise ValueError(
             f"Steps: {raw} not contained in allowed steps: {steps_allowed}"
         )
     if raw == ["all"]:
-        return ["detect", "analysis"]
+        return ["detect", "analysis", "train", "infer", "explain", "plot"]
 
     return raw
 
 def get_path_structure(
     roots: dict[str, str],
     dataset_config: dict[str, Any],
-    steps: Sequence[Literal["detect", "analysis"]]
+    steps: Sequence[Literal["detect", "analysis", "train", "infer", "plot"]]
 ) -> dict[str, Path]:
     """
     Build only the paths needed by active steps.
@@ -65,8 +79,8 @@ def get_path_structure(
         Root dirs (work).
     dataset_config : dict[str, Any]
         Dataset dict (id, method, class, time_label, detection).
-    steps : Sequence[Literal["detect", "analysis"]]
-        Selected steps (e.g., ['detect','analysis']).
+    steps : Sequence[str]
+        Selected steps (e.g., ['detect','analysis', 'train', 'infer', 'explain', 'plot']).
 
     Returns
     -------
@@ -79,6 +93,7 @@ def get_path_structure(
     class_label = dataset_config.get("class", "")
     time_label = dataset_config.get("time_label", "")
     work_root = Path(roots["work"])
+    results_root = roots.get("results")  
 
     base_proc = work_root / ds_id / method / class_label / time_label
 
@@ -87,14 +102,13 @@ def get_path_structure(
 
     paths["det_dir"] = base_proc / f"{time_label}_Processed_{method}_With_Blob_Data"
 
-    if "analysis" in steps:
+    if any(s in steps for s in {"analysis", "train", "infer", "explain"}):
         a_cfg = dataset_config.get("analysis", {})
         per_img_path = a_cfg.get("per_image_csv")
         agg_path = a_cfg.get("aggregate_csv")
         # if either of the paths are missing from the analysis config
         # assign the default dir to whichever paths are missing
         if not (per_img_path and agg_path):
-            results_root = roots.get("results")  
             if results_root is None:
                 raise ValueError("Please provide `results` path via input yaml file")
             per_img_path = per_img_path or Path(results_root) / ds_id / "per_image.csv"
@@ -104,6 +118,17 @@ def get_path_structure(
         comp_choice = a_cfg.get("composition_csv") or dataset_config.get("composition_csv")
         if comp_choice:
             paths["composition_csv"] = Path(comp_choice)
+
+    if any(s in steps for s in {"train", "infer", "explain"}):
+        if results_root is None:
+            raise ValueError("Please provide `results` path via input yaml file")
+        model_root = Path(roots.get("model", Path(results_root) / "model"))
+        infer_dir = Path(results_root) / f"infer_{ds_id}"
+        paths["model_dir"] = model_root
+        paths["explain_dir"] = Path(results_root) / ds_id / "explain"
+        paths["pred_csv"] = infer_dir / "pred.csv"
+        paths["phase_dir"] = infer_dir / "phase_plots"
+        paths["roc_png"] = infer_dir / "roc.png"
 
     return paths
 
@@ -332,3 +357,245 @@ def stage_analyze_features(dataset_config: dict[str, Any], paths: dict[str, Path
         exclude_numeric_cols=["Offset"],
         img_shape=img_shape
     )
+
+
+def stage_train_model(
+    train_ds: dict[str, Any],
+    train_paths: dict[str, Path],
+    val_ds: dict[str, Any],
+    val_paths: dict[str, Path],
+    n_jobs: int,
+    target: str = "Phase_Separation",
+    ml_hyper_opt: bool = True,
+) -> Path:
+    """
+    Train an ensemble machine learning classifier and save
+    the trained model using joblib. Perform ML hyperparameter
+    optimization if requested by the user using validation dataset.
+
+    Parameters
+    ----------
+    train_ds : dict[str, Any]
+        Training dataset config holding 'composition_cols' etc.
+    train_paths : dict[str, Path]
+        Paths for training; needs 'agg_csv' and 'model_dir'.
+    val_ds : dict[str, Any]
+        Validation dataset config used for determining best model
+        parameters when performing hyperparameter optimization.
+    val_paths : dict[str, Path]
+        Paths for validation; needs 'agg_csv'.
+    n_jobs: int
+        number of parallel processes/threads to use during ML training.
+        (when n_jobs=-1: use all available cores).
+    target : str
+        name of the target variable for training the ML model
+    ml_hyper_opt: bool
+        whether or not to perform hyperparameter optimization
+        of the ML model via exhaustive grid search
+
+    Returns
+    -------
+    Path
+        Filesystem path to the saved model bundle (.joblib).
+    """
+   
+    ds_id = train_ds["id"]
+
+    # load training dataset
+    agg_tr = train_paths["agg_csv"].expanduser().resolve()
+    if not agg_tr.exists():
+        raise FileNotFoundError(f"Train aggregate CSV not found: {agg_tr}")
+    df_tr = pd.read_csv(agg_tr)
+    # initialize column names to exclude from the training feature dataset
+    # and prepare data for ML training. 
+    excl_tr = ["Group", "Label", "Time", "Class"] + train_ds.get("composition_cols", [])
+    X_tr, y_tr = ml_preprocess(df_tr, target=target, exclude=excl_tr)
+    
+    if ml_hyper_opt:
+        # check for appropriate validation dataset paths if performing hyperparamter optimization
+        if val_ds is None:
+            raise ValueError(
+                "stage_train_model requires a validation dataset config (val_ds) for hyperparameter optimization."
+            )
+        if val_paths is None:
+            raise ValueError(
+                "stage_train_model requires validation paths (val_paths) for hyperparameter optimization."
+            )
+
+        agg_val = val_paths["agg_csv"]
+        if not agg_val.exists():
+            raise FileNotFoundError(f"Validation aggregate CSV not found: {agg_val}")
+        df_val = pd.read_csv(agg_val)
+        excl_val = ["Group", "Label", "Time", "Class"] + val_ds.get("composition_cols", [])
+        X_val, y_val = ml_preprocess(df_val, target=target, exclude=excl_val)
+
+        common_cols = [c for c in X_tr.columns if c in X_val.columns]  # type: ignore[assignment]
+        if not common_cols:
+            raise ValueError("No overlapping feature columns between train and validation.")
+        if len(common_cols) < len(X_tr.columns) or len(common_cols) < len(X_val.columns):
+            raise ValueError(
+                f"Feature mismatch: using {len(common_cols)}"
+                f" common features (train={X_tr.columns}, val={X_val.columns})."
+            )
+        X_val = X_val[common_cols]  # type: ignore[assignment]
+        X_tr = X_tr[common_cols]  # type: ignore[assignment]
+        roc_label = "Validation"
+    else:
+        # We dont pass a validation dataset if not performing hyperparameter optimization
+        common_cols = X_tr.columns  # type: ignore[assignment]
+        X_val = None
+        y_val = None
+        roc_label = "Training"
+
+    # perform model training and save trained model
+    model_dir = train_paths["model_dir"]
+    model_dir.mkdir(parents=True, exist_ok=True)
+    model_path = model_dir / f"{ds_id}_model.joblib"
+    model, metrics, best_params, val_proba = train_model(
+        X_tr, y_tr, X_val, y_val, ml_hyper_opt=ml_hyper_opt, n_jobs=n_jobs,
+    )
+    save_model_bundle(
+        model=model,
+        features=common_cols,  # type: ignore[arg-type]
+        metrics=metrics,
+        best_params=best_params,
+        path=model_path,
+    )
+    roc_png = model_dir / f"{ds_id}_roc.png"
+    y_out = y_val if y_val is not None else y_tr
+    plot_roc(y_true=y_out, y_prob=val_proba, out_png=roc_png, label=roc_label)
+    roc_metric = metrics.get("roc_auc")
+    pr_metric = metrics.get("pr_auc")
+    log.info(
+        f"--> Model saved: {model_path} | ROC: {roc_png} | " 
+        f"AUC={roc_metric:.3f} | PR-AUC={pr_metric:.3f}"
+    )
+
+    return model_path
+
+def stage_explain(
+    train_dataset_config: dict[str, Any],
+    paths: dict[str, Path],
+    model_path: Path,
+    target: str = "Phase_Separation",
+    random_seed: int | None = None,
+) -> None:
+    """
+    Generates feature importance reports for a trained model.
+
+    This function loads a pre-trained model from a .joblib file and
+    the corresponding training data. It then runs various explainability
+    methods (SHAP, LIME and EBM) to determine feature importance and
+    saves the resulting plots.
+
+    Parameters
+    ----------
+    train_dataset_config : dict[str, Any]
+        The configuration for the training dataset, used to identify
+        columns for preprocessing and user specified top-n features.
+    paths : dict[str, Path]
+        A dictionary of file paths, including the training data CSV
+        and the output directory for explainability plots.
+    model_path : Path
+        The path to the saved .joblib model bundle file.
+    target : str
+        Target dataframe column for performing explanation
+    random_seed : int
+        Optional random seed value for initializing SHAP explainer
+    """
+    log.info(f"--- Starting Explainability Stage for model: {model_path} ---")
+    
+    log.info(f"Loading training data from {paths['agg_csv']}...")
+    df = pd.read_csv(paths["agg_csv"])
+    
+    composition_cols = train_dataset_config.get("composition_cols", [])
+    exclude_cols = [
+        "Group", "Label", "Time", "Class", "Offset"
+    ] + composition_cols
+    X, y = ml_preprocess(
+        df, 
+        target=target, 
+        exclude=exclude_cols
+    )
+
+    log.info(f"Loading trained model bundle from {model_path}...")
+    model_bundle = joblib.load(model_path)
+    model = model_bundle['model']
+
+    log.info(f"Aligning data to the {len(model_bundle['features'])} features the model was trained on.")
+    X = X[model_bundle['features']]
+
+    log.info("Running feature importance comparison methods...")
+    explain_dir = paths["explain_dir"]
+    top = train_dataset_config.get("top_n_features", 20)
+    compare_methods(
+        model=model, 
+        X=X, 
+        y=y, 
+        out_dir=explain_dir, 
+        top=top,
+        random_seed=random_seed,
+    )
+    log.info(f"--> Explainability plots saved to {explain_dir}")
+
+def stage_run_inference_and_plot(
+    infer_dataset_config: dict[str, Any],
+    paths: dict[str, Path],
+    model_path: Path,
+    steps: list[Literal["infer", "plot"]],
+    target: str | None = None,
+) -> None:
+    """
+    Uses a trained model to make predictions on 
+    an inference dataset. If specified, it then 
+    uses these predictions to construct and save a
+    phase diagram.
+
+    Parameters
+    ----------
+    infer_dataset_config : dict[str, Any]
+        The configuration for the dataset to be 
+        used for inference.
+    paths : dict[str, Path]
+        A dictionary of file paths for data and results.
+    model_path : Path
+        The path to the trained model file.
+    steps : list[Literal["infer", "plot"]]
+        A list of active workflow steps to determine 
+        whether to run inference, plotting, or both.
+    target : str | None
+        The target dataframe column for performing inference
+    """
+    ds_id = infer_dataset_config['id']
+    paths["pred_csv"].parent.mkdir(parents=True, exist_ok=True)
+    composition_cols = infer_dataset_config.get("composition_cols", [])
+    exclude_cols = ["Group", "Label", "Time", "Class", "Offset"] + composition_cols
+
+    if "infer" in steps:
+        log.info(f"Running inference on {ds_id}")
+        run_inference(
+            model_in=model_path,
+            data_csv=paths["agg_csv"],
+            target=target,
+            exclude_cols=exclude_cols,
+            roc_png=paths["roc_png"],
+            pred_csv=paths["pred_csv"],
+        )
+
+    if "plot" in steps:
+        log.info(f"Constructing phase diagram for {ds_id}")
+        if len(composition_cols) != 2:
+            raise ValueError(
+                f"Cannot plot phase diagram for {ds_id}: "
+                f"expected 2 composition columns, got {len(composition_cols)}"
+            )
+            return
+        plot_phase_diagram(
+            file_path=paths["pred_csv"],
+            x_col=composition_cols[0],
+            y_col=composition_cols[1],
+            phase_col=target,
+            pred_phase_col="Pred_Label",
+            output_path=paths["phase_dir"] / "phase_diagram.png",
+            model_boundary=True,
+        )

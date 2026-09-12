@@ -7,19 +7,24 @@ import torch
 import pandas as pd
 from numpy.testing import assert_allclose
 import copy
+import numpy as np
+from matplotlib.testing.compare import compare_images
+import joblib
+from sklearn.utils.validation import check_is_fitted
 
 import neat_ml.workflow.lib_workflow as wf
 
 @pytest.mark.parametrize(
     ("steps_str", "expected", "err"),
     [
-        ("all", ["detect", "analysis"], False),  # expands to full pipeline
+        ("all", ["detect", "analysis", "train", "infer", "explain", "plot"], False),  # expands to full pipeline
         (" detect ,  analysis ", ["detect", "analysis"], False),  # whitespace removed
         ("ANALYSIS,DETECT", None, True),  # case sensitive inputs raise error
         ("", None, True),  # empty input -> empty list -> raises error
         ("ALL", None, True),  # 'ALL' raises error
         ("detect,", ["detect"], False),  # trailing comma ignored
         ("X,DETECT", None, True),  # unknown steps raise error
+        ("train,infer,explain,plot", ["train", "infer", "explain", "plot"], False) # subset of input steps
     ],
 )
 def test_as_steps_set_normalizes_and_expands(steps_str, expected, err):
@@ -121,13 +126,21 @@ def test_get_path_structure_builds_expected_paths(
         assert paths["agg_csv"] == exp_agg
         assert paths["composition_csv"] == Path("comp.csv")
 
-def test_get_path_structure_results_error():
+@pytest.mark.parametrize("steps, paths",
+    [
+        ("analysis", None),
+        ("train", "path.csv")
+    ]
+)
+def test_get_path_structure_results_error(steps, paths):
     """test that get_path_structure raises error when no
     explicit `results` path is provided by the user"""
     roots = {"work": "work_path"}
     input_ds = {"method": "BubbleSAM"}
+    if paths is not None:
+        input_ds.update({"analysis": {"per_image_csv": paths, "aggregate_csv": paths}})
     with pytest.raises(ValueError, match="Please provide `results` path"):
-        wf.get_path_structure(roots, input_ds, ["analysis"])
+        wf.get_path_structure(roots, input_ds, [steps])
 
 def test_get_path_structure_fallbacks(tmp_path):
     """
@@ -677,3 +690,298 @@ def test_stage_analyze_features_errors(
         }
     with pytest.raises(ValueError, match=err_msg):
         wf.stage_analyze_features(ds, paths={"per_csv": "per_img.csv", "agg_csv": "agg.csv"})
+
+
+def test_get_path_structure_includes_train_infer_explain_and_model_override(tmp_path):
+    """
+    When steps include train/infer/explain/plot, ensure the extra paths are built and
+    model_dir honors roots['model'] override.
+    """
+    roots = {
+        "work": tmp_path,
+        "results": tmp_path / "results",
+        "model": tmp_path / "custom_model_dir",
+    }
+    ds = {"id": "DS2", "method": "BubbleSAM", "class": "neg", "time_label": "T02", "composition_csv": "comp.csv"}
+    steps = ["analysis", "train", "infer", "explain", "plot"]
+
+    paths = wf.get_path_structure(roots, ds, steps)
+
+    results_root = tmp_path / "results"
+    assert paths["per_csv"] == results_root / "DS2" / "per_image.csv"
+    assert paths["agg_csv"] == results_root / "DS2" / "aggregate.csv"
+    assert paths["composition_csv"] == Path("comp.csv")
+    assert paths["model_dir"] == tmp_path / "custom_model_dir"
+    assert paths["explain_dir"] == results_root / "DS2" / "explain"
+    assert paths["pred_csv"] == results_root / "infer_DS2" / "pred.csv"
+    assert paths["phase_dir"] == results_root / "infer_DS2" / "phase_plots"
+
+@pytest.mark.parametrize("val_ds, val_paths, err_msg",
+    [
+        (None, {"agg_csv": "val.csv"}, r"requires a validation dataset config \(val_ds\)"),
+        ({"id": "VAL"}, None, r"requires validation paths \(val_paths\)"),
+    ]
+)
+def test_stage_train_model_requires_validation_args(
+    tmp_path,
+    sample_data,
+    val_ds,
+    val_paths,
+    err_msg
+):
+    train_ds = {"id": "TR1"}
+    agg_csv_path = tmp_path / "train.csv"
+    train_paths = {"agg_csv": agg_csv_path, "model_dir": tmp_path / "model"}
+    # save a sample training dataset to circumvent earlier checks
+    target_data = sample_data.rename(columns={"target": "Phase_Separation", "feature3": "Group"})
+    target_data.to_csv(agg_csv_path)
+
+    with pytest.raises(ValueError, match=err_msg):
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds=val_ds,
+            val_paths=val_paths,
+            n_jobs=1,
+        )
+
+
+@pytest.mark.parametrize("train_csv, val_csv, missing",
+    [
+        # case where `train_csv` is missing
+        (None, "val.csv", "Train"),
+        # case where `val_csv` is missing
+        ("train.csv", None, "Validation"),
+    ]
+)
+def test_stage_train_model_missing_csv_raises(
+    tmp_path,
+    sample_data,
+    train_csv,
+    val_csv,
+    missing,
+):
+    train_ds = {"id": "TR2"}
+    train_path = (tmp_path / "train.csv").resolve()
+    val_path = tmp_path / "val.csv"
+    train_paths = {"agg_csv": train_path, "model_dir": tmp_path / "model"}
+    if train_csv is None:
+        sample_data.to_csv(val_path)
+    if val_csv is None:
+        sample_data.to_csv(train_path)
+
+    with pytest.raises(FileNotFoundError,
+        match=f"{missing} aggregate CSV not found"
+    ):
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds={"id": "VAL"},
+            val_paths={"agg_csv": val_path},
+            n_jobs=1,
+            target="target"
+        )
+
+
+def test_stage_train_model_no_overlapping_features_raises(tmp_path, sample_data):
+    train_ds = {"id": "TR4"}
+    train_path = tmp_path / "train.csv"
+    val_path = tmp_path / "val.csv"
+    train_paths = {"agg_csv": train_path, "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": val_path}
+    val_data = sample_data.rename(
+        columns={"feature1": "feature5", "feature2": "feature6", "feature3": "feature4"}
+    )
+    sample_data.to_csv(train_path, index=False)
+    val_data.drop(columns=["exclude_col"]).to_csv(val_path, index=False)
+
+    with pytest.raises(ValueError,
+        match="No overlapping feature columns between train and validation."
+    ):
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds={"id": "VAL"},
+            val_paths=val_paths,
+            n_jobs=1,
+            target="target"
+        )
+
+
+def test_stage_train_model_column_mismatch(tmp_path, sample_data):
+    train_ds = {"id": "TR4"}
+    train_path = tmp_path / "train.csv"
+    val_path = tmp_path / "val.csv"
+    train_paths = {"agg_csv": train_path, "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": val_path}
+    sample_data.to_csv(train_path, index=False)
+    val_data = sample_data.drop(columns=["feature1", "exclude_col"])
+    val_data.to_csv(val_path, index=False)
+    
+    with pytest.raises(ValueError, match="Feature mismatch"):
+        wf.stage_train_model(
+            train_ds,
+            train_paths,
+            val_ds={"id": "VAL"},
+            val_paths=val_paths,
+            n_jobs=1,
+            target="target"
+        )
+
+
+@pytest.mark.parametrize("ml_hyper_opt", [True, False])
+def test_stage_train_model_happy_path_saves_bundle_and_roc(
+    tmp_path,
+    sample_data,
+    ml_hyper_opt,
+):
+    train_ds = {"id": "TR5"}
+    train_paths = {"agg_csv": tmp_path / "train.csv", "model_dir": tmp_path / "model"}
+    val_paths = {"agg_csv": tmp_path / "val.csv"}
+    sample_data.to_csv(val_paths["agg_csv"], index=False)
+    sample_data.to_csv(train_paths["agg_csv"], index=False)
+
+    model_path = wf.stage_train_model(
+        train_ds,
+        train_paths,
+        val_ds={"id": "VAL"},
+        val_paths=val_paths,
+        target="target",
+        ml_hyper_opt=ml_hyper_opt,
+        n_jobs=1
+    )
+    save_path = train_paths["model_dir"]                                                             
+    # check that the roc-curve was generated
+    assert (tmp_path / save_path / "TR5_roc.png").exists()
+    # check that the model bundle contains a fitted classifier
+    model_bundle = joblib.load(model_path)
+    check_is_fitted(model_bundle["model"])
+    # assertions that the roc-auc and pr-auc values
+    model_metrics = model_bundle["metrics"]
+    assert_allclose(list(model_metrics.values()), [1.0, 1.0])
+    # assertions on the expected values from
+    # performing ml hyperparameter optimization.
+    # with ml_hyper_opt==True, `train_model` returns best_params from
+    # `GridSearchCV`; with my_hyper_opt==False, `train_model returns 
+    # best_params from `Pipeline`.
+    model_params = model_bundle["best_params"]
+    if ml_hyper_opt:
+        assert model_params["ensemble__xgb__learning_rate"] == 0.05
+        assert model_params["ensemble__xgb__max_depth"] == 3
+        assert model_params["ensemble__xgb__n_estimators"] == 10
+    else:
+        assert_allclose(
+            model_params["ensemble__xgb__scale_pos_weight"], 0.9607843137254902
+        )
+        assert model_params['ensemble__rf__n_estimators'] == 500
+        assert model_params['ensemble__xgb__colsample_bytree'] == 0.8
+
+
+def test_stage_explain_aligns_features_and_calls_compare_methods(
+    tmp_path,
+    sample_inference_data,
+    trained_model_bundle,
+):
+    explain_out = tmp_path / "explain_out"
+    train_ds = {"id": "TRX", "top_n_features": 2}
+    paths = {"agg_csv": sample_inference_data, "explain_dir": explain_out}
+
+    wf.stage_explain(train_ds, paths, trained_model_bundle, target="ground_truth")
+    # check that the appropriate files are generated by running ``stage_explain``
+    # skip checking contents / image comparison which is performed elsewhere in 
+    # the test suite
+    output_contents = os.listdir(explain_out)
+    assert set(output_contents).issubset(
+        [
+            'shap_summary.png',
+            'ebm_importance.png',
+            'feature_importance_comparison.png',
+            'feature_importance_comparison.csv',
+            'feat_imp_consensus.png',
+            'ebm_importance.csv'
+        ]
+    )
+    fic_df = pd.read_csv(explain_out / "feature_importance_comparison.csv")
+    ebm_df = pd.read_csv(explain_out / "ebm_importance.csv")
+    assert_allclose(fic_df["SHAP"].values, [0.111888, 0.007520])
+    assert_allclose(ebm_df["0"].values, [0.16195064, 0.10430588])
+
+
+@pytest.mark.parametrize("only_inference, exp_img, n_cols",
+    [
+        # test-case for plotting phase diagram with inference only
+        (True, "infer_only_phase_diagram_exp.png", 7),
+        # test-case for plotting phase diagram with training + inference
+        (False, "train_infer_phase_diagram_exp.png", 8),
+    ]
+)
+def test_stage_run_inference_calls_inference_and_makes_pred_dir(
+    tmp_path,
+    baseline_dir,
+    sample_inference_data,
+    trained_model_bundle,
+    only_inference,
+    exp_img,
+    n_cols,
+):
+    # add composition columns to sample inference data
+    sample_data = pd.read_csv(sample_inference_data)
+    rng = np.random.default_rng(42)
+    sample_data['Dex'] = rng.uniform(low=1, high=10, size=len(sample_data))
+    sample_data['PEG'] = rng.uniform(low=1, high=10, size=len(sample_data))
+    if only_inference:
+        # in the case where we are only performing inference
+        # there may not be "ground truth" in the composition csv file
+        sample_data = sample_data.drop(columns="ground_truth")
+        target = None
+    else:
+        target = "ground_truth"
+    tmp_save_path = tmp_path / sample_inference_data.name
+    sample_data.to_csv(tmp_save_path, index=False)
+    out_dir = tmp_path / "infer"
+    ds = {"id": "INFER1", "composition_cols": ["Dex", "PEG"]}
+    paths = {
+        "agg_csv": tmp_save_path,
+        "pred_csv": out_dir / "pred.csv",
+        "phase_dir": out_dir / "phase_plots",
+        "roc_png": out_dir / "roc.png",
+    }
+
+    wf.stage_run_inference_and_plot(
+        ds,
+        paths,
+        trained_model_bundle,
+        steps=["infer", "plot"],
+        target=target,
+    )
+    assert set(os.listdir(out_dir)).issubset(["phase_plots", "roc.png", "pred.csv"])
+    pred_df = pd.read_csv(out_dir / "pred.csv")
+    assert pred_df["Pred_Label"].sum() == 3
+    assert pred_df.shape == (50, n_cols)
+    result = compare_images(
+        out_dir / "phase_plots/phase_diagram.png",
+        baseline_dir / exp_img,
+        tol=1e-2,
+    )
+    assert result is None
+
+
+def test_stage_run_inference_and_plot_error_when_wrong_num_composition_cols(
+    tmp_path,
+):
+    """test that the appropriate error is raised when more than 2 composition
+    columns are provided to `stage_run_inference_and_plot`"""
+    pred_csv = tmp_path / "pred.csv"
+    pred_csv.write_text("Phase_Separation,Pred_Label\n0,0\n1,1\n")
+
+    ds = {"id": "INFER2", "composition_cols": ["A", "B", "C"]}
+    paths = {
+        "agg_csv": tmp_path / "agg.csv",  # not used here
+        "pred_csv": pred_csv,
+        "phase_dir": tmp_path / "phase",
+    }
+
+    with pytest.raises(ValueError, match="Cannot plot phase diagram for"):
+        wf.stage_run_inference_and_plot(
+            ds, paths, model_path=tmp_path / "m.joblib", steps=["plot"]
+        )
